@@ -1,3 +1,19 @@
+# Smart Contracts
+
+This folder contains all Solidity smart contracts for Seller Block Marketplace.
+
+## Architecture
+- EscrowVault: Holds USDC until buyer acceptance
+- MarketplaceRegistry: Manages listings and state
+- AuctionModule: Handles bidding logic
+- RaffleModule: Handles target-based raffles
+
+## Rules
+- Solidity only
+- No frontend or backend logic here
+- All funds logic must be audited
+- Tests required for all contracts
+
 # Sample Hardhat 3 Beta Project (`mocha` and `ethers`)
 
 This project showcases a Hardhat 3 Beta project using `mocha` for tests and the `ethers` library for Ethereum interactions.
