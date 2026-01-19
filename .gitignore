@@ -1,2 +1,2 @@
-# Ignore the documentation folder and its files
-Documentation/
+# Ignore all files in the Documentation folder
+Documentation/*

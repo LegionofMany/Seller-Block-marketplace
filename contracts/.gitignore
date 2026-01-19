@@ -18,3 +18,7 @@
 
 # Hardhat coverage reports
 /coverage
+
+# Ignore all .env files
+*.env
+.env.example
