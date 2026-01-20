@@ -31,18 +31,20 @@ export default defineConfig({
       type: "edr-simulated",
       chainType: "op",
     },
+    base: {
+      type: "http",
+      url: process.env.BASE_RPC_URL || (() => { throw new Error("BASE_RPC_URL is not defined in the .env file"); })(),
+      accounts: process.env.PRIVATE_KEY
+        ? [process.env.PRIVATE_KEY]
+        : (() => { throw new Error("PRIVATE_KEY is not defined in the .env file"); })(),
+    },
     sepolia: {
       type: "http",
       chainType: "l1",
-      url: configVariable("SEPOLIA_RPC_URL"),
-      accounts: [configVariable("SEPOLIA_PRIVATE_KEY")],
-    },
-    base: {
-      type: "http",
-      url: process.env.BASE_RPC_URL || "",
+      url: process.env.SEPOLIA_RPC_URL || (() => { throw new Error("SEPOLIA_RPC_URL is not defined in the .env file"); })(),
       accounts: process.env.PRIVATE_KEY
         ? [process.env.PRIVATE_KEY]
-        : [],
+        : (() => { throw new Error("PRIVATE_KEY is not defined in the .env file"); })(),
     },
   },
 });
