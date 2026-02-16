@@ -1,70 +1,67 @@
-import Image from "next/image";
+"use client";
 
-export default function Home() {
+import Link from "next/link";
+
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useListings } from "@/lib/hooks/useListings";
+import { formatPrice, shortenHex } from "@/lib/format";
+import { isNativeToken, saleTypeLabel, statusLabel } from "@/lib/contracts/types";
+
+export default function ListingsPage() {
+  const { listings, isLoading, error } = useListings();
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <div className="mt-4">
-            <div className="bg-blue-500 text-white p-4 rounded">
-              Tailwind is working!
-            </div>
-          </div>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
+    <div className="space-y-6">
+      <div className="flex flex-col gap-2">
+        <h1 className="text-2xl font-semibold tracking-tight">Listings</h1>
+        <p className="text-sm text-muted-foreground">Browse listings created on Sepolia.</p>
+      </div>
+
+      {error ? (
+        <Card>
+          <CardContent className="p-6 text-sm text-destructive">{error}</CardContent>
+        </Card>
+      ) : null}
+
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {isLoading
+          ? Array.from({ length: 6 }).map((_, i) => (
+              <Card key={i}>
+                <CardHeader>
+                  <Skeleton className="h-5 w-40" />
+                  <Skeleton className="h-4 w-56" />
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <Skeleton className="h-4 w-32" />
+                  <Skeleton className="h-4 w-24" />
+                </CardContent>
+              </Card>
+            ))
+          : listings.map((l) => {
+              const native = isNativeToken(l.token);
+              return (
+                <Link key={l.id} href={`/listing/${l.id}`} className="block">
+                  <Card className="h-full transition-colors hover:bg-accent/40">
+                    <CardHeader>
+                      <CardTitle className="text-base">{saleTypeLabel(l.saleType as any)}</CardTitle>
+                      <CardDescription className="break-all">
+                        {l.metadataURI || shortenHex(l.id)}
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="flex items-center justify-between gap-3">
+                      <div className="text-sm">
+                        <div className="font-medium">{formatPrice(l.price, native)}</div>
+                        <div className="text-xs text-muted-foreground">Seller: {shortenHex(l.seller)}</div>
+                      </div>
+                      <Badge variant="outline">{statusLabel(l.status as any)}</Badge>
+                    </CardContent>
+                  </Card>
+                </Link>
+              );
+            })}
+      </div>
     </div>
   );
 }

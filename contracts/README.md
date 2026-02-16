@@ -128,7 +128,25 @@ Create `contracts/.env` with:
 PRIVATE_KEY=
 SEPOLIA_RPC_URL=
 BASE_RPC_URL=
+
+# Optional: if you already deployed EscrowVault and want to reuse it
+VAULT_ADDRESS=
+
+# Optional deployment configuration
+# If unset, deployer is used as fee recipient.
+FEE_RECIPIENT=
+
+# Optional arbiter (leave empty to disable arbiter actions).
+ARBITER=
+
+# Optional protocol fee (bps). If unset, contract default (250 = 2.5%) is used.
+# Max allowed by contract is 1000 (10%).
+PROTOCOL_FEE_BPS=
 ```
+
+After `npm run deploy:<network>`, the script writes deployed addresses to:
+
+- `contracts/deployments/<network>.json`
 
 ## Directory layout
 
