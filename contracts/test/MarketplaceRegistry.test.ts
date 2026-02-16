@@ -17,59 +17,70 @@ describe("MarketplaceRegistry", function () {
 		const Vault = await ethers.getContractFactory("EscrowVault");
 		const vault = await Vault.deploy(owner.address);
 
-		const Registry = await ethers.getContractFactory("MarketplaceRegistry");
-		const registry = await Registry.deploy(owner.address, vault.target);
+		const Auction = await ethers.getContractFactory("AuctionModule");
+		const auction = await Auction.deploy(owner.address);
 
-		return { owner, seller, other, vault, registry };
+		const Raffle = await ethers.getContractFactory("RaffleModule");
+		const raffle = await Raffle.deploy(owner.address);
+
+		const Registry = await ethers.getContractFactory("MarketplaceRegistry");
+		const registry = await Registry.deploy(owner.address, vault.target, auction.target, raffle.target, owner.address);
+
+		await vault.connect(owner).setController(registry.target);
+		await auction.connect(owner).setRegistry(registry.target);
+		await raffle.connect(owner).setRegistry(registry.target);
+
+		return { owner, seller, other, vault, registry, auction, raffle };
 	}
 
-	it("creates listing with correct seller ownership and SaleType assignment", async function () {
+	it("creates fixed-price listing with metadata, token, and status", async function () {
 		const { seller, registry } = await deployFixture();
-		const listingId = ethers.id("listing-1");
-
-		await expect(registry.connect(seller).createListing(listingId, 0)).to.emit(
+		await expect(registry.connect(seller).createListing("ipfs://meta/1", 100n, ethers.ZeroAddress, 0)).to.emit(
 			registry,
 			"ListingCreated"
+		);
+
+		const nonce = await registry.listingNonce();
+		const listingId = ethers.solidityPackedKeccak256(
+			["address", "uint256", "address"],
+			[registry.target, nonce, seller.address]
 		);
 
 		const listing = await registry.listings(listingId);
 		expect(listing.seller).to.equal(seller.address);
 		expect(listing.saleType).to.equal(0);
-		expect(listing.active).to.equal(true);
+		expect(listing.status).to.equal(1); // Active
+		expect(listing.metadataURI).to.equal("ipfs://meta/1");
+		expect(listing.price).to.equal(100n);
+		expect(listing.token).to.equal(ethers.ZeroAddress);
 	});
 
-	it("deactivates listing by seller only", async function () {
+	it("seller can cancel; others cannot", async function () {
 		const { seller, other, registry } = await deployFixture();
-		const listingId = ethers.id("listing-2");
-
-		await registry.connect(seller).createListing(listingId, 1);
-
-		await expect(registry.connect(other).deactivateListing(listingId))
-			.to.be.revertedWithCustomError(registry, "NotSeller");
-
-		await expect(registry.connect(seller).deactivateListing(listingId)).to.emit(
-			registry,
-			"ListingDeactivated"
+		await registry.connect(seller).createListing("ipfs://meta/2", 100n, ethers.ZeroAddress, 0);
+		const nonce = await registry.listingNonce();
+		const listingId = ethers.solidityPackedKeccak256(
+			["address", "uint256", "address"],
+			[registry.target, nonce, seller.address]
 		);
 
+		await expect(registry.connect(other).cancelListing(listingId)).to.be.revertedWithCustomError(
+			registry,
+			"NotSeller"
+		);
+		await expect(registry.connect(seller).cancelListing(listingId)).to.emit(registry, "ListingCancelled");
+
 		const listing = await registry.listings(listingId);
-		expect(listing.active).to.equal(false);
+		expect(listing.status).to.equal(2); // Cancelled
 	});
 
-	it("invalid access must revert (deactivate non-existent)", async function () {
-		const { seller, registry } = await deployFixture();
-		const listingId = ethers.id("missing");
-		await expect(registry.connect(seller).deactivateListing(listingId)).
-			to.be.revertedWithCustomError(registry, "ListingNotFound");
-	});
-
-	it("prevents listing overwrite", async function () {
-		const { seller, registry } = await deployFixture();
-		const listingId = ethers.id("listing-3");
-
-		await registry.connect(seller).createListing(listingId, 2);
-		await expect(registry.connect(seller).createListing(listingId, 2)).
-			to.be.revertedWithCustomError(registry, "ListingAlreadyExists");
+	it("pause blocks listing creation", async function () {
+		const { owner, seller, registry } = await deployFixture();
+		await registry.connect(owner).pause();
+		await expect(registry.connect(seller).createListing("ipfs://meta/3", 1n, ethers.ZeroAddress, 0)).to.be.revertedWithCustomError(
+			registry,
+			"EnforcedPause"
+		);
 	});
 });
 

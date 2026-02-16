@@ -1,73 +1,138 @@
-# Smart Contracts
+# Seller Block Marketplace — Smart Contracts
 
-This folder contains all Solidity smart contracts for Seller Block Marketplace.
+Solidity contracts and Hardhat tooling for the Seller Block Marketplace monorepo.
 
-## Architecture
-- EscrowVault: Holds USDC until buyer acceptance
-- MarketplaceRegistry: Manages listings and state
-- AuctionModule: Handles bidding logic
-- RaffleModule: Handles target-based raffles
+## Contracts
 
-## Rules
-- Solidity only
-- No frontend or backend logic here
-- All funds logic must be audited
-- Tests required for all contracts
+Source files are in `contracts/contracts/`:
 
-# Sample Hardhat 3 Beta Project (`mocha` and `ethers`)
+- `EscrowVault.sol`
+- `MarketplaceRegistry.sol`
+- `AuctionModule.sol`
+- `RaffleModule.sol`
+- `ERC20Mock.sol` (test helper)
 
-This project showcases a Hardhat 3 Beta project using `mocha` for tests and the `ethers` library for Ethereum interactions.
+## Tooling
 
-To learn more about the Hardhat 3 Beta, please visit the [Getting Started guide](https://hardhat.org/docs/getting-started#getting-started-with-hardhat-3). To share your feedback, join our [Hardhat 3 Beta](https://hardhat.org/hardhat3-beta-telegram-group) Telegram group or [open an issue](https://github.com/NomicFoundation/hardhat/issues/new) in our GitHub issue tracker.
+- Hardhat 3
+- Ethers v6
+- Solidity compiler: `0.8.28`
 
-## Project Overview
+Network configuration lives in `hardhat.config.ts`.
 
-This example project includes:
+## Install
 
-- A simple Hardhat configuration file.
-- Foundry-compatible Solidity unit tests.
-- TypeScript integration tests using `mocha` and ethers.js
-- Examples demonstrating how to connect to different types of networks, including locally simulating OP mainnet.
-
-## Usage
-
-### Running Tests
-
-To run all the tests in the project, execute the following command:
-
-```shell
-npx hardhat test
+```bash
+npm install
 ```
 
-You can also selectively run the Solidity or `mocha` tests:
+## Tests
 
-```shell
-npx hardhat test solidity
-npx hardhat test mocha
+Run all tests:
+
+```bash
+npm test
 ```
 
-### Make a deployment to Sepolia
+Run only Solidity or Mocha suites:
 
-This project includes an example Ignition module to deploy the contract. You can deploy this module to a locally simulated chain or to Sepolia.
-
-To run the deployment to a local chain:
-
-```shell
-npx hardhat ignition deploy ignition/modules/Counter.ts
+```bash
+npm run test:solidity
+npm run test:mocha
 ```
 
-To run the deployment to Sepolia, you need an account with funds to send the transaction. The provided Hardhat configuration includes a Configuration Variable called `SEPOLIA_PRIVATE_KEY`, which you can use to set the private key of the account you want to use.
+## TypeScript client helpers
 
-You can set the `SEPOLIA_PRIVATE_KEY` variable using the `hardhat-keystore` plugin or by setting it as an environment variable.
+This repo includes a small helper layer (validation + gas estimation + revert decoding) in `src/client/`.
 
-To set the `SEPOLIA_PRIVATE_KEY` config variable using `hardhat-keystore`:
+Build it:
 
-```shell
-npx hardhat keystore set SEPOLIA_PRIVATE_KEY
+```bash
+npm run build:client
 ```
 
-After setting the variable, you can run the deployment with the Sepolia network:
+Example usage (ERC20 fixed-price buy):
 
-```shell
-npx hardhat ignition deploy --network sepolia ignition/modules/Counter.ts
+```ts
+import { ethers } from "ethers";
+import { MarketplaceClient, approveIfNeeded } from "./dist/client/index.js";
+
+const provider = new ethers.JsonRpcProvider(process.env.RPC_URL!);
+const wallet = new ethers.Wallet(process.env.PRIVATE_KEY!, provider);
+
+const registryAddress = "0xRegistry";
+const listingId = "0x..."; // bytes32
+
+const client = MarketplaceClient.connect(registryAddress, wallet);
+const { escrowVault } = await client.addresses();
+
+// For ERC20 buys, the protocol expects approval to the EscrowVault (it pulls funds)
+await approveIfNeeded({
+	token: "0xToken",
+	owner: await wallet.getAddress(),
+	spender: escrowVault,
+	amount: 1_000_000n,
+	runner: wallet,
+});
+
+await (await client.buy(listingId)).wait();
 ```
+
+Example usage (ERC20 auction bid):
+
+```ts
+import { ethers } from "ethers";
+import { MarketplaceClient, approveIfNeeded } from "./dist/client/index.js";
+
+const provider = new ethers.JsonRpcProvider(process.env.RPC_URL!);
+const wallet = new ethers.Wallet(process.env.PRIVATE_KEY!, provider);
+
+const client = MarketplaceClient.connect("0xRegistry", wallet);
+const { auctionModule } = await client.addresses();
+
+const listingId = "0x..."; // bytes32
+const bidAmount = 1_500_000n; // e.g. 1.5 USDC (6 decimals)
+
+// For ERC20 bids, the protocol expects approval to the AuctionModule (it pulls bid funds)
+await approveIfNeeded({
+	token: "0xToken",
+	owner: await wallet.getAddress(),
+	spender: auctionModule,
+	amount: bidAmount,
+	runner: wallet,
+});
+
+await (await client.bid(listingId, bidAmount)).wait();
+```
+
+## Deploy
+
+Local simulated deployment:
+
+```bash
+npm run deploy:local
+```
+
+Live deployments (require environment variables):
+
+```bash
+npm run deploy:sepolia
+npm run deploy:base
+```
+
+### Environment variables
+
+Create `contracts/.env` with:
+
+```dotenv
+PRIVATE_KEY=
+SEPOLIA_RPC_URL=
+BASE_RPC_URL=
+```
+
+## Directory layout
+
+- `contracts/` — Solidity sources
+- `test/` — contract tests
+- `scripts/` — deployment / network scripts
+- `artifacts/`, `cache/`, `types/` — generated outputs
