@@ -20,6 +20,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 
+import { fetchJson } from "@/lib/api";
 import { getEnv } from "@/lib/env";
 import { marketplaceRegistryAbi } from "@/lib/contracts/abi/MarketplaceRegistry";
 
@@ -51,7 +52,10 @@ export default function CreateListingPage() {
   const { writeContractAsync } = useWriteContract();
 
   const [saleType, setSaleType] = React.useState<SaleType>(0);
-  const [metadataURI, setMetadataURI] = React.useState("");
+  const [title, setTitle] = React.useState("");
+  const [description, setDescription] = React.useState("");
+  const [image, setImage] = React.useState("");
+  const [generatedMetadataURI, setGeneratedMetadataURI] = React.useState<string>("");
   const [tokenAddress, setTokenAddress] = React.useState<string>("");
 
   const [fixedPrice, setFixedPrice] = React.useState("0.01");
@@ -90,8 +94,30 @@ export default function CreateListingPage() {
       return;
     }
 
-    if (!metadataURI.trim()) {
-      toast.error("Metadata URI is required");
+    if (!title.trim() || !description.trim() || !image.trim()) {
+      toast.error("Title, description, and image URL are required");
+      return;
+    }
+
+    let metadataURI: string;
+    try {
+      const res = await fetchJson<{ metadataURI: string; id: string }>("/metadata", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          title: title.trim(),
+          description: description.trim(),
+          image: image.trim(),
+          attributes: [],
+        }),
+        timeoutMs: 5_000,
+      });
+      metadataURI = res.metadataURI;
+      setGeneratedMetadataURI(res.metadataURI);
+    } catch (err: any) {
+      toast.error(err?.message ?? "Failed to upload metadata");
       return;
     }
 
@@ -120,7 +146,7 @@ export default function CreateListingPage() {
         address: env.marketplaceRegistryAddress,
         abi: marketplaceRegistryAbi,
         functionName: "createListing",
-        args: [metadataURI.trim(), price, token, saleType],
+        args: [metadataURI, price, token, saleType],
       });
 
       const receipt = await publicClient.waitForTransactionReceipt({ hash });
@@ -225,8 +251,20 @@ export default function CreateListingPage() {
 
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2 sm:col-span-2">
-                <Label>Metadata URI</Label>
-                <Textarea value={metadataURI} onChange={(e) => setMetadataURI(e.target.value)} placeholder="ipfs://… or https://…" />
+                <Label>Title</Label>
+                <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. My item" />
+              </div>
+              <div className="space-y-2 sm:col-span-2">
+                <Label>Description</Label>
+                <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Describe your item" />
+              </div>
+              <div className="space-y-2 sm:col-span-2">
+                <Label>Image URL</Label>
+                <Input value={image} onChange={(e) => setImage(e.target.value)} placeholder="https://…" />
+              </div>
+              <div className="space-y-2 sm:col-span-2">
+                <Label>Generated metadataURI (from backend)</Label>
+                <Input value={generatedMetadataURI} readOnly placeholder="Will be generated on submit" />
               </div>
               <div className="space-y-2 sm:col-span-2">
                 <Label>Token (optional)</Label>

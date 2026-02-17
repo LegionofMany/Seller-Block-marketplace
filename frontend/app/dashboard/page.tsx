@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 
 import { getEnv } from "@/lib/env";
+import { fetchJson } from "@/lib/api";
 import { marketplaceRegistryAbi } from "@/lib/contracts/abi/MarketplaceRegistry";
 import { shortenHex } from "@/lib/format";
 
@@ -54,6 +55,21 @@ export default function DashboardPage() {
         setMyListingIds([]);
         return;
       }
+
+      // Prefer backend API (indexed DB). Fallback to on-chain logs if API isn't available.
+      try {
+        setMyListingIds(null);
+        const resp = await fetchJson<{ items: Array<{ id: string }> }>(
+          `/seller/${address}/listings?limit=100&offset=0`,
+          { timeoutMs: 5_000 }
+        );
+        const ids = resp.items.map((r) => r.id as Hex);
+        if (!cancelled) setMyListingIds(Array.from(new Set(ids)));
+        return;
+      } catch {
+        // ignore, fallback below
+      }
+
       if (!publicClient) {
         setMyListingIds([]);
         return;

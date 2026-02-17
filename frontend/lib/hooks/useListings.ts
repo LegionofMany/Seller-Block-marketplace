@@ -5,6 +5,7 @@ import { type Address, type Hex, parseAbiItem } from "viem";
 import { usePublicClient } from "wagmi";
 
 import { getEnv } from "@/lib/env";
+import { fetchJson } from "@/lib/api";
 import { marketplaceRegistryAbi } from "@/lib/contracts/abi/MarketplaceRegistry";
 import { parseListing } from "@/lib/contracts/parse";
 import { type ListingStatus, type SaleType } from "@/lib/contracts/types";
@@ -17,6 +18,24 @@ export type ListingSummary = {
   price: bigint;
   metadataURI: string;
   status: ListingStatus;
+};
+
+type BackendListingRow = {
+  id: string;
+  seller: string;
+  metadataURI: string;
+  price: string;
+  token: string;
+  saleType: number;
+  active: 0 | 1;
+  createdAt: number;
+  blockNumber: number;
+};
+
+type BackendListingsResponse = {
+  items: BackendListingRow[];
+  limit: number;
+  offset: number;
 };
 
 const listingCreatedEvent = parseAbiItem(
@@ -38,8 +57,31 @@ export function useListings() {
         setIsLoading(true);
         setError(null);
 
-        if (!publicClient) throw new Error("No public client");
+        // Prefer backend indexer API (fast, no RPC log scanning per request).
+        try {
+          const resp = await fetchJson<BackendListingsResponse>("/listings?limit=50&offset=0", {
+            timeoutMs: 5_000,
+          });
 
+          const items = resp.items.map((row) =>
+            ({
+              id: row.id as Hex,
+              seller: row.seller as Address,
+              saleType: row.saleType as SaleType,
+              token: row.token as Address,
+              price: BigInt(row.price),
+              metadataURI: row.metadataURI,
+              status: (row.active ? 1 : 2) as ListingStatus,
+            }) satisfies ListingSummary
+          );
+
+          if (!cancelled) setData(items);
+          return;
+        } catch {
+          // Backend may not be running; fall back to on-chain.
+        }
+
+        if (!publicClient) throw new Error("No public client");
         const env = getEnv();
 
         const logs = await publicClient.getLogs({
@@ -49,11 +91,7 @@ export function useListings() {
           toBlock: "latest",
         });
 
-        const ids = logs
-          .map((l) => l.args.id as Hex)
-          .filter(Boolean)
-          .reverse();
-
+        const ids = logs.map((l) => l.args.id as Hex).filter(Boolean).reverse();
         const uniqueIds = Array.from(new Set(ids));
 
         const listings = await Promise.all(

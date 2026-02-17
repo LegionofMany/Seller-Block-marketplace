@@ -39,6 +39,7 @@ Optional but useful:
 - `NEXT_PUBLIC_ESCROW_VAULT_ADDRESS`
 - `NEXT_PUBLIC_AUCTION_MODULE_ADDRESS`
 - `NEXT_PUBLIC_RAFFLE_MODULE_ADDRESS`
+- `NEXT_PUBLIC_BACKEND_URL` (optional API for indexed listings/search/metadata; default `http://localhost:4000`)
 - `NEXT_PUBLIC_SEPOLIA_START_BLOCK` (improves listings/dashboard load time)
 - `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` (enables WalletConnect)
 

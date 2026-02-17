@@ -4,6 +4,7 @@ export type ClientEnv = {
   chainId: number;
   sepoliaRpcUrl: string;
   walletConnectProjectId?: string;
+  backendUrl?: string;
   marketplaceRegistryAddress: Address;
   escrowVaultAddress: Address;
   auctionModuleAddress: Address;
@@ -29,6 +30,7 @@ export function getEnv(): ClientEnv {
   if (!sepoliaRpcUrl) throw new Error("Missing required env var: NEXT_PUBLIC_SEPOLIA_RPC_URL");
 
   const walletConnectProjectId = clean(process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID);
+  const backendUrl = clean(process.env.NEXT_PUBLIC_BACKEND_URL);
 
   const marketplaceRegistryAddressRaw = clean(process.env.NEXT_PUBLIC_MARKETPLACE_REGISTRY_ADDRESS);
   if (!marketplaceRegistryAddressRaw) {
@@ -70,6 +72,7 @@ export function getEnv(): ClientEnv {
     chainId,
     sepoliaRpcUrl,
     walletConnectProjectId,
+    backendUrl,
     marketplaceRegistryAddress,
     escrowVaultAddress,
     auctionModuleAddress,

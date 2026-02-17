@@ -1,0 +1,18 @@
+# dependencies
+/node_modules
+
+# build
+/dist
+
+# local sqlite data
+/data
+*.sqlite
+*.sqlite-journal
+
+# env files
+.env
+.env.*
+!src/.env.local.example
+
+# logs
+npm-debug.log*
