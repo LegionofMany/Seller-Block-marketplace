@@ -27,12 +27,24 @@ export type RaffleRow = {
   endTime: number;
 };
 
+export type MetadataRow = {
+  id: string;
+  title: string;
+  description: string;
+  image: string;
+  attributesJson: string;
+  createdAt: number;
+};
+
 let singleton: Database.Database | null = null;
 
 export function openDb(dbPath: string) {
   if (singleton) return singleton;
 
-  const absPath = path.isAbsolute(dbPath) ? dbPath : path.join(process.cwd(), dbPath);
+  // Resolve relative paths against the backend package root (not process.cwd()),
+  // so `npm run dev` from different working directories always hits the same DB file.
+  const backendRoot = path.resolve(__dirname, "..", "..", "..");
+  const absPath = path.isAbsolute(dbPath) ? dbPath : path.join(backendRoot, dbPath);
   fs.mkdirSync(path.dirname(absPath), { recursive: true });
 
   const db = new Database(absPath);
@@ -82,6 +94,15 @@ function migrate(db: Database.Database) {
       ticketsSold INTEGER NOT NULL,
       endTime INTEGER NOT NULL,
       FOREIGN KEY(listingId) REFERENCES listings(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS metadata (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      description TEXT NOT NULL,
+      image TEXT NOT NULL,
+      attributesJson TEXT NOT NULL,
+      createdAt INTEGER NOT NULL
     );
   `);
 }
@@ -176,6 +197,23 @@ export function findAuction(db: Database.Database, listingId: string): AuctionRo
 
 export function findRaffle(db: Database.Database, listingId: string): RaffleRow | null {
   return (db.prepare("SELECT * FROM raffles WHERE listingId = ?").get(listingId) as RaffleRow | undefined) ?? null;
+}
+
+export function upsertMetadata(db: Database.Database, row: MetadataRow) {
+  db.prepare(
+    `INSERT INTO metadata(id, title, description, image, attributesJson, createdAt)
+     VALUES(@id, @title, @description, @image, @attributesJson, @createdAt)
+     ON CONFLICT(id) DO UPDATE SET
+       title = excluded.title,
+       description = excluded.description,
+       image = excluded.image,
+       attributesJson = excluded.attributesJson,
+       createdAt = excluded.createdAt`
+  ).run(row);
+}
+
+export function findMetadata(db: Database.Database, id: string): MetadataRow | null {
+  return (db.prepare("SELECT * FROM metadata WHERE id = ?").get(id) as MetadataRow | undefined) ?? null;
 }
 
 export type ListingsQuery = {

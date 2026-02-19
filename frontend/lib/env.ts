@@ -3,6 +3,7 @@ import { type Address, getAddress, isAddress, zeroAddress } from "viem";
 export type ClientEnv = {
   chainId: number;
   sepoliaRpcUrl: string;
+  sepoliaRpcFallbackUrl?: string;
   walletConnectProjectId?: string;
   backendUrl?: string;
   marketplaceRegistryAddress: Address;
@@ -28,6 +29,8 @@ export function getEnv(): ClientEnv {
   const chainId = Number.parseInt(clean(process.env.NEXT_PUBLIC_CHAIN_ID) ?? "11155111", 10);
   const sepoliaRpcUrl = clean(process.env.NEXT_PUBLIC_SEPOLIA_RPC_URL);
   if (!sepoliaRpcUrl) throw new Error("Missing required env var: NEXT_PUBLIC_SEPOLIA_RPC_URL");
+
+  const sepoliaRpcFallbackUrl = clean(process.env.NEXT_PUBLIC_SEPOLIA_RPC_FALLBACK_URL) ?? undefined;
 
   const walletConnectProjectId = clean(process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID);
   const backendUrl = clean(process.env.NEXT_PUBLIC_BACKEND_URL);
@@ -71,6 +74,7 @@ export function getEnv(): ClientEnv {
   cached = {
     chainId,
     sepoliaRpcUrl,
+    sepoliaRpcFallbackUrl,
     walletConnectProjectId,
     backendUrl,
     marketplaceRegistryAddress,

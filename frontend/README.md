@@ -32,6 +32,7 @@ copy .env.local.example .env.local
 2) Edit `.env.local` and set at least:
 
 - `NEXT_PUBLIC_SEPOLIA_RPC_URL` (an HTTPS RPC URL)
+- `NEXT_PUBLIC_SEPOLIA_RPC_FALLBACK_URL` (optional; another HTTPS RPC URL used if the first is rate-limited)
 - `NEXT_PUBLIC_MARKETPLACE_REGISTRY_ADDRESS`
 
 Optional but useful:

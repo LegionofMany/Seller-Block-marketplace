@@ -87,6 +87,7 @@ Raffles
 Metadata
 
 - `POST /metadata` (JSON body: `{ title, description, image, attributes }`)
+- `GET /metadata/:id`
 
 ## Project structure
 

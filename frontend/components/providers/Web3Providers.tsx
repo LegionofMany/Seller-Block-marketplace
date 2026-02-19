@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { WagmiProvider, createConfig, http } from "wagmi";
+import { WagmiProvider, createConfig, fallback, http } from "wagmi";
 import { sepolia } from "wagmi/chains";
 import { injected, walletConnect } from "wagmi/connectors";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -10,7 +10,14 @@ import { RainbowKitProvider, darkTheme } from "@rainbow-me/rainbowkit";
 import { getEnv } from "@/lib/env";
 import { Card, CardContent } from "@/components/ui/card";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 1,
+      refetchOnWindowFocus: false,
+    },
+  },
+});
 
 export function Web3Providers({ children }: { children: React.ReactNode }) {
   const [state, setState] = React.useState<
@@ -32,7 +39,20 @@ export function Web3Providers({ children }: { children: React.ReactNode }) {
         chains: [sepolia],
         connectors,
         transports: {
-          [sepolia.id]: http(env.sepoliaRpcUrl),
+          [sepolia.id]: (() => {
+            // If a fallback URL is provided, treat it as the preferred RPC.
+            // This helps when the default RPC (often Infura) is rate-limited.
+            const primary = env.sepoliaRpcFallbackUrl ?? env.sepoliaRpcUrl;
+            const secondary = env.sepoliaRpcFallbackUrl ? env.sepoliaRpcUrl : "https://rpc.sepolia.org";
+
+            return fallback(
+              [
+                http(primary, { timeout: 15_000, retryCount: 0 }),
+                http(secondary, { timeout: 15_000, retryCount: 0 }),
+              ],
+              { rank: false }
+            );
+          })(),
         },
         ssr: true,
       });

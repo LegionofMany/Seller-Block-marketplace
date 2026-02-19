@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { useParams } from "next/navigation";
 import { type Address, type Hex, isAddress, parseEther, zeroAddress } from "viem";
 import { useAccount, useReadContract, useWaitForTransactionReceipt, useWriteContract } from "wagmi";
@@ -21,6 +22,8 @@ import { parseListing } from "@/lib/contracts/parse";
 import { isNativeToken, saleTypeLabel, statusLabel } from "@/lib/contracts/types";
 import { formatPrice, shortenHex } from "@/lib/format";
 import { useToastTx } from "@/lib/hooks/useToastTx";
+import { fetchMetadataById, metadataIdFromUri, type MarketplaceMetadata } from "@/lib/metadata";
+import { fetchJson } from "@/lib/api";
 
 function asBytes32(value: string): Hex | null {
   if (!value?.startsWith("0x")) return null;
@@ -51,19 +54,108 @@ export default function ListingDetailPage() {
   const [ticketCount, setTicketCount] = React.useState("1");
   const [reveal, setReveal] = React.useState<Hex>(("0x" + "00".repeat(32)) as Hex);
 
-  const { data: raw, isLoading } = useReadContract({
+  const { data: raw, isLoading, isError, error } = useReadContract({
     address: env.marketplaceRegistryAddress,
     abi: marketplaceRegistryAbi,
     functionName: "listings",
     args: listingId ? [listingId] : undefined,
-    query: { enabled: Boolean(listingId) },
+    query: { enabled: Boolean(listingId), retry: 1 },
   });
 
+  const loadingListing = isLoading;
+
+  const listingReadError: any = isError ? (error as any) : null;
   const listing = raw ? parseListing(raw) : null;
   const native = listing ? isNativeToken(listing.token as Address) : true;
 
+  const { data: arbiterAddress } = useReadContract({
+    address: env.marketplaceRegistryAddress,
+    abi: marketplaceRegistryAbi,
+    functionName: "arbiter",
+    query: { retry: 1 },
+  });
+
+  const [metadata, setMetadata] = React.useState<MarketplaceMetadata | null>(null);
+  const [isReuploadingMetadata, setIsReuploadingMetadata] = React.useState(false);
+
+  const metadataId = React.useMemo(() => {
+    if (!listing?.metadataURI) return null;
+    return metadataIdFromUri(listing.metadataURI);
+  }, [listing?.metadataURI]);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    async function run() {
+      setMetadata(null);
+      if (!listing?.metadataURI) return;
+      const id = metadataIdFromUri(listing.metadataURI);
+      if (!id) return;
+      try {
+        const md = await fetchMetadataById(id);
+        if (!cancelled) setMetadata(md);
+      } catch {
+        // ignore
+      }
+    }
+    run();
+    return () => {
+      cancelled = true;
+    };
+  }, [listing?.metadataURI]);
+
+  async function reuploadMissingMetadata() {
+    if (!isSeller || !metadataId || !listing?.metadataURI) return;
+
+    const title = window.prompt("Metadata title (required)")?.trim() ?? "";
+    if (!title) return;
+
+    const description = window.prompt("Metadata description (required)")?.trim() ?? "";
+    if (!description) return;
+
+    const image = window.prompt("Metadata image URL (required)")?.trim() ?? "";
+    if (!image) return;
+
+    try {
+      setIsReuploadingMetadata(true);
+      const res = await fetchJson<{ metadataURI: string; id: string }>("/metadata", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          title,
+          description,
+          image,
+          attributes: [],
+        }),
+        timeoutMs: 7_000,
+      });
+
+      if (res.id.toLowerCase() !== metadataId.toLowerCase()) {
+        window.alert(
+          `Uploaded metadata, but the generated id does not match this listing.\n\nExpected: ${metadataId}\nGot: ${res.id}\n\nThis listing will still show the old metadata URI.`
+        );
+        return;
+      }
+
+      const md = await fetchMetadataById(metadataId);
+      setMetadata(md);
+      window.alert("Metadata uploaded and linked successfully.");
+    } catch (e: any) {
+      window.alert(e?.message ?? "Failed to upload metadata");
+    } finally {
+      setIsReuploadingMetadata(false);
+    }
+  }
+
   const isSeller = Boolean(address && listing && address.toLowerCase() === listing.seller.toLowerCase());
   const isBuyer = Boolean(address && listing && address.toLowerCase() === listing.buyer.toLowerCase());
+  const isArbiter = Boolean(
+    address &&
+      typeof arbiterAddress === "string" &&
+      arbiterAddress !== zeroAddress &&
+      address.toLowerCase() === arbiterAddress.toLowerCase()
+  );
 
   // ERC20 allowance (fixed-price only)
   const needsErc20Approval = Boolean(
@@ -176,14 +268,66 @@ export default function ListingDetailPage() {
   }, [receipt.isSuccess, receipt.isError]);
 
   async function send(tx: Promise<`0x${string}`>) {
-    const hash = await tx;
-    setPendingHash(hash);
+    try {
+      const hash = await tx;
+      setPendingHash(hash);
+    } catch (e: any) {
+      toastTx.fail(e?.shortMessage ?? e?.message ?? "Transaction failed");
+    }
   }
 
+  // IMPORTANT: do not return early before hooks above run.
+  // Route params can be undefined on the first render, then become defined.
+  // Returning early before all hooks would change hook order between renders.
   if (!listingId) {
     return (
       <Card>
         <CardContent className="p-6 text-sm text-destructive">Invalid listing id.</CardContent>
+      </Card>
+    );
+  }
+
+  if (listingReadError) {
+    return (
+      <Card>
+        <CardContent className="p-6 space-y-2">
+          <div className="text-sm font-semibold">Failed to load listing</div>
+          <div className="text-sm text-muted-foreground break-words">
+            {listingReadError?.shortMessage ?? listingReadError?.message ?? "RPC request failed"}
+          </div>
+          <div className="text-xs text-muted-foreground break-words">
+            This is commonly caused by a rate-limited RPC URL (for example Infura 429). Set a higher-limit
+            `NEXT_PUBLIC_SEPOLIA_RPC_URL` and restart `npm run dev`.
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (!loadingListing && !listing) {
+    return (
+      <Card>
+        <CardContent className="p-6 space-y-2">
+          <div className="text-sm font-semibold">Listing not found</div>
+          <div className="text-sm text-muted-foreground break-words">
+            The listing could not be loaded from the registry.
+          </div>
+          <div className="text-xs text-muted-foreground break-words">Listing id: {listingId}</div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (!loadingListing && !listing) {
+    return (
+      <Card>
+        <CardContent className="p-6 space-y-2">
+          <div className="text-sm font-semibold">Listing not found</div>
+          <div className="text-sm text-muted-foreground break-words">
+            The listing could not be loaded from the registry.
+          </div>
+          <div className="text-xs text-muted-foreground break-words">Listing id: {listingId}</div>
+        </CardContent>
       </Card>
     );
   }
@@ -198,16 +342,22 @@ export default function ListingDetailPage() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center justify-between gap-3">
-            <span>{listing ? saleTypeLabel(listing.saleType) : "Loading…"}</span>
+            <span>{metadata?.title ?? (listing ? saleTypeLabel(listing.saleType) : "Loading…")}</span>
             {listing ? <Badge variant="outline">{statusLabel(listing.status)}</Badge> : null}
           </CardTitle>
-          <CardDescription className="break-all">
-            {listing ? listing.metadataURI : <Skeleton className="h-4 w-64" />}
-          </CardDescription>
+          {listing ? (
+            <CardDescription className="text-sm">
+              {metadata?.description ?? listing.metadataURI}
+            </CardDescription>
+          ) : (
+            <div className="text-sm text-muted-foreground break-all">
+              <Skeleton className="h-4 w-64" />
+            </div>
+          )}
         </CardHeader>
 
         <CardContent className="space-y-4">
-          {isLoading || !listing ? (
+          {loadingListing || !listing ? (
             <div className="space-y-3">
               <Skeleton className="h-4 w-48" />
               <Skeleton className="h-4 w-56" />
@@ -215,6 +365,34 @@ export default function ListingDetailPage() {
             </div>
           ) : (
             <>
+              {isSeller && metadataId && !metadata ? (
+                <div className="space-y-2 rounded-md border p-3">
+                  <div className="text-sm font-medium">Metadata not found in backend</div>
+                  <div className="text-xs text-muted-foreground break-words">
+                    This listing references metadata id {metadataId}, but the backend returned 404.
+                    You can re-upload the original metadata to restore title/description/image.
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={isReuploadingMetadata}
+                    onClick={reuploadMissingMetadata}
+                  >
+                    {isReuploadingMetadata ? "Uploading…" : "Re-upload metadata"}
+                  </Button>
+                </div>
+              ) : null}
+
+              {metadata?.image ? (
+                <div className="overflow-hidden rounded-md border bg-muted">
+                  <img src={metadata.image} alt={metadata.title ?? "Listing image"} className="w-full object-cover" />
+                </div>
+              ) : null}
+
+              {metadata?.image ? (
+                <div className="truncate text-xs text-muted-foreground">Image: {metadata.image}</div>
+              ) : null}
+
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="text-sm">
                   <div className="text-muted-foreground">Price</div>
@@ -330,6 +508,104 @@ export default function ListingDetailPage() {
                     >
                       Request Refund
                     </Button>
+                  </div>
+                ) : null}
+
+                {listing.status === 4 && isSeller ? (
+                  <div className="rounded-md border p-4 text-sm space-y-2">
+                    <div className="font-medium">Pending delivery</div>
+                    <div className="text-muted-foreground">
+                      The buyer has funded escrow. The listing completes only when the buyer clicks
+                      <span className="font-medium"> Confirm Delivery</span> on this page.
+                    </div>
+                    <div className="text-muted-foreground">
+                      After completion, withdraw your payout from the <Link className="underline" href="/dashboard">Dashboard</Link>.
+                    </div>
+                    {listing.buyer !== zeroAddress ? (
+                      <div className="text-xs text-muted-foreground">Buyer: {shortenHex(listing.buyer)}</div>
+                    ) : null}
+                  </div>
+                ) : null}
+
+                {listing.status === 4 && isArbiter ? (
+                  <div className="rounded-md border p-4 text-sm space-y-3">
+                    <div className="font-medium">Arbiter actions</div>
+                    <div className="text-muted-foreground">
+                      Use these only to resolve a dispute when delivery cannot be confirmed.
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        disabled={receipt.isLoading}
+                        onClick={() => send(writeContractAsync({
+                          address: env.marketplaceRegistryAddress,
+                          abi: marketplaceRegistryAbi,
+                          functionName: "arbiterRelease",
+                          args: [listingId],
+                        }))}
+                      >
+                        Release to seller
+                      </Button>
+                      <Button
+                        variant="outline"
+                        disabled={receipt.isLoading}
+                        onClick={() => send(writeContractAsync({
+                          address: env.marketplaceRegistryAddress,
+                          abi: marketplaceRegistryAbi,
+                          functionName: "arbiterRefund",
+                          args: [listingId],
+                        }))}
+                      >
+                        Refund buyer
+                      </Button>
+                    </div>
+                  </div>
+                ) : null}
+
+                {listing.status === 5 && isSeller ? (
+                  <div className="rounded-md border p-4 text-sm space-y-3">
+                    <div className="font-medium">Completed</div>
+                    <div className="text-muted-foreground">
+                      Funds are now credited in EscrowVault. Withdraw them to your wallet.
+                    </div>
+                    <Button
+                      variant="outline"
+                      disabled={receipt.isLoading}
+                      onClick={() => send(writeContractAsync({
+                        address: env.marketplaceRegistryAddress,
+                        abi: marketplaceRegistryAbi,
+                        functionName: "withdrawPayout",
+                        args: [listing.token],
+                      }))}
+                    >
+                      Withdraw payout
+                    </Button>
+                    <div className="text-xs text-muted-foreground">
+                      Note: this withdraws all your credits for this token (not only this listing).
+                    </div>
+                  </div>
+                ) : null}
+
+                {listing.status === 6 && isBuyer ? (
+                  <div className="rounded-md border p-4 text-sm space-y-3">
+                    <div className="font-medium">Refunded</div>
+                    <div className="text-muted-foreground">
+                      Your funds were refunded into EscrowVault credits. Withdraw them to your wallet.
+                    </div>
+                    <Button
+                      variant="outline"
+                      disabled={receipt.isLoading}
+                      onClick={() => send(writeContractAsync({
+                        address: env.marketplaceRegistryAddress,
+                        abi: marketplaceRegistryAbi,
+                        functionName: "withdrawPayout",
+                        args: [listing.token],
+                      }))}
+                    >
+                      Withdraw refund
+                    </Button>
+                    <div className="text-xs text-muted-foreground">
+                      Note: this withdraws all your credits for this token (not only this listing).
+                    </div>
                   </div>
                 ) : null}
 
@@ -497,7 +773,11 @@ export default function ListingDetailPage() {
 
                 <div className="rounded-md border p-4">
                   <div className="text-sm font-medium">Withdraw payout credits</div>
-                  <div className="text-sm text-muted-foreground">Withdraw ETH credits from escrow vault via registry.</div>
+                  <div className="font-medium">
+                    <Link className="underline" href={`/seller/${listing.seller}`}>
+                      {shortenHex(listing.seller)}
+                    </Link>
+                  </div>
                   <div className="mt-3">
                     <Button
                       variant="outline"
