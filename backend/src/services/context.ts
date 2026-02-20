@@ -22,7 +22,7 @@ export function getContext(): AppContext {
   const logger = createLogger();
   const db = openDb(env.dbPath);
   const cache = new TtlCache(env.cacheTtlMs);
-  const provider = getProvider(env.sepoliaRpcUrl);
+  const provider = getProvider([env.sepoliaRpcUrl, env.sepoliaRpcUrlFallback]);
 
   ctx = { env, logger, db, cache, provider };
   return ctx;

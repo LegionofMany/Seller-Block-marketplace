@@ -31,12 +31,14 @@ copy src\.env.local.example .env
 Required:
 
 - `SEPOLIA_RPC_URL`
+- (Optional backup) `SEPOLIA_RPC_URL_FALLBACK`
 - `MARKETPLACE_REGISTRY_ADDRESS`
 
 Optional:
 
 - `DB_PATH` (default `./data/marketplace.sqlite`)
 - `START_BLOCK` (recommended: set to your deploy block to speed up first sync)
+- `INDEXER_ENABLED` (default `true`; set to `false` to run API without the background indexer)
 - `INDEXER_POLL_MS`, `INDEXER_CHUNK_SIZE`
 - `CACHE_TTL_MS`
 - `RATE_LIMIT_WINDOW_MS`, `RATE_LIMIT_MAX`

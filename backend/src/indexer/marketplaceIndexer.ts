@@ -15,8 +15,44 @@ import { fetchListingFromChain, getRegistryInterface } from "../services/blockch
 
 const CONFIRMATIONS = 3;
 
+function isTransientRpcError(err: any): boolean {
+  const code = (err?.code ?? err?.errno ?? "").toString();
+  // Node/network-level
+  if (["ECONNRESET", "ECONNREFUSED", "EPIPE", "ETIMEDOUT", "EAI_AGAIN", "ENOTFOUND"].includes(code)) return true;
+  // ethers v6
+  if (["TIMEOUT", "NETWORK_ERROR", "SERVER_ERROR"].includes(code)) return true;
+
+  const message = (err?.shortMessage ?? err?.message ?? "").toString().toLowerCase();
+  if (message.includes("timeout")) return true;
+  if (message.includes("econnreset") || message.includes("enotfound") || message.includes("eai_again")) return true;
+  return false;
+}
+
+function rpcErrorHint(err: any): string | undefined {
+  const code = (err?.code ?? err?.errno ?? "").toString();
+  if (code === "ENOTFOUND") return "RPC hostname could not be resolved (check SEPOLIA_RPC_URL, DNS, and internet connectivity).";
+  if (code === "ECONNREFUSED") return "RPC host refused the connection (check SEPOLIA_RPC_URL and that the endpoint is reachable).";
+  if (code === "TIMEOUT") return "RPC request timed out (endpoint may be down/slow; consider using a different RPC URL).";
+  if (code === "ECONNRESET") return "RPC connection was reset (often transient).";
+  return undefined;
+}
+
+function backoffMs(baseMs: number, failures: number): number {
+  const cappedFailures = Math.min(Math.max(failures, 0), 8);
+  const maxMs = Math.max(baseMs, 5 * 60_000);
+  const exp = Math.min(maxMs, baseMs * Math.pow(2, cappedFailures));
+  // +/- 20% jitter
+  const jitter = exp * 0.2 * (Math.random() * 2 - 1);
+  return Math.max(baseMs, Math.round(exp + jitter));
+}
+
 export function startMarketplaceIndexer() {
   const { env, db, provider, logger } = getContext();
+
+  if (!env.indexerEnabled) {
+    logger.info({ enabled: env.indexerEnabled }, "marketplace indexer disabled");
+    return { stop() {} };
+  }
 
   const iface = getRegistryInterface();
   const checkpointKey = `registry:${env.marketplaceRegistryAddress}:lastProcessedBlock`;
@@ -39,6 +75,9 @@ export function startMarketplaceIndexer() {
   });
 
   let running = false;
+  let stopped = false;
+  let timer: NodeJS.Timeout | null = null;
+  let failureCount = 0;
 
   async function ensureListingExists(listingId: string, createdAt: number, blockNumber: number) {
     const existing = findListing(db, listingId);
@@ -57,10 +96,18 @@ export function startMarketplaceIndexer() {
     });
   }
 
+  function scheduleNext(delayMs: number) {
+    if (stopped) return;
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(() => void tick(), delayMs);
+  }
+
   async function tick() {
+    if (stopped) return;
     if (running) return;
     running = true;
 
+    let nextDelayMs = env.indexerPollMs;
     try {
       const latest = await provider.getBlockNumber();
       const target = Math.max(0, latest - CONFIRMATIONS);
@@ -249,10 +296,25 @@ export function startMarketplaceIndexer() {
         setCheckpoint(db, checkpointKey, toBlock);
         fromBlock = toBlock + 1;
       }
+
+      failureCount = 0;
     } catch (e: any) {
-      logger.error({ err: e }, "indexer tick failed");
+      failureCount += 1;
+      const transient = isTransientRpcError(e);
+      nextDelayMs = transient ? backoffMs(env.indexerPollMs, failureCount) : env.indexerPollMs;
+      logger.error(
+        {
+          err: e,
+          transient,
+          failureCount,
+          nextRetryMs: nextDelayMs,
+          hint: rpcErrorHint(e),
+        },
+        "indexer tick failed"
+      );
     } finally {
       running = false;
+      scheduleNext(nextDelayMs);
     }
   }
 
@@ -262,17 +324,18 @@ export function startMarketplaceIndexer() {
       pollMs: env.indexerPollMs,
       chunkSize: env.indexerChunkSize,
       startBlock: env.startBlock,
+      rpcFallbackConfigured: Boolean(env.sepoliaRpcUrlFallback),
     },
     "marketplace indexer started"
   );
 
-  // Fire immediately then poll.
+  // Fire immediately then self-schedule (with adaptive backoff on failures).
   tick().catch(() => undefined);
-  const timer = setInterval(() => void tick(), env.indexerPollMs);
 
   return {
     stop() {
-      clearInterval(timer);
+      stopped = true;
+      if (timer) clearTimeout(timer);
     },
   };
 }

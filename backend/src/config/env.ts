@@ -3,8 +3,10 @@ import { isAddress, getAddress } from "ethers";
 export type Env = {
   port: number;
   sepoliaRpcUrl: string;
+  sepoliaRpcUrlFallback?: string;
   marketplaceRegistryAddress: string;
   dbPath: string;
+  indexerEnabled: boolean;
   indexerPollMs: number;
   indexerChunkSize: number;
   startBlock?: number | undefined;
@@ -32,9 +34,49 @@ function numberFromEnv(name: string, fallback: number): number {
   return parsed;
 }
 
+function boolFromEnv(name: string, fallback: boolean): boolean {
+  const raw = optional(name);
+  if (raw == null) return fallback;
+  switch (raw.toLowerCase()) {
+    case "1":
+    case "true":
+    case "yes":
+    case "y":
+    case "on":
+      return true;
+    case "0":
+    case "false":
+    case "no":
+    case "n":
+    case "off":
+      return false;
+    default:
+      throw new Error(`Invalid ${name} (expected true/false)`);
+  }
+}
+
+function validateRpcUrl(name: string, value: string) {
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    throw new Error(`Invalid ${name} (expected an http(s):// or ws(s):// URL)`);
+  }
+  if (!["http:", "https:", "ws:", "wss:"].includes(parsed.protocol)) {
+    throw new Error(`Invalid ${name} protocol (expected http(s) or ws(s))`);
+  }
+  if (!parsed.hostname) {
+    throw new Error(`Invalid ${name} (missing hostname)`);
+  }
+}
+
 export function getEnv(): Env {
   const port = numberFromEnv("PORT", 4000);
   const sepoliaRpcUrl = required("SEPOLIA_RPC_URL");
+  validateRpcUrl("SEPOLIA_RPC_URL", sepoliaRpcUrl);
+
+  const sepoliaRpcUrlFallback = optional("SEPOLIA_RPC_URL_FALLBACK");
+  if (sepoliaRpcUrlFallback) validateRpcUrl("SEPOLIA_RPC_URL_FALLBACK", sepoliaRpcUrlFallback);
 
   const marketplaceRegistryAddressRaw = required("MARKETPLACE_REGISTRY_ADDRESS");
   if (!isAddress(marketplaceRegistryAddressRaw)) throw new Error("Invalid MARKETPLACE_REGISTRY_ADDRESS");
@@ -42,6 +84,7 @@ export function getEnv(): Env {
 
   const dbPath = optional("DB_PATH") ?? "./data/marketplace.sqlite";
 
+  const indexerEnabled = boolFromEnv("INDEXER_ENABLED", true);
   const indexerPollMs = numberFromEnv("INDEXER_POLL_MS", 5_000);
   const indexerChunkSize = numberFromEnv("INDEXER_CHUNK_SIZE", 2_000);
   const startBlockRaw = optional("START_BLOCK");
@@ -55,8 +98,10 @@ export function getEnv(): Env {
   return {
     port,
     sepoliaRpcUrl,
+    ...(sepoliaRpcUrlFallback ? { sepoliaRpcUrlFallback } : {}),
     marketplaceRegistryAddress,
     dbPath,
+    indexerEnabled,
     indexerPollMs,
     indexerChunkSize,
     startBlock,

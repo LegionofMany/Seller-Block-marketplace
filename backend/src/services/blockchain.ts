@@ -1,4 +1,4 @@
-import { Contract, Interface, JsonRpcProvider, getAddress, isHexString } from "ethers";
+import { AbstractProvider, Contract, FallbackProvider, Interface, JsonRpcProvider, getAddress, isHexString } from "ethers";
 
 export type ProtocolAddresses = {
   escrowVault: string;
@@ -29,24 +29,36 @@ const raffleAbi = [
   "function quoteEntry(bytes32 raffleId, uint32 ticketCount) view returns (uint256 amount)",
 ] as const;
 
-let providerSingleton: JsonRpcProvider | null = null;
+let providerSingleton: AbstractProvider | null = null;
 let protocolAddrCache: { value: ProtocolAddresses; fetchedAt: number } | null = null;
 
-export function getProvider(rpcUrl: string) {
+export function getProvider(rpcUrl: string | Array<string | undefined>) {
   if (providerSingleton) return providerSingleton;
-  providerSingleton = new JsonRpcProvider(rpcUrl);
+
+  const urls = (Array.isArray(rpcUrl) ? rpcUrl : [rpcUrl]).filter((u): u is string => Boolean(u && u.trim().length));
+  if (urls.length === 0) throw new Error("Missing RPC URL");
+
+  if (urls.length === 1) {
+    providerSingleton = new JsonRpcProvider(urls[0]);
+    return providerSingleton;
+  }
+
+  const providers = urls.map((u) => new JsonRpcProvider(u));
+  providerSingleton = new FallbackProvider(
+    providers.map((p, i) => ({ provider: p, priority: i + 1, stallTimeout: 2_500, weight: 1 }))
+  );
   return providerSingleton;
 }
 
-export function getRegistryContract(provider: JsonRpcProvider, registryAddress: string) {
+export function getRegistryContract(provider: AbstractProvider, registryAddress: string) {
   return new Contract(registryAddress, registryAbi, provider);
 }
 
-export function getAuctionContract(provider: JsonRpcProvider, auctionAddress: string) {
+export function getAuctionContract(provider: AbstractProvider, auctionAddress: string) {
   return new Contract(auctionAddress, auctionAbi, provider);
 }
 
-export function getRaffleContract(provider: JsonRpcProvider, raffleAddress: string) {
+export function getRaffleContract(provider: AbstractProvider, raffleAddress: string) {
   return new Contract(raffleAddress, raffleAbi, provider);
 }
 
@@ -55,7 +67,7 @@ export function getRegistryInterface() {
 }
 
 export async function getProtocolAddresses(
-  provider: JsonRpcProvider,
+  provider: AbstractProvider,
   registryAddress: string,
   cacheMs: number
 ): Promise<ProtocolAddresses> {
@@ -88,7 +100,7 @@ export function normalizeAddress(value: string) {
 }
 
 export async function fetchListingFromChain(
-  provider: JsonRpcProvider,
+  provider: AbstractProvider,
   registryAddress: string,
   listingId: string
 ) {
