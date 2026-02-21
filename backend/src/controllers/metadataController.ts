@@ -14,7 +14,7 @@ export async function uploadMetadata(req: Request, res: Response) {
 
   const { metadataURI, id } = buildFakeMetadataUri(parsed.data);
 
-  upsertMetadata(db, {
+  await upsertMetadata(db, {
     id,
     title: parsed.data.title,
     description: parsed.data.description,
@@ -34,7 +34,7 @@ export async function getMetadataById(req: Request, res: Response) {
     throw new HttpError(400, "Invalid metadata id", "INVALID_METADATA_ID");
   }
 
-  const row = findMetadata(db, id);
+  const row = await findMetadata(db, id);
   if (!row) {
     throw new HttpError(404, "Metadata not found", "METADATA_NOT_FOUND");
   }

@@ -6,6 +6,7 @@ export type Env = {
   sepoliaRpcUrlFallback?: string;
   marketplaceRegistryAddress: string;
   dbPath: string;
+  corsOrigins?: string[];
   indexerEnabled: boolean;
   indexerPollMs: number;
   indexerChunkSize: number;
@@ -70,6 +71,27 @@ function validateRpcUrl(name: string, value: string) {
   }
 }
 
+function parseOrigins(raw: string | undefined): string[] | undefined {
+  if (!raw) return undefined;
+  const parts = raw
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  if (!parts.length) return undefined;
+  if (parts.includes("*")) return ["*"];
+
+  for (const o of parts) {
+    try {
+      const u = new URL(o);
+      if (!u.protocol || !u.hostname) throw new Error();
+    } catch {
+      throw new Error(`Invalid CORS origin: ${o}`);
+    }
+  }
+  return parts;
+}
+
 export function getEnv(): Env {
   const port = numberFromEnv("PORT", 4000);
   const sepoliaRpcUrl = required("SEPOLIA_RPC_URL");
@@ -82,7 +104,10 @@ export function getEnv(): Env {
   if (!isAddress(marketplaceRegistryAddressRaw)) throw new Error("Invalid MARKETPLACE_REGISTRY_ADDRESS");
   const marketplaceRegistryAddress = getAddress(marketplaceRegistryAddressRaw);
 
-  const dbPath = optional("DB_PATH") ?? "./data/marketplace.sqlite";
+  // Prefer DATABASE_URL (Postgres connection string) for managed DBs; fall back to DB_PATH for local sqlite.
+  const dbPath = optional("DATABASE_URL") ?? optional("DB_PATH") ?? "./data/marketplace.sqlite";
+
+  const corsOrigins = parseOrigins(optional("CORS_ORIGINS") ?? optional("CORS_ORIGIN"));
 
   const indexerEnabled = boolFromEnv("INDEXER_ENABLED", true);
   const indexerPollMs = numberFromEnv("INDEXER_POLL_MS", 5_000);
@@ -101,6 +126,7 @@ export function getEnv(): Env {
     ...(sepoliaRpcUrlFallback ? { sepoliaRpcUrlFallback } : {}),
     marketplaceRegistryAddress,
     dbPath,
+    ...(corsOrigins ? { corsOrigins } : {}),
     indexerEnabled,
     indexerPollMs,
     indexerChunkSize,

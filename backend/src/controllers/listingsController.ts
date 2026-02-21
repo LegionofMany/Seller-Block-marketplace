@@ -23,7 +23,7 @@ function saleTypeFromQuery(value: unknown): number | undefined {
 async function backfillListingIfMissing(id: string): Promise<ListingRow | null> {
   const { env, db, provider } = getContext();
 
-  const existing = findListing(db, id);
+  const existing = await findListing(db, id);
   if (existing) return existing;
 
   const iface = getRegistryInterface();
@@ -76,7 +76,7 @@ async function backfillListingIfMissing(id: string): Promise<ListingRow | null> 
     blockNumber,
   };
 
-  upsertListing(db, row);
+  await upsertListing(db, row);
   return row;
 }
 
@@ -94,7 +94,7 @@ export async function getListings(req: Request, res: Response) {
   const minPrice = parseBigint(req.query.minPrice);
   const maxPrice = parseBigint(req.query.maxPrice);
 
-  const rows = queryListings(db, {
+  const rows = await queryListings(db, {
     saleType,
     active,
     minPrice,
@@ -116,11 +116,11 @@ export async function getListingById(req: Request, res: Response) {
   const cached = cache.get<any>(cacheKey);
   if (cached) return res.json(cached);
 
-  const listing = (findListing(db, id) ?? (await backfillListingIfMissing(id)));
+  const listing = ((await findListing(db, id)) ?? (await backfillListingIfMissing(id)));
   if (!listing) return res.status(404).json({ error: { message: "Listing not found" } });
 
-  const auction = findAuction(db, id);
-  const raffle = findRaffle(db, id);
+  const auction = await findAuction(db, id);
+  const raffle = await findRaffle(db, id);
 
   const body = { listing, auction, raffle };
   cache.set(cacheKey, body);
@@ -141,7 +141,7 @@ export async function getListingsBySeller(req: Request, res: Response) {
   const minPrice = parseBigint(req.query.minPrice);
   const maxPrice = parseBigint(req.query.maxPrice);
 
-  const rows = queryListings(db, {
+  const rows = await queryListings(db, {
     seller,
     saleType,
     active,

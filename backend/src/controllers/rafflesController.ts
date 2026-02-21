@@ -12,7 +12,7 @@ export async function getRaffleByListingId(req: Request, res: Response) {
   const cached = cache.get<any>(cacheKey);
   if (cached) return res.json(cached);
 
-  const existing = findRaffle(db, listingId);
+  const existing = await findRaffle(db, listingId);
   if (existing) {
     const body = { raffle: existing };
     cache.set(cacheKey, body);
@@ -52,7 +52,7 @@ export async function getRaffleByListingId(req: Request, res: Response) {
     endTime: listing.endTime ?? 0,
   };
 
-  upsertRaffle(db, row);
+  await upsertRaffle(db, row);
 
   const body = { raffle: row };
   cache.set(cacheKey, body);

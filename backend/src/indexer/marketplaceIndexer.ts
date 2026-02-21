@@ -80,10 +80,10 @@ export function startMarketplaceIndexer() {
   let failureCount = 0;
 
   async function ensureListingExists(listingId: string, createdAt: number, blockNumber: number) {
-    const existing = findListing(db, listingId);
+    const existing = await findListing(db, listingId);
     if (existing) return;
     const listing = await fetchListingFromChain(provider, env.marketplaceRegistryAddress, listingId);
-    upsertListing(db, {
+    await upsertListing(db, {
       id: listingId,
       seller: listing.seller,
       metadataURI: listing.metadataURI,
@@ -112,7 +112,7 @@ export function startMarketplaceIndexer() {
       const latest = await provider.getBlockNumber();
       const target = Math.max(0, latest - CONFIRMATIONS);
 
-      const checkpoint = getCheckpoint(db, checkpointKey);
+      const checkpoint = await getCheckpoint(db, checkpointKey);
       const lastProcessed = checkpoint ?? ((env.startBlock ?? 0) - 1);
 
       let fromBlock = lastProcessed + 1;
@@ -160,7 +160,7 @@ export function startMarketplaceIndexer() {
               const price = BigInt(parsed.args.price);
               const metadataURI = String(parsed.args.metadataURI);
 
-              upsertListing(db, {
+              await upsertListing(db, {
                 id,
                 seller,
                 metadataURI,
@@ -175,7 +175,7 @@ export function startMarketplaceIndexer() {
             }
             case "ListingCancelled": {
               const id = String(parsed.args.id).toLowerCase();
-              setListingActive(db, id, 0);
+              await setListingActive(db, id, 0);
               break;
             }
             case "AuctionOpened": {
@@ -194,7 +194,7 @@ export function startMarketplaceIndexer() {
                 // ignore
               }
 
-              upsertAuction(db, {
+              await upsertAuction(db, {
                 listingId,
                 highestBid: "0",
                 highestBidder: ZeroAddress,
@@ -211,7 +211,7 @@ export function startMarketplaceIndexer() {
               } catch {
                 // ignore
               }
-              updateAuctionBid(db, listingId, bidder, amount);
+              await updateAuctionBid(db, listingId, bidder, amount);
               break;
             }
             case "AuctionClosed": {
@@ -234,13 +234,13 @@ export function startMarketplaceIndexer() {
                 // ignore
               }
 
-              upsertAuction(db, {
+              await upsertAuction(db, {
                 listingId,
                 highestBid: amount.toString(),
                 highestBidder: winner,
                 endTime,
               });
-              setListingActive(db, listingId, 0);
+              await setListingActive(db, listingId, 0);
               break;
             }
             case "RaffleOpened": {
@@ -258,7 +258,7 @@ export function startMarketplaceIndexer() {
                 // ignore
               }
 
-              upsertRaffle(db, {
+              await upsertRaffle(db, {
                 listingId,
                 ticketsSold: 0,
                 endTime,
@@ -274,7 +274,7 @@ export function startMarketplaceIndexer() {
                 // ignore
               }
               if (Number.isFinite(tickets) && tickets > 0) {
-                incrementRaffleTickets(db, listingId, tickets);
+                await incrementRaffleTickets(db, listingId, tickets);
               }
               break;
             }
@@ -285,7 +285,7 @@ export function startMarketplaceIndexer() {
               } catch {
                 // ignore
               }
-              setListingActive(db, listingId, 0);
+              await setListingActive(db, listingId, 0);
               break;
             }
             default:
@@ -293,7 +293,7 @@ export function startMarketplaceIndexer() {
           }
         }
 
-        setCheckpoint(db, checkpointKey, toBlock);
+        await setCheckpoint(db, checkpointKey, toBlock);
         fromBlock = toBlock + 1;
       }
 

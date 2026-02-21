@@ -16,7 +16,7 @@ export async function getAuctionByListingId(req: Request, res: Response) {
   const cached = cache.get<any>(cacheKey);
   if (cached) return res.json(cached);
 
-  const existing = findAuction(db, listingId);
+  const existing = await findAuction(db, listingId);
   if (existing) {
     const body = { auction: existing };
     cache.set(cacheKey, body);
@@ -44,7 +44,7 @@ export async function getAuctionByListingId(req: Request, res: Response) {
     endTime: listing.endTime ?? 0,
   };
 
-  upsertAuction(db, row);
+  await upsertAuction(db, row);
   const body = { auction: row };
   cache.set(cacheKey, body);
   return res.json(body);

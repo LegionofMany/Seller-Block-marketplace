@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { use } from "react";
 import Link from "next/link";
 import { type Address, type Hex, isAddress, parseAbiItem } from "viem";
 import { usePublicClient } from "wagmi";
@@ -46,7 +47,10 @@ function isRateLimitError(err: unknown): boolean {
     /rate limit/i.test(details);
 }
 
-export default function SellerListingsPage({ params }: { params: { address: string } }) {
+export default function SellerListingsPage({ params }: { params: Promise<{ address: string }> }) {
+  // Next.js 16 types `params` as a Promise in App Router.
+  // React 19 `use()` unwraps the promise on the client (suspends if needed).
+  const resolvedParams = use(params);
   const publicClient = usePublicClient();
 
   const [listings, setListings] = React.useState<ListingSummary[]>([]);
@@ -65,7 +69,7 @@ export default function SellerListingsPage({ params }: { params: { address: stri
     );
   }
 
-  const address = params?.address;
+  const address = resolvedParams?.address;
   const seller = isAddress(address) ? (address as Address) : null;
 
   React.useEffect(() => {

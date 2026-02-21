@@ -4,8 +4,8 @@ Express + TypeScript backend workspace for the Seller Block Marketplace monorepo
 
 This backend is a production-ready MVP API layer that:
 
-- Indexes Sepolia `MarketplaceRegistry` events into SQLite
-- Serves listings/auctions/raffles from the local DB (fast)
+- Indexes Sepolia `MarketplaceRegistry` events into Postgres
+- Serves listings/auctions/raffles from the DB
 - Provides a metadata upload endpoint (fake URI for now)
 
 ## Prerequisites
@@ -36,12 +36,14 @@ Required:
 
 Optional:
 
-- `DB_PATH` (default `./data/marketplace.sqlite`)
+- `DATABASE_URL` (preferred in production; managed Postgres connection string)
+- `DB_PATH` (legacy; local SQLite path)
 - `START_BLOCK` (recommended: set to your deploy block to speed up first sync)
 - `INDEXER_ENABLED` (default `true`; set to `false` to run API without the background indexer)
 - `INDEXER_POLL_MS`, `INDEXER_CHUNK_SIZE`
 - `CACHE_TTL_MS`
 - `RATE_LIMIT_WINDOW_MS`, `RATE_LIMIT_MAX`
+- `CORS_ORIGINS` (comma-separated list of allowed origins; set this to your Vercel domain in production)
 - `LOG_LEVEL`, `NODE_ENV`
 
 ## Run

@@ -108,6 +108,30 @@ Open `http://localhost:3000`.
 - `npm run build` — TypeScript compile to `dist/`
 - `npm start` — run compiled server from `dist/`
 
+Database / production notes
+---------------------------
+
+- Prefer a managed Postgres instance in production. Set the Postgres connection string in `DATABASE_URL` (example: `postgres://user:pass@host:5432/dbname`).
+- The backend will use `DATABASE_URL` if present; for local development you may continue to use `DB_PATH` with SQLite (but the recent migration changes prefer Postgres).
+
+Migration from SQLite to Postgres
+--------------------------------
+
+If you have existing data in the local SQLite DB (`backend/data/marketplace.sqlite`) you can copy it to Postgres using the included script:
+
+```bash
+# set these env vars to point to your Postgres and local sqlite
+export DATABASE_URL="postgres://user:pass@host:5432/dbname"
+export DB_PATH="./backend/data/marketplace.sqlite"
+cd backend
+npm install
+npm run migrate:sqlite-to-pg
+```
+
+Notes:
+- The script `backend/scripts/sqlite_to_pg.js` uses `better-sqlite3` and `pg` to read SQLite rows and upsert into Postgres. Ensure the target Postgres has the schema created (see `backend/migrations/001_init.sql`).
+- For production, create a managed Postgres (Render, Railway, Heroku, Supabase) and set `DATABASE_URL` in your environment/CI.
+
 ### frontend/
 
 - `npm run dev` — Next.js dev server

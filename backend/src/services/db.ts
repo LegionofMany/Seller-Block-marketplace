@@ -1,6 +1,6 @@
-import Database from "better-sqlite3";
 import fs from "node:fs";
 import path from "node:path";
+import { Pool } from "pg";
 
 export type ListingRow = {
   id: string;
@@ -36,184 +36,280 @@ export type MetadataRow = {
   createdAt: number;
 };
 
-let singleton: Database.Database | null = null;
+let pool: Pool | null = null;
 
-export function openDb(dbPath: string) {
-  if (singleton) return singleton;
+export function openDb(connStr: string) {
+  if (pool) return pool;
 
-  // Resolve relative paths against the backend package root (not process.cwd()),
-  // so `npm run dev` from different working directories always hits the same DB file.
-  const backendRoot = path.resolve(__dirname, "..", "..", "..");
-  const absPath = path.isAbsolute(dbPath) ? dbPath : path.join(backendRoot, dbPath);
-  fs.mkdirSync(path.dirname(absPath), { recursive: true });
+  // If a relative path was provided, treat it as a file-based SQLite path for compatibility.
+  // For Postgres, expect a connection string like postgres://user:pass@host:port/db
+  const isPg = typeof connStr === "string" && connStr.startsWith("postgres");
+  if (!isPg) {
+    // Keep minimal compatibility: create directory for sqlite path but warn.
+    const backendRoot = path.resolve(__dirname, "..", "..", "..");
+    const absPath = path.isAbsolute(connStr) ? connStr : path.join(backendRoot, connStr);
+    fs.mkdirSync(path.dirname(absPath), { recursive: true });
+    throw new Error("SQLite DB path support removed. Set DATABASE_URL to a Postgres connection string.");
+  }
 
-  const db = new Database(absPath);
-  db.pragma("journal_mode = WAL");
-  db.pragma("foreign_keys = ON");
+  const requireSsl =
+    /sslmode=require/i.test(connStr) ||
+    (process.env.PGSSLMODE?.toLowerCase?.() === "require") ||
+    (process.env.PGSSL?.toLowerCase?.() === "true");
 
-  migrate(db);
+  pool = new Pool({
+    connectionString: connStr,
+    ...(requireSsl ? { ssl: { rejectUnauthorized: false } } : {}),
+  });
 
-  singleton = db;
-  return db;
+  return pool;
 }
 
-function migrate(db: Database.Database) {
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS indexer_state (
-      key TEXT PRIMARY KEY,
-      value TEXT NOT NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS listings (
-      id TEXT PRIMARY KEY,
-      seller TEXT NOT NULL,
-      metadataURI TEXT NOT NULL,
-      price TEXT NOT NULL,
-      token TEXT NOT NULL,
-      saleType INTEGER NOT NULL,
-      active INTEGER NOT NULL,
-      createdAt INTEGER NOT NULL,
-      blockNumber INTEGER NOT NULL
-    );
-
-    CREATE INDEX IF NOT EXISTS idx_listings_seller ON listings(seller);
-    CREATE INDEX IF NOT EXISTS idx_listings_active ON listings(active);
-    CREATE INDEX IF NOT EXISTS idx_listings_saleType ON listings(saleType);
-    CREATE INDEX IF NOT EXISTS idx_listings_price ON listings(price);
-
-    CREATE TABLE IF NOT EXISTS auctions (
-      listingId TEXT PRIMARY KEY,
-      highestBid TEXT NOT NULL,
-      highestBidder TEXT NOT NULL,
-      endTime INTEGER NOT NULL,
-      FOREIGN KEY(listingId) REFERENCES listings(id) ON DELETE CASCADE
-    );
-
-    CREATE TABLE IF NOT EXISTS raffles (
-      listingId TEXT PRIMARY KEY,
-      ticketsSold INTEGER NOT NULL,
-      endTime INTEGER NOT NULL,
-      FOREIGN KEY(listingId) REFERENCES listings(id) ON DELETE CASCADE
-    );
-
-    CREATE TABLE IF NOT EXISTS metadata (
-      id TEXT PRIMARY KEY,
-      title TEXT NOT NULL,
-      description TEXT NOT NULL,
-      image TEXT NOT NULL,
-      attributesJson TEXT NOT NULL,
-      createdAt INTEGER NOT NULL
-    );
-  `);
+function ensurePool(db: Pool | any): Pool {
+  if (db && typeof db.query === "function") return db as Pool;
+  if (pool) return pool;
+  throw new Error("DB pool not initialized");
 }
 
-export function getCheckpoint(db: Database.Database, key: string): number | null {
-  const row = db.prepare("SELECT value FROM indexer_state WHERE key = ?").get(key) as { value: string } | undefined;
-  if (!row) return null;
-  const parsed = Number(row.value);
+function migrationsDir(): string {
+  // In production (Render) the process CWD should be the backend root.
+  const fromCwd = path.resolve(process.cwd(), "migrations");
+  if (fs.existsSync(fromCwd)) return fromCwd;
+
+  // Fallback for unusual launch directories.
+  const fromDist = path.resolve(__dirname, "..", "..", "migrations");
+  return fromDist;
+}
+
+export async function migrateDb(db: Pool): Promise<void> {
+  const p = ensurePool(db);
+  const dir = migrationsDir();
+
+  if (!fs.existsSync(dir)) {
+    throw new Error(`Migrations directory not found: ${dir}`);
+  }
+
+  const files = fs
+    .readdirSync(dir)
+    .filter((f) => f.toLowerCase().endsWith(".sql"))
+    .sort((a, b) => a.localeCompare(b));
+
+  const client = await p.connect();
+  try {
+    await client.query("BEGIN");
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS schema_migrations (
+        id TEXT PRIMARY KEY,
+        applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
+
+    const appliedRes = await client.query("SELECT id FROM schema_migrations");
+    const applied = new Set<string>(appliedRes.rows.map((r: any) => String(r.id)));
+
+    for (const file of files) {
+      if (applied.has(file)) continue;
+      const sql = fs.readFileSync(path.join(dir, file), "utf8");
+      if (!sql.trim()) continue;
+
+      await client.query(sql);
+      await client.query("INSERT INTO schema_migrations(id) VALUES($1)", [file]);
+    }
+
+    await client.query("COMMIT");
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+export async function closeDb(db: Pool): Promise<void> {
+  await ensurePool(db).end();
+}
+
+function toListingRow(r: any): ListingRow {
+  return {
+    id: String(r.id),
+    seller: String(r.seller),
+    metadataURI: String(r.metadataURI ?? r.metadatauri ?? r.metadata_uri),
+    price: String(r.price),
+    token: String(r.token),
+    saleType: Number(r.saleType ?? r.saletype ?? r.sale_type),
+    active: Number(r.active) ? 1 : 0,
+    createdAt: Number(r.createdAt ?? r.createdat ?? r.created_at),
+    blockNumber: Number(r.blockNumber ?? r.blocknumber ?? r.block_number),
+  };
+}
+
+function toAuctionRow(r: any): AuctionRow {
+  return {
+    listingId: String(r.listingId ?? r.listingid ?? r.listing_id),
+    highestBid: String(r.highestBid ?? r.highestbid ?? r.highest_bid),
+    highestBidder: String(r.highestBidder ?? r.highestbidder ?? r.highest_bidder),
+    endTime: Number(r.endTime ?? r.endtime ?? r.end_time),
+  };
+}
+
+function toRaffleRow(r: any): RaffleRow {
+  return {
+    listingId: String(r.listingId ?? r.listingid ?? r.listing_id),
+    ticketsSold: Number(r.ticketsSold ?? r.ticketssold ?? r.tickets_sold),
+    endTime: Number(r.endTime ?? r.endtime ?? r.end_time),
+  };
+}
+
+function toMetadataRow(r: any): MetadataRow {
+  return {
+    id: String(r.id),
+    title: String(r.title),
+    description: String(r.description),
+    image: String(r.image),
+    attributesJson: String(r.attributesJson ?? r.attributesjson ?? r.attributes_json),
+    createdAt: Number(r.createdAt ?? r.createdat ?? r.created_at),
+  };
+}
+
+export async function getCheckpoint(_db: Pool | any, key: string): Promise<number | null> {
+  const p = ensurePool(_db);
+  const res = await p.query("SELECT value FROM indexer_state WHERE key = $1", [key]);
+  if (res.rows.length === 0) return null;
+  const parsed = Number(res.rows[0].value);
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-export function setCheckpoint(db: Database.Database, key: string, value: number) {
-  db.prepare("INSERT INTO indexer_state(key, value) VALUES(?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(
-    key,
-    String(value)
+export async function setCheckpoint(_db: Pool | any, key: string, value: number) {
+  const p = ensurePool(_db);
+  await p.query(
+    `INSERT INTO indexer_state(key, value) VALUES($1, $2) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+    [key, String(value)]
   );
 }
 
-export function upsertListing(db: Database.Database, row: ListingRow) {
-  db.prepare(
+export async function upsertListing(_db: Pool | any, row: ListingRow) {
+  const p = ensurePool(_db);
+  await p.query(
     `INSERT INTO listings(id, seller, metadataURI, price, token, saleType, active, createdAt, blockNumber)
-     VALUES(@id, @seller, @metadataURI, @price, @token, @saleType, @active, @createdAt, @blockNumber)
-     ON CONFLICT(id) DO UPDATE SET
-       seller = excluded.seller,
-       metadataURI = excluded.metadataURI,
-       price = excluded.price,
-       token = excluded.token,
-       saleType = excluded.saleType,
-       active = excluded.active,
-       createdAt = excluded.createdAt,
-       blockNumber = excluded.blockNumber
-    `
-  ).run(row);
+     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)
+     ON CONFLICT (id) DO UPDATE SET
+       seller = EXCLUDED.seller,
+       metadataURI = EXCLUDED.metadataURI,
+       price = EXCLUDED.price,
+       token = EXCLUDED.token,
+       saleType = EXCLUDED.saleType,
+       active = EXCLUDED.active,
+       createdAt = EXCLUDED.createdAt,
+       blockNumber = EXCLUDED.blockNumber
+    `,
+    [row.id, row.seller, row.metadataURI, row.price, row.token, row.saleType, row.active, row.createdAt, row.blockNumber]
+  );
 }
 
-export function setListingActive(db: Database.Database, listingId: string, active: 0 | 1) {
-  db.prepare("UPDATE listings SET active = ? WHERE id = ?").run(active, listingId);
+export async function setListingActive(_db: Pool | any, listingId: string, active: 0 | 1) {
+  const p = ensurePool(_db);
+  await p.query("UPDATE listings SET active = $1 WHERE id = $2", [active, listingId]);
 }
 
-export function upsertAuction(db: Database.Database, row: AuctionRow) {
-  db.prepare(
+export async function upsertAuction(_db: Pool | any, row: AuctionRow) {
+  const p = ensurePool(_db);
+  await p.query(
     `INSERT INTO auctions(listingId, highestBid, highestBidder, endTime)
-     VALUES(@listingId, @highestBid, @highestBidder, @endTime)
-     ON CONFLICT(listingId) DO UPDATE SET
-       highestBid = excluded.highestBid,
-       highestBidder = excluded.highestBidder,
-       endTime = excluded.endTime
-    `
-  ).run(row);
+     VALUES($1,$2,$3,$4)
+     ON CONFLICT (listingId) DO UPDATE SET
+       highestBid = EXCLUDED.highestBid,
+       highestBidder = EXCLUDED.highestBidder,
+       endTime = EXCLUDED.endTime
+    `,
+    [row.listingId, row.highestBid, row.highestBidder, row.endTime]
+  );
 }
 
-export function updateAuctionBid(db: Database.Database, listingId: string, bidder: string, amount: bigint) {
-  const existing = db.prepare("SELECT highestBid FROM auctions WHERE listingId = ?").get(listingId) as
-    | { highestBid: string }
-    | undefined;
-
-  const current = existing ? BigInt(existing.highestBid) : 0n;
+export async function updateAuctionBid(_db: Pool | any, listingId: string, bidder: string, amount: bigint) {
+  const p = ensurePool(_db);
+  const res = await p.query('SELECT highestbid AS "highestBid" FROM auctions WHERE listingid = $1', [listingId]);
+  const current = res.rows.length ? BigInt(res.rows[0].highestBid) : 0n;
   if (amount <= current) return;
-
-  db.prepare(
+  await p.query(
     `INSERT INTO auctions(listingId, highestBid, highestBidder, endTime)
-     VALUES(?, ?, ?, 0)
-     ON CONFLICT(listingId) DO UPDATE SET highestBid = excluded.highestBid, highestBidder = excluded.highestBidder`
-  ).run(listingId, amount.toString(), bidder);
+     VALUES($1,$2,$3,0)
+     ON CONFLICT (listingId) DO UPDATE SET highestBid = EXCLUDED.highestBid, highestBidder = EXCLUDED.highestBidder`,
+    [listingId, amount.toString(), bidder]
+  );
 }
 
-export function upsertRaffle(db: Database.Database, row: RaffleRow) {
-  db.prepare(
+export async function upsertRaffle(_db: Pool | any, row: RaffleRow) {
+  const p = ensurePool(_db);
+  await p.query(
     `INSERT INTO raffles(listingId, ticketsSold, endTime)
-     VALUES(@listingId, @ticketsSold, @endTime)
-     ON CONFLICT(listingId) DO UPDATE SET
-       ticketsSold = excluded.ticketsSold,
-       endTime = excluded.endTime`
-  ).run(row);
+     VALUES($1,$2,$3)
+     ON CONFLICT (listingId) DO UPDATE SET
+       ticketsSold = EXCLUDED.ticketsSold,
+       endTime = EXCLUDED.endTime`,
+    [row.listingId, row.ticketsSold, row.endTime]
+  );
 }
 
-export function incrementRaffleTickets(db: Database.Database, listingId: string, tickets: number) {
-  db.prepare(
+export async function incrementRaffleTickets(_db: Pool | any, listingId: string, tickets: number) {
+  const p = ensurePool(_db);
+  await p.query(
     `INSERT INTO raffles(listingId, ticketsSold, endTime)
-     VALUES(?, ?, 0)
-     ON CONFLICT(listingId) DO UPDATE SET ticketsSold = ticketsSold + excluded.ticketsSold`
-  ).run(listingId, tickets);
+     VALUES($1,$2,0)
+     ON CONFLICT (listingId) DO UPDATE SET ticketsSold = raffles.ticketsSold + EXCLUDED.ticketsSold`,
+    [listingId, tickets]
+  );
 }
 
-export function findListing(db: Database.Database, id: string): ListingRow | null {
-  return (db.prepare("SELECT * FROM listings WHERE id = ?").get(id) as ListingRow | undefined) ?? null;
+export async function findListing(_db: Pool | any, id: string): Promise<ListingRow | null> {
+  const p = ensurePool(_db);
+  const res = await p.query(
+    'SELECT id, seller, metadatauri AS "metadataURI", price, token, saletype AS "saleType", active, createdat AS "createdAt", blocknumber AS "blockNumber" FROM listings WHERE id = $1',
+    [id]
+  );
+  return res.rows[0] ? toListingRow(res.rows[0]) : null;
 }
 
-export function findAuction(db: Database.Database, listingId: string): AuctionRow | null {
-  return (db.prepare("SELECT * FROM auctions WHERE listingId = ?").get(listingId) as AuctionRow | undefined) ?? null;
+export async function findAuction(_db: Pool | any, listingId: string): Promise<AuctionRow | null> {
+  const p = ensurePool(_db);
+  const res = await p.query(
+    'SELECT listingid AS "listingId", highestbid AS "highestBid", highestbidder AS "highestBidder", endtime AS "endTime" FROM auctions WHERE listingid = $1',
+    [listingId]
+  );
+  return res.rows[0] ? toAuctionRow(res.rows[0]) : null;
 }
 
-export function findRaffle(db: Database.Database, listingId: string): RaffleRow | null {
-  return (db.prepare("SELECT * FROM raffles WHERE listingId = ?").get(listingId) as RaffleRow | undefined) ?? null;
+export async function findRaffle(_db: Pool | any, listingId: string): Promise<RaffleRow | null> {
+  const p = ensurePool(_db);
+  const res = await p.query(
+    'SELECT listingid AS "listingId", ticketssold AS "ticketsSold", endtime AS "endTime" FROM raffles WHERE listingid = $1',
+    [listingId]
+  );
+  return res.rows[0] ? toRaffleRow(res.rows[0]) : null;
 }
 
-export function upsertMetadata(db: Database.Database, row: MetadataRow) {
-  db.prepare(
+export async function upsertMetadata(_db: Pool | any, row: MetadataRow) {
+  const p = ensurePool(_db);
+  await p.query(
     `INSERT INTO metadata(id, title, description, image, attributesJson, createdAt)
-     VALUES(@id, @title, @description, @image, @attributesJson, @createdAt)
-     ON CONFLICT(id) DO UPDATE SET
-       title = excluded.title,
-       description = excluded.description,
-       image = excluded.image,
-       attributesJson = excluded.attributesJson,
-       createdAt = excluded.createdAt`
-  ).run(row);
+     VALUES($1,$2,$3,$4,$5,$6)
+     ON CONFLICT (id) DO UPDATE SET
+       title = EXCLUDED.title,
+       description = EXCLUDED.description,
+       image = EXCLUDED.image,
+       attributesJson = EXCLUDED.attributesJson,
+       createdAt = EXCLUDED.createdAt`,
+    [row.id, row.title, row.description, row.image, row.attributesJson, row.createdAt]
+  );
 }
 
-export function findMetadata(db: Database.Database, id: string): MetadataRow | null {
-  return (db.prepare("SELECT * FROM metadata WHERE id = ?").get(id) as MetadataRow | undefined) ?? null;
+export async function findMetadata(_db: Pool | any, id: string): Promise<MetadataRow | null> {
+  const p = ensurePool(_db);
+  const res = await p.query(
+    'SELECT id, title, description, image, attributesjson AS "attributesJson", createdat AS "createdAt" FROM metadata WHERE id = $1',
+    [id]
+  );
+  return res.rows[0] ? toMetadataRow(res.rows[0]) : null;
 }
 
 export type ListingsQuery = {
@@ -226,39 +322,44 @@ export type ListingsQuery = {
   offset: number;
 };
 
-export function queryListings(db: Database.Database, q: ListingsQuery) {
+export async function queryListings(_db: Pool | any, q: ListingsQuery) {
+  const p = ensurePool(_db);
   const where: string[] = [];
   const params: any[] = [];
 
   if (q.seller) {
-    where.push("seller = ?");
+    where.push(`seller = $${params.length + 1}`);
     params.push(q.seller);
   }
   if (typeof q.saleType === "number") {
-    where.push("saleType = ?");
+    where.push(`saleType = $${params.length + 1}`);
     params.push(q.saleType);
   }
   if (typeof q.active === "boolean") {
-    where.push("active = ?");
+    where.push(`active = $${params.length + 1}`);
     params.push(q.active ? 1 : 0);
   }
   if (typeof q.minPrice === "bigint") {
-    // Stored as decimal strings, so cast to INTEGER for comparisons.
-    where.push("CAST(price AS INTEGER) >= ?");
+    where.push(`CAST(price AS BIGINT) >= $${params.length + 1}`);
     params.push(q.minPrice.toString());
   }
   if (typeof q.maxPrice === "bigint") {
-    where.push("CAST(price AS INTEGER) <= ?");
+    where.push(`CAST(price AS BIGINT) <= $${params.length + 1}`);
     params.push(q.maxPrice.toString());
   }
 
   const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
 
-  const rows = db
-    .prepare(
-      `SELECT * FROM listings ${whereSql} ORDER BY blockNumber DESC LIMIT ? OFFSET ?`
-    )
-    .all(...params, q.limit, q.offset) as ListingRow[];
+  params.push(q.limit, q.offset);
+  const limitParam = `$${params.length - 1}`;
+  const offsetParam = `$${params.length}`;
 
-  return rows;
+  const res = await p.query(
+    `SELECT id, seller, metadatauri AS "metadataURI", price, token, saletype AS "saleType", active, createdat AS "createdAt", blocknumber AS "blockNumber"
+     FROM listings ${whereSql}
+     ORDER BY blocknumber DESC
+     LIMIT ${limitParam} OFFSET ${offsetParam}`,
+    params
+  );
+  return res.rows.map(toListingRow);
 }

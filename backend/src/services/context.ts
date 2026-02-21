@@ -1,4 +1,4 @@
-import type Database from "better-sqlite3";
+import type { Pool } from "pg";
 import { getEnv, type Env } from "../config/env";
 import { createLogger } from "../config/logger";
 import { openDb } from "./db";
@@ -8,7 +8,7 @@ import { getProvider } from "./blockchain";
 export type AppContext = {
   env: Env;
   logger: ReturnType<typeof createLogger>;
-  db: Database.Database;
+  db: Pool;
   cache: TtlCache;
   provider: ReturnType<typeof getProvider>;
 };
