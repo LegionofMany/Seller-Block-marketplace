@@ -7,7 +7,8 @@
   Note: run when Postgres is reachable and empty or compatible schema.
 */
 const { Pool } = require('pg');
-const Database = require('better-sqlite3');
+const initSqlJs = require('sql.js');
+const fs = require('fs');
 const path = require('path');
 
 function required(name) {
@@ -22,12 +23,28 @@ function required(name) {
 const DATABASE_URL = process.env.DATABASE_URL || required('DATABASE_URL');
 const DB_PATH = process.env.DB_PATH || './data/marketplace.sqlite';
 
+function rowsFromExec(execResult) {
+  if (!execResult || !execResult.length) return [];
+  const { columns, values } = execResult[0];
+  return values.map((row) => {
+    const obj = {};
+    for (let i = 0; i < columns.length; i++) obj[columns[i]] = row[i];
+    return obj;
+  });
+}
+
+function selectAll(sqliteDb, sql) {
+  return rowsFromExec(sqliteDb.exec(sql));
+}
+
 async function run() {
   console.log('Connecting to Postgres...');
   const pool = new Pool({ connectionString: DATABASE_URL });
   const sqlitePath = path.resolve(DB_PATH);
   console.log('Opening SQLite:', sqlitePath);
-  const sdb = new Database(sqlitePath, { readonly: true });
+  const sqliteFile = fs.readFileSync(sqlitePath);
+  const SQL = await initSqlJs();
+  const sdb = new SQL.Database(sqliteFile);
 
   try {
     // optional: ensure schema exists in Postgres by running migrations manually
@@ -38,7 +55,7 @@ async function run() {
       await client.query('BEGIN');
 
       // indexer_state
-      const states = sdb.prepare('SELECT key, value FROM indexer_state').all();
+      const states = selectAll(sdb, 'SELECT key, value FROM indexer_state');
       for (const r of states) {
         await client.query(
           `INSERT INTO indexer_state(key, value) VALUES($1,$2) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
@@ -47,7 +64,7 @@ async function run() {
       }
 
       // listings
-      const listings = sdb.prepare('SELECT * FROM listings').all();
+      const listings = selectAll(sdb, 'SELECT * FROM listings');
       for (const r of listings) {
         await client.query(
           `INSERT INTO listings(id, seller, metadataURI, price, token, saleType, active, createdAt, blockNumber)
@@ -66,7 +83,7 @@ async function run() {
       }
 
       // auctions
-      const auctions = sdb.prepare('SELECT * FROM auctions').all();
+      const auctions = selectAll(sdb, 'SELECT * FROM auctions');
       for (const r of auctions) {
         await client.query(
           `INSERT INTO auctions(listingId, highestBid, highestBidder, endTime)
@@ -77,7 +94,7 @@ async function run() {
       }
 
       // raffles
-      const raffles = sdb.prepare('SELECT * FROM raffles').all();
+      const raffles = selectAll(sdb, 'SELECT * FROM raffles');
       for (const r of raffles) {
         await client.query(
           `INSERT INTO raffles(listingId, ticketsSold, endTime)
@@ -88,7 +105,7 @@ async function run() {
       }
 
       // metadata
-      const metas = sdb.prepare('SELECT * FROM metadata').all();
+      const metas = selectAll(sdb, 'SELECT * FROM metadata');
       for (const r of metas) {
         await client.query(
           `INSERT INTO metadata(id, title, description, image, attributesJson, createdAt)

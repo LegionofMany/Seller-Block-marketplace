@@ -33,11 +33,11 @@ Required:
 - `SEPOLIA_RPC_URL`
 - (Optional backup) `SEPOLIA_RPC_URL_FALLBACK`
 - `MARKETPLACE_REGISTRY_ADDRESS`
+- `DATABASE_URL` (managed Postgres connection string)
 
 Optional:
 
-- `DATABASE_URL` (preferred in production; managed Postgres connection string)
-- `DB_PATH` (legacy; local SQLite path)
+- `PORT` (defaults to `4000`)
 - `START_BLOCK` (recommended: set to your deploy block to speed up first sync)
 - `INDEXER_ENABLED` (default `true`; set to `false` to run API without the background indexer)
 - `INDEXER_POLL_MS`, `INDEXER_CHUNK_SIZE`

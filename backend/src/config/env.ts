@@ -104,8 +104,16 @@ export function getEnv(): Env {
   if (!isAddress(marketplaceRegistryAddressRaw)) throw new Error("Invalid MARKETPLACE_REGISTRY_ADDRESS");
   const marketplaceRegistryAddress = getAddress(marketplaceRegistryAddressRaw);
 
-  // Prefer DATABASE_URL (Postgres connection string) for managed DBs; fall back to DB_PATH for local sqlite.
-  const dbPath = optional("DATABASE_URL") ?? optional("DB_PATH") ?? "./data/marketplace.sqlite";
+  const databaseUrl = optional("DATABASE_URL");
+  if (!databaseUrl) {
+    if (optional("DB_PATH")) {
+      throw new Error("DB_PATH is no longer supported. Set DATABASE_URL to a Postgres connection string.");
+    }
+    throw new Error("Missing required env var: DATABASE_URL");
+  }
+
+  // Kept as dbPath for backward compatibility in the rest of the codebase.
+  const dbPath = databaseUrl;
 
   const corsOrigins = parseOrigins(optional("CORS_ORIGINS") ?? optional("CORS_ORIGIN"));
 
