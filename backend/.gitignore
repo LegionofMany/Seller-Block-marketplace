@@ -13,6 +13,7 @@
 .env
 .env.*
 !src/.env.local.example
+.env.example
 
 # logs
 npm-debug.log*

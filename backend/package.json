@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "nodemon --exec ts-node src/index.ts",
     "build": "tsc",
+    "buildyarn": "npm run build",
     "start": "node dist/index.js",
     "migrate:sqlite-to-pg": "node ./scripts/sqlite_to_pg.js",
     "test": "echo \"Error: no test specified\" && exit 1"
