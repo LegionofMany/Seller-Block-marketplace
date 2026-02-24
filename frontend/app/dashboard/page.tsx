@@ -250,13 +250,13 @@ export default function DashboardPage() {
           <CardDescription>Connected address and quick helpers.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-2 text-sm">
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
             <div className="text-muted-foreground">Address</div>
-            <div className="font-medium">{address ? shortenHex(address) : "Not connected"}</div>
+            <div className="font-medium break-all sm:text-right">{address ? shortenHex(address) : "Not connected"}</div>
           </div>
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
             <div className="text-muted-foreground">Last listing</div>
-            <div className="font-medium break-all">
+            <div className="font-medium break-all sm:text-right">
               {lastListingId && lastListingId !== ("0x" + "00".repeat(32)) ? (
                 <Link className="underline" href={`/listing/${lastListingId}`}> {shortenHex(lastListingId)} </Link>
               ) : (
@@ -279,6 +279,8 @@ export default function DashboardPage() {
           </div>
           <Button
             variant="outline"
+            size="lg"
+            className="w-full sm:w-auto"
             disabled={!address}
             onClick={async () => {
               try {
@@ -310,31 +312,31 @@ export default function DashboardPage() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2 text-sm">
-            <div className="flex items-center justify-between gap-3">
+            <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
               <div className="text-muted-foreground">Registry owner</div>
-              <div className="font-medium break-all">{typeof registryOwner === "string" ? registryOwner : "—"}</div>
+              <div className="font-medium break-all sm:text-right">{typeof registryOwner === "string" ? registryOwner : "—"}</div>
             </div>
-            <div className="flex items-center justify-between gap-3">
+            <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
               <div className="text-muted-foreground">Vault owner</div>
-              <div className="font-medium break-all">{typeof vaultOwner === "string" ? vaultOwner : "—"}</div>
+              <div className="font-medium break-all sm:text-right">{typeof vaultOwner === "string" ? vaultOwner : "—"}</div>
             </div>
-            <div className="flex items-center justify-between gap-3">
+            <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
               <div className="text-muted-foreground">Vault controller</div>
-              <div className="font-medium break-all">{typeof vaultControllerOnchain === "string" ? vaultControllerOnchain : "—"}</div>
+              <div className="font-medium break-all sm:text-right">{typeof vaultControllerOnchain === "string" ? vaultControllerOnchain : "—"}</div>
             </div>
-            <div className="flex items-center justify-between gap-3">
+            <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
               <div className="text-muted-foreground">Vault arbiter</div>
-              <div className="font-medium break-all">{typeof vaultArbiterOnchain === "string" ? vaultArbiterOnchain : "—"}</div>
+              <div className="font-medium break-all sm:text-right">{typeof vaultArbiterOnchain === "string" ? vaultArbiterOnchain : "—"}</div>
             </div>
-            <div className="flex items-center justify-between gap-3">
+            <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
               <div className="text-muted-foreground">Protocol fee</div>
-              <div className="font-medium">
+              <div className="font-medium sm:text-right">
                 {typeof protocolFeeBps === "bigint" ? `${protocolFeeBps.toString()} bps` : "—"}
               </div>
             </div>
-            <div className="flex items-center justify-between gap-3">
+            <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
               <div className="text-muted-foreground">Fee recipient</div>
-              <div className="font-medium break-all">{typeof feeRecipient === "string" ? feeRecipient : "—"}</div>
+              <div className="font-medium break-all sm:text-right">{typeof feeRecipient === "string" ? feeRecipient : "—"}</div>
             </div>
           </div>
 

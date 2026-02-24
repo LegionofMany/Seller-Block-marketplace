@@ -237,13 +237,13 @@ export default function CreateListingPage() {
             <div className="space-y-2">
               <Label>Sale type</Label>
               <div className="flex flex-wrap gap-2">
-                <Button type="button" variant={saleType === 0 ? "default" : "outline"} onClick={() => setSaleType(0)}>
+                <Button type="button" size="lg" variant={saleType === 0 ? "default" : "outline"} onClick={() => setSaleType(0)} className="w-full sm:w-auto">
                   Fixed price
                 </Button>
-                <Button type="button" variant={saleType === 1 ? "default" : "outline"} onClick={() => setSaleType(1)}>
+                <Button type="button" size="lg" variant={saleType === 1 ? "default" : "outline"} onClick={() => setSaleType(1)} className="w-full sm:w-auto">
                   Auction
                 </Button>
-                <Button type="button" variant={saleType === 2 ? "default" : "outline"} onClick={() => setSaleType(2)}>
+                <Button type="button" size="lg" variant={saleType === 2 ? "default" : "outline"} onClick={() => setSaleType(2)} className="w-full sm:w-auto">
                   Raffle
                 </Button>
               </div>
@@ -345,7 +345,9 @@ export default function CreateListingPage() {
               </div>
             ) : null}
 
-            <Button type="submit">Create</Button>
+            <Button type="submit" size="lg" className="w-full sm:w-auto">
+              Create
+            </Button>
           </form>
         </CardContent>
       </Card>

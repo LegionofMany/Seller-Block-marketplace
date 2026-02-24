@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -21,7 +22,7 @@ export function ListingCard({ row }: { row: ListingSummary }) {
 
   return (
     <Link href={`/listing/${row.id}`} className="block">
-      <Card className="transition-colors hover:bg-accent/30">
+      <Card className="h-full transition-colors hover:bg-accent/30 active:bg-accent/40">
         <CardHeader>
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
@@ -34,8 +35,17 @@ export function ListingCard({ row }: { row: ListingSummary }) {
         <CardContent>
           {imageUrl ? (
             <div className="mb-3 overflow-hidden rounded-md border">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={imageUrl} alt={title} className="h-36 w-full object-cover" />
+              <div className="relative h-40 w-full">
+                <Image
+                  src={imageUrl}
+                  alt={title}
+                  fill
+                  className="object-cover"
+                  sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+                  unoptimized
+                  priority={false}
+                />
+              </div>
             </div>
           ) : null}
 

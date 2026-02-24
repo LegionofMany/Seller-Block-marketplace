@@ -19,13 +19,18 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className="min-h-screen bg-background text-foreground">
+      <body className="min-h-screen overflow-x-hidden bg-background text-foreground">
         <ThemeProvider>
           <Web3Providers>
             <Toaster richColors theme="dark" />
             <div className="min-h-screen">
               <SiteHeader />
-              <main className="mx-auto w-full max-w-6xl px-4 py-8">{children}</main>
+              <main className="mx-auto w-full max-w-screen-xl px-4 py-6 sm:py-8">{children}</main>
+              <footer className="border-t">
+                <div className="mx-auto w-full max-w-screen-xl px-4 py-6 text-xs text-muted-foreground">
+                  Seller Block Marketplace
+                </div>
+              </footer>
             </div>
           </Web3Providers>
         </ThemeProvider>

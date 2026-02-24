@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { type Address, type Hex, isAddress, parseEther, zeroAddress } from "viem";
@@ -375,6 +376,8 @@ export default function ListingDetailPage() {
                   <Button
                     type="button"
                     variant="outline"
+                    size="lg"
+                    className="w-full sm:w-auto"
                     disabled={isReuploadingMetadata}
                     onClick={reuploadMissingMetadata}
                   >
@@ -385,7 +388,17 @@ export default function ListingDetailPage() {
 
               {metadata?.image ? (
                 <div className="overflow-hidden rounded-md border bg-muted">
-                  <img src={metadata.image} alt={metadata.title ?? "Listing image"} className="w-full object-cover" />
+                  <div className="relative w-full aspect-[4/3]">
+                    <Image
+                      src={metadata.image}
+                      alt={metadata.title ?? "Listing image"}
+                      fill
+                      className="object-cover"
+                      sizes="100vw"
+                      unoptimized
+                      priority={false}
+                    />
+                  </div>
                 </div>
               ) : null}
 
@@ -420,6 +433,8 @@ export default function ListingDetailPage() {
                 {listing.status === 1 && isSeller ? (
                   <Button
                     variant="destructive"
+                    size="lg"
+                    className="w-full sm:w-auto"
                     disabled={receipt.isLoading}
                     onClick={() => send(writeContractAsync({
                       address: env.marketplaceRegistryAddress,
@@ -440,9 +455,11 @@ export default function ListingDetailPage() {
                         <div className="text-muted-foreground">
                           Approve the EscrowVault, then buy.
                         </div>
-                        <div className="mt-3 flex flex-wrap gap-2">
+                        <div className="mt-3 flex flex-col gap-2 sm:flex-row">
                           <Button
                             variant="secondary"
+                            size="lg"
+                            className="w-full sm:w-auto"
                             disabled={approvedEnough || receipt.isLoading}
                             onClick={() => send(writeContractAsync({
                               address: listing.token,
@@ -454,6 +471,8 @@ export default function ListingDetailPage() {
                             {approvedEnough ? "Approved" : "Approve"}
                           </Button>
                           <Button
+                            size="lg"
+                            className="w-full sm:w-auto"
                             disabled={!approvedEnough || receipt.isLoading}
                             onClick={() => send(writeContractAsync({
                               address: env.marketplaceRegistryAddress,
@@ -468,6 +487,8 @@ export default function ListingDetailPage() {
                       </div>
                     ) : (
                       <Button
+                        size="lg"
+                        className="w-full sm:w-auto"
                         disabled={receipt.isLoading}
                         onClick={() => send(writeContractAsync({
                           address: env.marketplaceRegistryAddress,
@@ -484,8 +505,10 @@ export default function ListingDetailPage() {
                 ) : null}
 
                 {listing.status === 4 && isBuyer ? (
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-col gap-2 sm:flex-row">
                     <Button
+                      size="lg"
+                      className="w-full sm:w-auto"
                       disabled={receipt.isLoading}
                       onClick={() => send(writeContractAsync({
                         address: env.marketplaceRegistryAddress,
@@ -498,6 +521,8 @@ export default function ListingDetailPage() {
                     </Button>
                     <Button
                       variant="outline"
+                      size="lg"
+                      className="w-full sm:w-auto"
                       disabled={receipt.isLoading}
                       onClick={() => send(writeContractAsync({
                         address: env.marketplaceRegistryAddress,
@@ -533,8 +558,10 @@ export default function ListingDetailPage() {
                     <div className="text-muted-foreground">
                       Use these only to resolve a dispute when delivery cannot be confirmed.
                     </div>
-                    <div className="flex flex-wrap gap-2">
+                    <div className="flex flex-col gap-2 sm:flex-row">
                       <Button
+                        size="lg"
+                        className="w-full sm:w-auto"
                         disabled={receipt.isLoading}
                         onClick={() => send(writeContractAsync({
                           address: env.marketplaceRegistryAddress,
@@ -547,6 +574,8 @@ export default function ListingDetailPage() {
                       </Button>
                       <Button
                         variant="outline"
+                        size="lg"
+                        className="w-full sm:w-auto"
                         disabled={receipt.isLoading}
                         onClick={() => send(writeContractAsync({
                           address: env.marketplaceRegistryAddress,
@@ -569,6 +598,8 @@ export default function ListingDetailPage() {
                     </div>
                     <Button
                       variant="outline"
+                      size="lg"
+                      className="w-full sm:w-auto"
                       disabled={receipt.isLoading}
                       onClick={() => send(writeContractAsync({
                         address: env.marketplaceRegistryAddress,
@@ -593,6 +624,8 @@ export default function ListingDetailPage() {
                     </div>
                     <Button
                       variant="outline"
+                      size="lg"
+                      className="w-full sm:w-auto"
                       disabled={receipt.isLoading}
                       onClick={() => send(writeContractAsync({
                         address: env.marketplaceRegistryAddress,
@@ -617,9 +650,11 @@ export default function ListingDetailPage() {
                       <Input value={bidAmount} onChange={(e) => setBidAmount(e.target.value)} placeholder={native ? "0.05" : "1000000"} />
                     </div>
                     {!native ? (
-                      <div className="flex flex-wrap gap-2">
+                      <div className="flex flex-col gap-2 sm:flex-row">
                         <Button
                           variant="secondary"
+                          size="lg"
+                          className="w-full sm:w-auto"
                           disabled={receipt.isLoading || !parsedBidAmount || bidApproved || env.auctionModuleAddress === zeroAddress}
                           onClick={() =>
                             send(
@@ -635,6 +670,8 @@ export default function ListingDetailPage() {
                           {bidApproved ? "Approved" : "Approve"}
                         </Button>
                         <Button
+                          size="lg"
+                          className="w-full sm:w-auto"
                           disabled={receipt.isLoading || !parsedBidAmount || !bidApproved}
                           onClick={() =>
                             send(
@@ -652,6 +689,8 @@ export default function ListingDetailPage() {
                       </div>
                     ) : (
                       <Button
+                        size="lg"
+                        className="w-full sm:w-auto"
                         disabled={receipt.isLoading || !parsedBidAmount}
                         onClick={() =>
                           send(
@@ -672,6 +711,8 @@ export default function ListingDetailPage() {
                     {isSeller ? (
                       <Button
                         variant="secondary"
+                        size="lg"
+                        className="w-full sm:w-auto"
                         disabled={receipt.isLoading}
                         onClick={() => send(writeContractAsync({
                           address: env.marketplaceRegistryAddress,
@@ -698,9 +739,11 @@ export default function ListingDetailPage() {
                     </div>
 
                     {!native ? (
-                      <div className="flex flex-wrap gap-2">
+                      <div className="flex flex-col gap-2 sm:flex-row">
                         <Button
                           variant="secondary"
+                          size="lg"
+                          className="w-full sm:w-auto"
                           disabled={receipt.isLoading || env.raffleModuleAddress === zeroAddress || typeof raffleQuote !== "bigint" || raffleApproved}
                           onClick={() =>
                             send(
@@ -716,6 +759,8 @@ export default function ListingDetailPage() {
                           {raffleApproved ? "Approved" : "Approve"}
                         </Button>
                         <Button
+                          size="lg"
+                          className="w-full sm:w-auto"
                           disabled={receipt.isLoading || typeof raffleQuote !== "bigint" || !raffleApproved || !parsedTicketCount}
                           onClick={() =>
                             send(
@@ -733,6 +778,8 @@ export default function ListingDetailPage() {
                       </div>
                     ) : (
                       <Button
+                        size="lg"
+                        className="w-full sm:w-auto"
                         disabled={receipt.isLoading || typeof raffleQuote !== "bigint" || !parsedTicketCount}
                         onClick={() =>
                           send(
@@ -756,6 +803,8 @@ export default function ListingDetailPage() {
                         <Input value={reveal} onChange={(e) => setReveal(e.target.value as Hex)} placeholder="0x..." />
                         <Button
                           variant="secondary"
+                          size="lg"
+                          className="w-full sm:w-auto"
                           disabled={receipt.isLoading}
                           onClick={() => send(writeContractAsync({
                             address: env.marketplaceRegistryAddress,
@@ -781,6 +830,8 @@ export default function ListingDetailPage() {
                   <div className="mt-3">
                     <Button
                       variant="outline"
+                      size="lg"
+                      className="w-full sm:w-auto"
                       disabled={receipt.isLoading}
                       onClick={() => send(writeContractAsync({
                         address: env.marketplaceRegistryAddress,

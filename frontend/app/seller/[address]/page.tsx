@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { use } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { type Address, type Hex, isAddress, parseAbiItem } from "viem";
 import { usePublicClient } from "wagmi";
@@ -262,7 +263,7 @@ export default function SellerListingsPage({ params }: { params: Promise<{ addre
         </Card>
       ) : null}
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {isLoading
           ? Array.from({ length: 6 }).map((_, i) => (
               <Card key={i}>
@@ -282,11 +283,21 @@ export default function SellerListingsPage({ params }: { params: Promise<{ addre
               const md = mdId ? metadataById[mdId] : undefined;
               return (
                 <Link key={l.id} href={`/listing/${l.id}`} className="block">
-                  <Card className="h-full transition-colors hover:bg-accent/40">
+                  <Card className="h-full transition-colors hover:bg-accent/30 active:bg-accent/40">
                     <CardHeader>
                       {md?.image ? (
                         <div className="overflow-hidden rounded-md border bg-muted">
-                          <img src={md.image} alt={md.title ?? "Listing image"} className="aspect-video w-full object-cover" />
+                          <div className="relative aspect-video w-full">
+                            <Image
+                              src={md.image}
+                              alt={md.title ?? "Listing image"}
+                              fill
+                              className="object-cover"
+                              sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+                              unoptimized
+                              priority={false}
+                            />
+                          </div>
                         </div>
                       ) : null}
                       {md?.image ? (
