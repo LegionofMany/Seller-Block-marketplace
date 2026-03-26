@@ -23,7 +23,7 @@ import { parseListing } from "@/lib/contracts/parse";
 import { isNativeToken, saleTypeLabel, statusLabel } from "@/lib/contracts/types";
 import { formatPrice, shortenHex } from "@/lib/format";
 import { useToastTx } from "@/lib/hooks/useToastTx";
-import { fetchMetadataById, metadataIdFromUri, type MarketplaceMetadata } from "@/lib/metadata";
+import { fetchMetadataById, fetchMetadataByUri, metadataIdFromUri, type MarketplaceMetadata } from "@/lib/metadata";
 import { fetchJson } from "@/lib/api";
 
 function asBytes32(value: string): Hex | null {
@@ -89,10 +89,9 @@ export default function ListingDetailPage() {
     async function run() {
       setMetadata(null);
       if (!listing?.metadataURI) return;
-      const id = metadataIdFromUri(listing.metadataURI);
-      if (!id) return;
       try {
-        const md = await fetchMetadataById(id);
+        const id = metadataIdFromUri(listing.metadataURI);
+        const md = id ? await fetchMetadataById(id) : await fetchMetadataByUri(listing.metadataURI);
         if (!cancelled) setMetadata(md);
       } catch {
         // ignore
@@ -407,6 +406,20 @@ export default function ListingDetailPage() {
               ) : null}
 
               <div className="grid gap-3 sm:grid-cols-2">
+                {metadata?.category ? (
+                  <div className="text-sm">
+                    <div className="text-muted-foreground">Category</div>
+                    <div className="font-medium">{metadata.subcategory ? `${metadata.category} / ${metadata.subcategory}` : metadata.category}</div>
+                  </div>
+                ) : null}
+                {metadata?.city || metadata?.region ? (
+                  <div className="text-sm">
+                    <div className="text-muted-foreground">Location</div>
+                    <div className="font-medium">
+                      {[metadata.city, metadata.region, metadata.postalCode].filter(Boolean).join(", ")}
+                    </div>
+                  </div>
+                ) : null}
                 <div className="text-sm">
                   <div className="text-muted-foreground">Price</div>
                   <div className="font-medium">{formatPrice(listing.price, native)}</div>
@@ -423,6 +436,14 @@ export default function ListingDetailPage() {
                   <div className="text-muted-foreground">Buyer</div>
                   <div className="font-medium">{listing.buyer === zeroAddress ? "—" : shortenHex(listing.buyer)}</div>
                 </div>
+                {metadata?.contactEmail || metadata?.contactPhone ? (
+                  <div className="text-sm sm:col-span-2">
+                    <div className="text-muted-foreground">Contact</div>
+                    <div className="font-medium">
+                      {[metadata.contactEmail, metadata.contactPhone].filter(Boolean).join(" • ")}
+                    </div>
+                  </div>
+                ) : null}
               </div>
 
               <Separator />

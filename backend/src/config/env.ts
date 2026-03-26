@@ -14,6 +14,9 @@ export type Env = {
   cacheTtlMs: number;
   rateLimitWindowMs: number;
   rateLimitMax: number;
+
+  pinataJwt?: string;
+  pinataGatewayBaseUrl?: string;
 };
 
 function required(name: string): string {
@@ -128,6 +131,10 @@ export function getEnv(): Env {
   const rateLimitWindowMs = numberFromEnv("RATE_LIMIT_WINDOW_MS", 60_000);
   const rateLimitMax = numberFromEnv("RATE_LIMIT_MAX", 120);
 
+  const pinataJwt = optional("PINATA_JWT");
+  const pinataGatewayBaseUrl = optional("PINATA_GATEWAY_BASE_URL");
+  if (pinataGatewayBaseUrl) validateRpcUrl("PINATA_GATEWAY_BASE_URL", pinataGatewayBaseUrl);
+
   return {
     port,
     sepoliaRpcUrl,
@@ -142,5 +149,8 @@ export function getEnv(): Env {
     cacheTtlMs,
     rateLimitWindowMs,
     rateLimitMax,
+
+    ...(pinataJwt ? { pinataJwt } : {}),
+    ...(pinataGatewayBaseUrl ? { pinataGatewayBaseUrl } : {}),
   };
 }

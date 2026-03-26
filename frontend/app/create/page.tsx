@@ -54,9 +54,17 @@ export default function CreateListingPage() {
   const [saleType, setSaleType] = React.useState<SaleType>(0);
   const [title, setTitle] = React.useState("");
   const [description, setDescription] = React.useState("");
-  const [image, setImage] = React.useState("");
+  const [files, setFiles] = React.useState<File[]>([]);
   const [generatedMetadataURI, setGeneratedMetadataURI] = React.useState<string>("");
   const [tokenAddress, setTokenAddress] = React.useState<string>("");
+
+  const [category, setCategory] = React.useState("");
+  const [subcategory, setSubcategory] = React.useState("");
+  const [city, setCity] = React.useState("");
+  const [region, setRegion] = React.useState("");
+  const [postalCode, setPostalCode] = React.useState("");
+  const [contactEmail, setContactEmail] = React.useState("");
+  const [contactPhone, setContactPhone] = React.useState("");
 
   const [fixedPrice, setFixedPrice] = React.useState("0.01");
 
@@ -94,14 +102,32 @@ export default function CreateListingPage() {
       return;
     }
 
-    if (!title.trim() || !description.trim() || !image.trim()) {
-      toast.error("Title, description, and image URL are required");
+    if (!title.trim() || !description.trim()) {
+      toast.error("Title and description are required");
+      return;
+    }
+
+    if (!files.length) {
+      toast.error("At least one image is required");
       return;
     }
 
     let metadataURI: string;
     try {
-      const res = await fetchJson<{ metadataURI: string; id: string }>("/metadata", {
+      // 1) Upload images
+      const form = new FormData();
+      for (const f of files.slice(0, 12)) form.append("files", f);
+      const uploadRes = await fetch("/uploads/images", { method: "POST", body: form });
+      if (!uploadRes.ok) {
+        const text = await uploadRes.text().catch(() => "");
+        throw new Error(text || `Upload failed (${uploadRes.status})`);
+      }
+      const uploadJson = (await uploadRes.json()) as { items: Array<{ ipfsUri: string; url: string }> };
+      const images = uploadJson.items.map((i) => i.ipfsUri).filter(Boolean);
+      if (!images.length) throw new Error("Image upload returned no IPFS URIs");
+
+      // 2) Pin metadata JSON
+      const res = await fetchJson<{ metadataURI: string; cid: string; id: string }>("/metadata/ipfs", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -109,10 +135,17 @@ export default function CreateListingPage() {
         body: JSON.stringify({
           title: title.trim(),
           description: description.trim(),
-          image: image.trim(),
+          images,
+          category: category.trim() || undefined,
+          subcategory: subcategory.trim() || undefined,
+          city: city.trim() || undefined,
+          region: region.trim() || undefined,
+          postalCode: postalCode.trim() || undefined,
+          contactEmail: contactEmail.trim() || undefined,
+          contactPhone: contactPhone.trim() || undefined,
           attributes: [],
         }),
-        timeoutMs: 5_000,
+        timeoutMs: 10_000,
       });
       metadataURI = res.metadataURI;
       setGeneratedMetadataURI(res.metadataURI);
@@ -259,8 +292,45 @@ export default function CreateListingPage() {
                 <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Describe your item" />
               </div>
               <div className="space-y-2 sm:col-span-2">
-                <Label>Image URL</Label>
-                <Input value={image} onChange={(e) => setImage(e.target.value)} placeholder="https://…" />
+                <Label>Images (required, up to 12)</Label>
+                <Input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={(e) => setFiles(Array.from(e.target.files ?? []))}
+                />
+                {files.length ? (
+                  <div className="text-xs text-muted-foreground">Selected: {files.map((f) => f.name).join(", ")}</div>
+                ) : null}
+              </div>
+
+              <div className="space-y-2">
+                <Label>Category</Label>
+                <Input value={category} onChange={(e) => setCategory(e.target.value)} placeholder="e.g. Cars & Vehicles" />
+              </div>
+              <div className="space-y-2">
+                <Label>Subcategory</Label>
+                <Input value={subcategory} onChange={(e) => setSubcategory(e.target.value)} placeholder="e.g. Cars & Trucks" />
+              </div>
+              <div className="space-y-2">
+                <Label>City</Label>
+                <Input value={city} onChange={(e) => setCity(e.target.value)} placeholder="e.g. Toronto" />
+              </div>
+              <div className="space-y-2">
+                <Label>Region/State</Label>
+                <Input value={region} onChange={(e) => setRegion(e.target.value)} placeholder="e.g. Ontario" />
+              </div>
+              <div className="space-y-2">
+                <Label>Postal code</Label>
+                <Input value={postalCode} onChange={(e) => setPostalCode(e.target.value)} placeholder="e.g. M5V" />
+              </div>
+              <div className="space-y-2">
+                <Label>Contact email (optional)</Label>
+                <Input value={contactEmail} onChange={(e) => setContactEmail(e.target.value)} placeholder="name@example.com" />
+              </div>
+              <div className="space-y-2">
+                <Label>Contact phone (optional)</Label>
+                <Input value={contactPhone} onChange={(e) => setContactPhone(e.target.value)} placeholder="+1 555…" />
               </div>
               <div className="space-y-2 sm:col-span-2">
                 <Label>Generated metadataURI (from backend)</Label>

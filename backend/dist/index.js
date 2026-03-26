@@ -16,6 +16,7 @@ const listings_1 = require("./routes/listings");
 const auctions_1 = require("./routes/auctions");
 const raffles_1 = require("./routes/raffles");
 const metadata_1 = require("./routes/metadata");
+const uploads_1 = require("./routes/uploads");
 const marketplaceIndexer_1 = require("./indexer/marketplaceIndexer");
 dotenv_1.default.config();
 const app = (0, express_1.default)();
@@ -51,6 +52,7 @@ async function main() {
     app.use((0, auctions_1.auctionsRouter)());
     app.use((0, raffles_1.rafflesRouter)());
     app.use((0, metadata_1.metadataRouter)());
+    app.use((0, uploads_1.uploadsRouter)());
     app.use(errors_1.notFound);
     app.use(errors_1.errorHandler);
     const server = app.listen(env.port, () => {

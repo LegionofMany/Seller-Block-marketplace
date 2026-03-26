@@ -6,6 +6,7 @@ export type ClientEnv = {
   sepoliaRpcFallbackUrl?: string;
   walletConnectProjectId?: string;
   backendUrl?: string;
+  ipfsGatewayBaseUrl?: string;
   marketplaceRegistryAddress: Address;
   escrowVaultAddress: Address;
   auctionModuleAddress: Address;
@@ -34,6 +35,7 @@ export function getEnv(): ClientEnv {
 
   const walletConnectProjectId = clean(process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID);
   const backendUrl = clean(process.env.NEXT_PUBLIC_BACKEND_URL);
+  const ipfsGatewayBaseUrl = clean(process.env.NEXT_PUBLIC_IPFS_GATEWAY_BASE_URL) ?? undefined;
 
   const marketplaceRegistryAddressRaw = clean(process.env.NEXT_PUBLIC_MARKETPLACE_REGISTRY_ADDRESS);
   if (!marketplaceRegistryAddressRaw) {
@@ -77,6 +79,7 @@ export function getEnv(): ClientEnv {
     sepoliaRpcFallbackUrl,
     walletConnectProjectId,
     backendUrl,
+    ipfsGatewayBaseUrl,
     marketplaceRegistryAddress,
     escrowVaultAddress,
     auctionModuleAddress,

@@ -20,6 +20,18 @@ export type ListingSummary = {
   status: ListingStatus;
 };
 
+export type ListingsParams = {
+  q?: string;
+  category?: string;
+  city?: string;
+  region?: string;
+  minPrice?: string;
+  maxPrice?: string;
+  type?: "fixed" | "auction" | "raffle";
+  limit?: number;
+  offset?: number;
+};
+
 type BackendListingRow = {
   id: string;
   seller: string;
@@ -57,11 +69,26 @@ function isRateLimitError(err: unknown): boolean {
 }
 
 const LISTINGS_CACHE_TTL_MS = 15_000;
-let cachedListings: ListingSummary[] | null = null;
-let cachedListingsAt = 0;
-let cachedListingsPromise: Promise<ListingSummary[]> | null = null;
+const cacheByKey = new Map<string, { at: number; items: ListingSummary[] }>();
+const inflightByKey = new Map<string, Promise<ListingSummary[]>>();
 
-export function useListings() {
+function buildQuery(params: ListingsParams | undefined): string {
+  const p = params ?? {};
+  const sp = new URLSearchParams();
+  sp.set("limit", String(p.limit ?? 50));
+  sp.set("offset", String(p.offset ?? 0));
+
+  if (p.q) sp.set("q", p.q);
+  if (p.category) sp.set("category", p.category);
+  if (p.city) sp.set("city", p.city);
+  if (p.region) sp.set("region", p.region);
+  if (p.minPrice) sp.set("minPrice", p.minPrice);
+  if (p.maxPrice) sp.set("maxPrice", p.maxPrice);
+  if (p.type) sp.set("type", p.type);
+  return sp.toString();
+}
+
+export function useListings(params?: ListingsParams) {
   const publicClient = usePublicClient();
 
   const [data, setData] = React.useState<ListingSummary[]>([]);
@@ -71,30 +98,36 @@ export function useListings() {
   React.useEffect(() => {
     let cancelled = false;
 
+    const query = buildQuery(params);
+    const cacheKey = `listings:${query}`;
+    const allowOnchainFallback = !params || Object.keys(params).length === 0;
+
     async function run() {
       try {
         setIsLoading(true);
         setError(null);
 
         // Fast path: avoid double-fetching in React strict mode and across navigation.
-        if (cachedListings && Date.now() - cachedListingsAt < LISTINGS_CACHE_TTL_MS) {
-          if (!cancelled) setData(cachedListings);
+        const cached = cacheByKey.get(cacheKey);
+        if (cached && Date.now() - cached.at < LISTINGS_CACHE_TTL_MS) {
+          if (!cancelled) setData(cached.items);
           return;
         }
 
-        if (cachedListingsPromise) {
-          const existing = await cachedListingsPromise;
+        const inflight = inflightByKey.get(cacheKey);
+        if (inflight) {
+          const existing = await inflight;
           if (!cancelled) setData(existing);
           return;
         }
 
-        cachedListingsPromise = (async () => {
+        const promise = (async () => {
           // Prefer backend indexer API (fast, no RPC log scanning per request).
           // If backend responds successfully but has indexed 0 listings yet, fall back
           // to a small on-chain scan window so the UI can still show recent listings.
           // This keeps discovery working while the indexer is catching up.
           try {
-            const resp = await fetchJson<BackendListingsResponse>("/listings?limit=50&offset=0", {
+            const resp = await fetchJson<BackendListingsResponse>(`/listings?${query}`, {
               timeoutMs: 5_000,
             });
 
@@ -111,14 +144,17 @@ export function useListings() {
             );
 
             if (items.length > 0) {
-              cachedListings = items;
-              cachedListingsAt = Date.now();
+              cacheByKey.set(cacheKey, { items, at: Date.now() });
               return items;
             }
 
-            // Backend is reachable but hasn't indexed listings yet; continue to on-chain fallback.
+            // Backend is reachable but hasn't indexed listings yet; continue to on-chain fallback (only for default view).
           } catch {
             // Backend may not be running; fall back to on-chain.
+          }
+
+          if (!allowOnchainFallback) {
+            throw new Error("Backend is unavailable for filtered search. Start the backend and try again.");
           }
 
           if (!publicClient) throw new Error("No public client");
@@ -177,18 +213,18 @@ export function useListings() {
             });
           }
 
-          cachedListings = listings;
-          cachedListingsAt = Date.now();
+          cacheByKey.set(cacheKey, { items: listings, at: Date.now() });
           return listings;
         })();
 
-        const listings = await cachedListingsPromise;
+        inflightByKey.set(cacheKey, promise);
+        const listings = await promise;
         if (!cancelled) setData(listings);
         return;
       } catch (e: any) {
         if (!cancelled) setError(e?.message ?? "Failed to load listings");
       } finally {
-        cachedListingsPromise = null;
+        inflightByKey.delete(cacheKey);
         if (!cancelled) setIsLoading(false);
       }
     }
@@ -197,7 +233,7 @@ export function useListings() {
     return () => {
       cancelled = true;
     };
-  }, [publicClient]);
+  }, [publicClient, JSON.stringify(params ?? {})]);
 
   return { listings: data, isLoading, error };
 }

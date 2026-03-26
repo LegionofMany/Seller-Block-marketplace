@@ -29,9 +29,18 @@ export type RaffleRow = {
 
 export type MetadataRow = {
   id: string;
+  uri?: string;
   title: string;
   description: string;
   image: string;
+  imagesJson?: string;
+  category?: string | null;
+  subcategory?: string | null;
+  city?: string | null;
+  region?: string | null;
+  postalCode?: string | null;
+  contactEmail?: string | null;
+  contactPhone?: string | null;
   attributesJson: string;
   createdAt: number;
 };
@@ -162,14 +171,25 @@ function toRaffleRow(r: any): RaffleRow {
 }
 
 function toMetadataRow(r: any): MetadataRow {
-  return {
+  const row: MetadataRow = {
     id: String(r.id),
     title: String(r.title),
     description: String(r.description),
     image: String(r.image),
+    imagesJson: r.imagesJson ?? r.imagesjson ?? r.images_json,
+    category: r.category ?? null,
+    subcategory: r.subcategory ?? null,
+    city: r.city ?? null,
+    region: r.region ?? null,
+    postalCode: r.postalCode ?? r.postalcode ?? r.postal_code ?? null,
+    contactEmail: r.contactEmail ?? r.contactemail ?? r.contact_email ?? null,
+    contactPhone: r.contactPhone ?? r.contactphone ?? r.contact_phone ?? null,
     attributesJson: String(r.attributesJson ?? r.attributesjson ?? r.attributes_json),
     createdAt: Number(r.createdAt ?? r.createdat ?? r.created_at),
   };
+
+  if (r.uri != null) row.uri = String(r.uri);
+  return row;
 }
 
 export async function getCheckpoint(_db: Pool | any, key: string): Promise<number | null> {
@@ -291,23 +311,59 @@ export async function findRaffle(_db: Pool | any, listingId: string): Promise<Ra
 export async function upsertMetadata(_db: Pool | any, row: MetadataRow) {
   const p = ensurePool(_db);
   await p.query(
-    `INSERT INTO metadata(id, title, description, image, attributesJson, createdAt)
-     VALUES($1,$2,$3,$4,$5,$6)
+    `INSERT INTO metadata(id, uri, title, description, image, imagesJson, category, subcategory, city, region, postalCode, contactEmail, contactPhone, attributesJson, createdAt)
+     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
      ON CONFLICT (id) DO UPDATE SET
+       uri = EXCLUDED.uri,
        title = EXCLUDED.title,
        description = EXCLUDED.description,
        image = EXCLUDED.image,
+       imagesJson = EXCLUDED.imagesJson,
+       category = EXCLUDED.category,
+       subcategory = EXCLUDED.subcategory,
+       city = EXCLUDED.city,
+       region = EXCLUDED.region,
+       postalCode = EXCLUDED.postalCode,
+       contactEmail = EXCLUDED.contactEmail,
+       contactPhone = EXCLUDED.contactPhone,
        attributesJson = EXCLUDED.attributesJson,
        createdAt = EXCLUDED.createdAt`,
-    [row.id, row.title, row.description, row.image, row.attributesJson, row.createdAt]
+    [
+      row.id,
+      row.uri ?? `metadata://sha256/${row.id}`,
+      row.title,
+      row.description,
+      row.image,
+      row.imagesJson ?? "[]",
+      row.category ?? null,
+      row.subcategory ?? null,
+      row.city ?? null,
+      row.region ?? null,
+      row.postalCode ?? null,
+      row.contactEmail ?? null,
+      row.contactPhone ?? null,
+      row.attributesJson,
+      row.createdAt,
+    ]
   );
 }
 
 export async function findMetadata(_db: Pool | any, id: string): Promise<MetadataRow | null> {
   const p = ensurePool(_db);
   const res = await p.query(
-    'SELECT id, title, description, image, attributesjson AS "attributesJson", createdat AS "createdAt" FROM metadata WHERE id = $1',
+    'SELECT id, uri, title, description, image, imagesjson AS "imagesJson", category, subcategory, city, region, postalcode AS "postalCode", contactemail AS "contactEmail", contactphone AS "contactPhone", attributesjson AS "attributesJson", createdat AS "createdAt" FROM metadata WHERE id = $1',
     [id]
+  );
+  return res.rows[0] ? toMetadataRow(res.rows[0]) : null;
+}
+
+export async function findMetadataByUri(_db: Pool | any, uri: string): Promise<MetadataRow | null> {
+  const p = ensurePool(_db);
+  const clean = String(uri ?? "").trim();
+  if (!clean) return null;
+  const res = await p.query(
+    'SELECT id, uri, title, description, image, imagesjson AS "imagesJson", category, subcategory, city, region, postalcode AS "postalCode", contactemail AS "contactEmail", contactphone AS "contactPhone", attributesjson AS "attributesJson", createdat AS "createdAt" FROM metadata WHERE uri = $1',
+    [clean]
   );
   return res.rows[0] ? toMetadataRow(res.rows[0]) : null;
 }
@@ -318,6 +374,10 @@ export type ListingsQuery = {
   active?: boolean | undefined;
   minPrice?: bigint | undefined;
   maxPrice?: bigint | undefined;
+  q?: string | undefined;
+  category?: string | undefined;
+  city?: string | undefined;
+  region?: string | undefined;
   limit: number;
   offset: number;
 };
@@ -326,6 +386,8 @@ export async function queryListings(_db: Pool | any, q: ListingsQuery) {
   const p = ensurePool(_db);
   const where: string[] = [];
   const params: any[] = [];
+
+  const joinMetadata = Boolean(q.q || q.category || q.city || q.region);
 
   if (q.seller) {
     where.push(`seller = $${params.length + 1}`);
@@ -348,6 +410,23 @@ export async function queryListings(_db: Pool | any, q: ListingsQuery) {
     params.push(q.maxPrice.toString());
   }
 
+  if (q.category) {
+    where.push(`m.category = $${params.length + 1}`);
+    params.push(q.category);
+  }
+  if (q.city) {
+    where.push(`m.city = $${params.length + 1}`);
+    params.push(q.city);
+  }
+  if (q.region) {
+    where.push(`m.region = $${params.length + 1}`);
+    params.push(q.region);
+  }
+  if (q.q) {
+    where.push(`(m.title ILIKE $${params.length + 1} OR m.description ILIKE $${params.length + 1})`);
+    params.push(`%${q.q}%`);
+  }
+
   const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
 
   params.push(q.limit, q.offset);
@@ -356,7 +435,9 @@ export async function queryListings(_db: Pool | any, q: ListingsQuery) {
 
   const res = await p.query(
     `SELECT id, seller, metadatauri AS "metadataURI", price, token, saletype AS "saleType", active, createdat AS "createdAt", blocknumber AS "blockNumber"
-     FROM listings ${whereSql}
+     FROM listings
+     ${joinMetadata ? 'LEFT JOIN metadata m ON m.uri = listings.metadataURI' : ''}
+     ${whereSql}
      ORDER BY blocknumber DESC
      LIMIT ${limitParam} OFFSET ${offsetParam}`,
     params

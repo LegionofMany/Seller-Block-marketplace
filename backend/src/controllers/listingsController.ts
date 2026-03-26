@@ -94,11 +94,20 @@ export async function getListings(req: Request, res: Response) {
   const minPrice = parseBigint(req.query.minPrice);
   const maxPrice = parseBigint(req.query.maxPrice);
 
+  const q = typeof req.query.q === "string" ? req.query.q.trim() : undefined;
+  const category = typeof req.query.category === "string" ? req.query.category.trim() : undefined;
+  const city = typeof req.query.city === "string" ? req.query.city.trim() : undefined;
+  const region = typeof req.query.region === "string" ? req.query.region.trim() : undefined;
+
   const rows = await queryListings(db, {
     saleType,
     active,
     minPrice,
     maxPrice,
+    ...(q ? { q } : {}),
+    ...(category ? { category } : {}),
+    ...(city ? { city } : {}),
+    ...(region ? { region } : {}),
     limit,
     offset,
   });
@@ -141,12 +150,21 @@ export async function getListingsBySeller(req: Request, res: Response) {
   const minPrice = parseBigint(req.query.minPrice);
   const maxPrice = parseBigint(req.query.maxPrice);
 
+  const q = typeof req.query.q === "string" ? req.query.q.trim() : undefined;
+  const category = typeof req.query.category === "string" ? req.query.category.trim() : undefined;
+  const city = typeof req.query.city === "string" ? req.query.city.trim() : undefined;
+  const region = typeof req.query.region === "string" ? req.query.region.trim() : undefined;
+
   const rows = await queryListings(db, {
     seller,
     saleType,
     active,
     minPrice,
     maxPrice,
+    ...(q ? { q } : {}),
+    ...(category ? { category } : {}),
+    ...(city ? { city } : {}),
+    ...(region ? { region } : {}),
     limit,
     offset,
   });

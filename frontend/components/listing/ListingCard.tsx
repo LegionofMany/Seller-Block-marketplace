@@ -19,6 +19,7 @@ export function ListingCard({ row }: { row: ListingSummary }) {
   const title = metadata?.title?.trim() || saleTypeLabel(row.saleType);
   const description = metadata?.description?.trim() || row.metadataURI;
   const imageUrl = metadata?.image?.trim() || "";
+  const subtitleParts = [metadata?.category, metadata?.city, metadata?.region].filter(Boolean).join(" • ");
 
   return (
     <Link href={`/listing/${row.id}`} className="block">
@@ -28,6 +29,7 @@ export function ListingCard({ row }: { row: ListingSummary }) {
             <div className="min-w-0">
               <CardTitle className="truncate">{title}</CardTitle>
               <CardDescription className="break-words">{description}</CardDescription>
+              {subtitleParts ? <div className="mt-1 truncate text-xs text-muted-foreground">{subtitleParts}</div> : null}
             </div>
             <Badge variant="outline">{saleTypeLabel(row.saleType)}</Badge>
           </div>
@@ -47,10 +49,6 @@ export function ListingCard({ row }: { row: ListingSummary }) {
                 />
               </div>
             </div>
-          ) : null}
-
-          {imageUrl ? (
-            <div className="mb-3 truncate text-xs text-muted-foreground">Image: {imageUrl}</div>
           ) : null}
 
           <div className="flex items-center justify-between text-sm">
