@@ -5,7 +5,8 @@ import Image from "next/image";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { type Address, type Hex, isAddress, parseEther, zeroAddress } from "viem";
-import { useAccount, useReadContract, useWaitForTransactionReceipt, useWriteContract } from "wagmi";
+import { useAccount, useReadContract, useWaitForTransactionReceipt, useWalletClient, useWriteContract } from "wagmi";
+import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -25,6 +26,7 @@ import { formatPrice, shortenHex } from "@/lib/format";
 import { useToastTx } from "@/lib/hooks/useToastTx";
 import { fetchMetadataById, fetchMetadataByUri, metadataIdFromUri, type MarketplaceMetadata } from "@/lib/metadata";
 import { fetchJson } from "@/lib/api";
+import { addBlockedSeller } from "@/lib/blocks";
 
 function asBytes32(value: string): Hex | null {
   if (!value?.startsWith("0x")) return null;
@@ -49,6 +51,7 @@ export default function ListingDetailPage() {
   const listingId = asBytes32(id);
 
   const { address } = useAccount();
+  const { data: walletClient } = useWalletClient();
   const { writeContractAsync } = useWriteContract();
 
   const [bidAmount, setBidAmount] = React.useState("");
@@ -102,6 +105,109 @@ export default function ListingDetailPage() {
       cancelled = true;
     };
   }, [listing?.metadataURI]);
+
+  async function blockSeller() {
+    if (!address) {
+      toast.error("Connect your wallet to block a seller.");
+      return;
+    }
+    if (!walletClient) {
+      toast.error("Wallet client not available.");
+      return;
+    }
+    if (!listing) return;
+
+    const blocker = address;
+    const blocked = listing.seller as Address;
+    const issuedAt = Date.now();
+
+    const message = [
+      "Seller-Block Marketplace",
+      "Action: Block user",
+      `Blocker: ${blocker}`,
+      `Blocked: ${blocked}`,
+      `IssuedAt: ${new Date(issuedAt).toISOString()}`,
+    ].join("\n");
+
+    try {
+      const signature = await walletClient.signMessage({ message });
+      await fetchJson<{ ok: true }>("/safety/block", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ blocker, blocked, signature, issuedAt }),
+        timeoutMs: 7_000,
+      });
+    } catch (e: any) {
+      // If backend is down, we still want local blocking to work.
+      toast.error(e?.message ?? "Failed to save block on backend");
+    }
+
+    addBlockedSeller(blocker, blocked);
+    toast.success("Seller blocked locally");
+  }
+
+  async function reportListing() {
+    if (!listingId) return;
+    const reasonRaw = window
+      .prompt("Report reason: spam, prohibited, scam, duplicate, harassment, other", "spam")
+      ?.trim()
+      .toLowerCase();
+    if (!reasonRaw) return;
+    const allowed = new Set(["spam", "prohibited", "scam", "duplicate", "harassment", "other"]);
+    if (!allowed.has(reasonRaw)) {
+      toast.error("Invalid report reason");
+      return;
+    }
+    const details = window.prompt("Optional details (max 1000 chars)")?.trim();
+
+    const issuedAt = Date.now();
+
+    try {
+      if (address && walletClient) {
+        const message = [
+          "Seller-Block Marketplace",
+          "Action: Report",
+          `Reporter: ${address}`,
+          "TargetType: listing",
+          `TargetId: ${listingId}`,
+          `Reason: ${reasonRaw}`,
+          `IssuedAt: ${new Date(issuedAt).toISOString()}`,
+        ].join("\n");
+
+        const signature = await walletClient.signMessage({ message });
+        await fetchJson<{ ok: true; id: string }>("/safety/report", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            reporter: address,
+            signature,
+            issuedAt,
+            targetType: "listing",
+            targetId: listingId,
+            reason: reasonRaw,
+            ...(details ? { details: details.slice(0, 1000) } : {}),
+          }),
+          timeoutMs: 7_000,
+        });
+      } else {
+        await fetchJson<{ ok: true; id: string }>("/safety/report", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            targetType: "listing",
+            targetId: listingId,
+            reason: reasonRaw,
+            ...(details ? { details: details.slice(0, 1000) } : {}),
+          }),
+          timeoutMs: 7_000,
+        });
+      }
+
+      toast.success("Report submitted");
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to submit report");
+    }
+  }
 
   async function reuploadMissingMetadata() {
     if (!isSeller || !metadataId || !listing?.metadataURI) return;
@@ -450,6 +556,27 @@ export default function ListingDetailPage() {
 
               <div className="space-y-4">
                 <div className="text-sm font-semibold">Actions</div>
+
+                {listing.status === 1 && !isSeller ? (
+                  <div className="rounded-md border p-4 space-y-2">
+                    <div className="text-sm font-medium">Safety</div>
+                    <div className="flex flex-col gap-2 sm:flex-row">
+                      <Button type="button" variant="outline" size="lg" className="w-full sm:w-auto" onClick={blockSeller}>
+                        Block seller
+                      </Button>
+                      <Button type="button" variant="outline" size="lg" className="w-full sm:w-auto" onClick={reportListing}>
+                        Report listing
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="rounded-md border p-4 space-y-2">
+                    <div className="text-sm font-medium">Safety</div>
+                    <Button type="button" variant="outline" size="lg" className="w-full sm:w-auto" onClick={reportListing}>
+                      Report listing
+                    </Button>
+                  </div>
+                )}
 
                 {listing.status === 1 && isSeller ? (
                   <Button

@@ -376,8 +376,11 @@ export type ListingsQuery = {
   maxPrice?: bigint | undefined;
   q?: string | undefined;
   category?: string | undefined;
+  subcategory?: string | undefined;
   city?: string | undefined;
   region?: string | undefined;
+  sort?: "newest" | "price_asc" | "price_desc" | undefined;
+  autoHideReportThreshold?: number | undefined;
   limit: number;
   offset: number;
 };
@@ -387,7 +390,7 @@ export async function queryListings(_db: Pool | any, q: ListingsQuery) {
   const where: string[] = [];
   const params: any[] = [];
 
-  const joinMetadata = Boolean(q.q || q.category || q.city || q.region);
+  const joinMetadata = Boolean(q.q || q.category || q.subcategory || q.city || q.region);
 
   if (q.seller) {
     where.push(`seller = $${params.length + 1}`);
@@ -402,17 +405,21 @@ export async function queryListings(_db: Pool | any, q: ListingsQuery) {
     params.push(q.active ? 1 : 0);
   }
   if (typeof q.minPrice === "bigint") {
-    where.push(`CAST(price AS BIGINT) >= $${params.length + 1}`);
+    where.push(`CAST(price AS NUMERIC) >= $${params.length + 1}`);
     params.push(q.minPrice.toString());
   }
   if (typeof q.maxPrice === "bigint") {
-    where.push(`CAST(price AS BIGINT) <= $${params.length + 1}`);
+    where.push(`CAST(price AS NUMERIC) <= $${params.length + 1}`);
     params.push(q.maxPrice.toString());
   }
 
   if (q.category) {
     where.push(`m.category = $${params.length + 1}`);
     params.push(q.category);
+  }
+  if (q.subcategory) {
+    where.push(`m.subcategory = $${params.length + 1}`);
+    params.push(q.subcategory);
   }
   if (q.city) {
     where.push(`m.city = $${params.length + 1}`);
@@ -427,7 +434,20 @@ export async function queryListings(_db: Pool | any, q: ListingsQuery) {
     params.push(`%${q.q}%`);
   }
 
+  if (typeof q.autoHideReportThreshold === "number" && q.autoHideReportThreshold > 0) {
+    where.push(
+      `(SELECT COUNT(1) FROM reports r WHERE r.targettype = 'listing' AND r.targetid = listings.id) < $${params.length + 1}`
+    );
+    params.push(q.autoHideReportThreshold);
+  }
+
   const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
+
+  const orderBy = (() => {
+    if (q.sort === "price_asc") return `ORDER BY CAST(price AS NUMERIC) ASC, blocknumber DESC`;
+    if (q.sort === "price_desc") return `ORDER BY CAST(price AS NUMERIC) DESC, blocknumber DESC`;
+    return `ORDER BY blocknumber DESC`;
+  })();
 
   params.push(q.limit, q.offset);
   const limitParam = `$${params.length - 1}`;
@@ -438,9 +458,74 @@ export async function queryListings(_db: Pool | any, q: ListingsQuery) {
      FROM listings
      ${joinMetadata ? 'LEFT JOIN metadata m ON m.uri = listings.metadataURI' : ''}
      ${whereSql}
-     ORDER BY blocknumber DESC
+     ${orderBy}
      LIMIT ${limitParam} OFFSET ${offsetParam}`,
     params
   );
   return res.rows.map(toListingRow);
+}
+
+export type UserBlockRow = {
+  blocker: string;
+  blocked: string;
+  createdAt: number;
+  signature: string;
+  message: string;
+};
+
+export async function upsertUserBlock(_db: Pool | any, row: UserBlockRow) {
+  const p = ensurePool(_db);
+  await p.query(
+    `INSERT INTO user_blocks(blocker, blocked, createdAt, signature, message)
+     VALUES($1,$2,$3,$4,$5)
+     ON CONFLICT (blocker, blocked) DO UPDATE SET
+       createdAt = EXCLUDED.createdAt,
+       signature = EXCLUDED.signature,
+       message = EXCLUDED.message`,
+    [row.blocker, row.blocked, row.createdAt, row.signature, row.message]
+  );
+}
+
+export async function listUserBlocks(_db: Pool | any, blocker: string): Promise<UserBlockRow[]> {
+  const p = ensurePool(_db);
+  const res = await p.query(
+    'SELECT blocker, blocked, createdat AS "createdAt", signature, message FROM user_blocks WHERE blocker = $1 ORDER BY createdat DESC',
+    [blocker]
+  );
+  return res.rows.map((r: any) => ({
+    blocker: String(r.blocker),
+    blocked: String(r.blocked),
+    createdAt: Number(r.createdAt ?? r.createdat ?? 0),
+    signature: String(r.signature),
+    message: String(r.message),
+  }));
+}
+
+export type CreateReportInput = {
+  reporter?: string | null;
+  targetType: "listing" | "user" | "message";
+  targetId: string;
+  reason: string;
+  details?: string | null;
+  createdAt: number;
+  reporterIp?: string | null;
+};
+
+export async function createReport(_db: Pool | any, input: CreateReportInput): Promise<{ id: string }> {
+  const p = ensurePool(_db);
+  const res = await p.query(
+    `INSERT INTO reports(reporter, targetType, targetId, reason, details, createdAt, reporterIp)
+     VALUES($1,$2,$3,$4,$5,$6,$7)
+     RETURNING id`,
+    [
+      input.reporter ?? null,
+      input.targetType,
+      input.targetId,
+      input.reason,
+      input.details ?? null,
+      input.createdAt,
+      input.reporterIp ?? null,
+    ]
+  );
+  return { id: String(res.rows?.[0]?.id ?? "") };
 }

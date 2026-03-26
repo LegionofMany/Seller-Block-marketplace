@@ -15,6 +15,8 @@ export type Env = {
   rateLimitWindowMs: number;
   rateLimitMax: number;
 
+  listingAutoHideReportsThreshold: number;
+
   pinataJwt?: string;
   pinataGatewayBaseUrl?: string;
 };
@@ -131,6 +133,10 @@ export function getEnv(): Env {
   const rateLimitWindowMs = numberFromEnv("RATE_LIMIT_WINDOW_MS", 60_000);
   const rateLimitMax = numberFromEnv("RATE_LIMIT_MAX", 120);
 
+  // Safety baseline: auto-hide listings once they have >= N reports.
+  // Set to 0 to disable auto-hide.
+  const listingAutoHideReportsThreshold = numberFromEnv("LISTING_AUTOHIDE_REPORTS_THRESHOLD", 3);
+
   const pinataJwt = optional("PINATA_JWT");
   const pinataGatewayBaseUrl = optional("PINATA_GATEWAY_BASE_URL");
   if (pinataGatewayBaseUrl) validateRpcUrl("PINATA_GATEWAY_BASE_URL", pinataGatewayBaseUrl);
@@ -149,6 +155,8 @@ export function getEnv(): Env {
     cacheTtlMs,
     rateLimitWindowMs,
     rateLimitMax,
+
+    listingAutoHideReportsThreshold,
 
     ...(pinataJwt ? { pinataJwt } : {}),
     ...(pinataGatewayBaseUrl ? { pinataGatewayBaseUrl } : {}),

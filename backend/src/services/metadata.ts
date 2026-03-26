@@ -1,11 +1,37 @@
 import { z } from "zod";
 import crypto from "node:crypto";
 
+function isHttpUrl(value: string): boolean {
+  try {
+    const u = new URL(value);
+    return u.protocol === "http:" || u.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+function isIpfsUri(value: string): boolean {
+  return /^ipfs:\/\/[a-zA-Z0-9]+(\/.*)?$/.test(value);
+}
+
+const imageUriSchema = z
+  .string()
+  .min(1)
+  .max(2048)
+  .refine((v) => isHttpUrl(v) || isIpfsUri(v), { message: "Expected http(s) URL or ipfs:// URI" });
+
+const safeTextSchema = (max: number) =>
+  z
+    .string()
+    .min(1)
+    .max(max)
+    .refine((v) => !/[<>]/.test(v), { message: "HTML-like content is not allowed" });
+
 export const metadataSchema = z.object({
-  title: z.string().min(1).max(120),
-  description: z.string().min(1).max(2000),
-  image: z.string().url().max(2048).optional(),
-  images: z.array(z.string().url().max(2048)).max(12).optional(),
+  title: safeTextSchema(120),
+  description: safeTextSchema(2000),
+  image: imageUriSchema.optional(),
+  images: z.array(imageUriSchema).max(12).optional(),
   category: z.string().min(1).max(64).optional(),
   subcategory: z.string().min(1).max(64).optional(),
   city: z.string().min(1).max(64).optional(),

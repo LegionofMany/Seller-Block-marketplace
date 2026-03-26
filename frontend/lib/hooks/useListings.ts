@@ -23,11 +23,13 @@ export type ListingSummary = {
 export type ListingsParams = {
   q?: string;
   category?: string;
+  subcategory?: string;
   city?: string;
   region?: string;
   minPrice?: string;
   maxPrice?: string;
   type?: "fixed" | "auction" | "raffle";
+  sort?: "newest" | "price_asc" | "price_desc";
   limit?: number;
   offset?: number;
 };
@@ -80,11 +82,13 @@ function buildQuery(params: ListingsParams | undefined): string {
 
   if (p.q) sp.set("q", p.q);
   if (p.category) sp.set("category", p.category);
+  if (p.subcategory) sp.set("subcategory", p.subcategory);
   if (p.city) sp.set("city", p.city);
   if (p.region) sp.set("region", p.region);
   if (p.minPrice) sp.set("minPrice", p.minPrice);
   if (p.maxPrice) sp.set("maxPrice", p.maxPrice);
   if (p.type) sp.set("type", p.type);
+  if (p.sort) sp.set("sort", p.sort);
   return sp.toString();
 }
 

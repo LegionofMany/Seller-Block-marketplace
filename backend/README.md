@@ -43,6 +43,7 @@ Optional:
 - `INDEXER_POLL_MS`, `INDEXER_CHUNK_SIZE`
 - `CACHE_TTL_MS`
 - `RATE_LIMIT_WINDOW_MS`, `RATE_LIMIT_MAX`
+- `LISTING_AUTOHIDE_REPORTS_THRESHOLD` (default `3`; set to `0` to disable auto-hide)
 - `CORS_ORIGINS` (comma-separated list of allowed origins; set this to your Vercel domain in production)
 - `LOG_LEVEL`, `NODE_ENV`
 
@@ -75,6 +76,10 @@ Listings
 
 Query params for `/listings` and `/seller/:address/listings`:
 
+- `q=<string>` (search title/description)
+- `category=<string>` / `subcategory=<string>`
+- `city=<string>` / `region=<string>`
+- `sort=newest|price_asc|price_desc`
 - `type=fixed|auction|raffle`
 - `active=true|false`
 - `minPrice=<uint>` / `maxPrice=<uint>` (raw token units)

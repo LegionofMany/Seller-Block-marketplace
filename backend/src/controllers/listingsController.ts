@@ -20,6 +20,15 @@ function saleTypeFromQuery(value: unknown): number | undefined {
   return undefined;
 }
 
+function sortFromQuery(value: unknown): "newest" | "price_asc" | "price_desc" | undefined {
+  if (typeof value !== "string" || !value.trim()) return undefined;
+  const v = value.toLowerCase();
+  if (v === "newest" || v === "recent") return "newest";
+  if (v === "price_asc" || v === "price-asc" || v === "price_low" || v === "price_low_high") return "price_asc";
+  if (v === "price_desc" || v === "price-desc" || v === "price_high" || v === "price_high_low") return "price_desc";
+  return undefined;
+}
+
 async function backfillListingIfMissing(id: string): Promise<ListingRow | null> {
   const { env, db, provider } = getContext();
 
@@ -81,7 +90,7 @@ async function backfillListingIfMissing(id: string): Promise<ListingRow | null> 
 }
 
 export async function getListings(req: Request, res: Response) {
-  const { db, cache } = getContext();
+  const { env, db, cache } = getContext();
 
   const cacheKey = `listings:${JSON.stringify(req.query)}`;
   const cached = cache.get<any>(cacheKey);
@@ -96,8 +105,10 @@ export async function getListings(req: Request, res: Response) {
 
   const q = typeof req.query.q === "string" ? req.query.q.trim() : undefined;
   const category = typeof req.query.category === "string" ? req.query.category.trim() : undefined;
+  const subcategory = typeof req.query.subcategory === "string" ? req.query.subcategory.trim() : undefined;
   const city = typeof req.query.city === "string" ? req.query.city.trim() : undefined;
   const region = typeof req.query.region === "string" ? req.query.region.trim() : undefined;
+  const sort = sortFromQuery(req.query.sort);
 
   const rows = await queryListings(db, {
     saleType,
@@ -106,8 +117,11 @@ export async function getListings(req: Request, res: Response) {
     maxPrice,
     ...(q ? { q } : {}),
     ...(category ? { category } : {}),
+    ...(subcategory ? { subcategory } : {}),
     ...(city ? { city } : {}),
     ...(region ? { region } : {}),
+    ...(sort ? { sort } : {}),
+    autoHideReportThreshold: env.listingAutoHideReportsThreshold,
     limit,
     offset,
   });
@@ -137,7 +151,7 @@ export async function getListingById(req: Request, res: Response) {
 }
 
 export async function getListingsBySeller(req: Request, res: Response) {
-  const { db, cache } = getContext();
+  const { env, db, cache } = getContext();
   const seller = requireAddress(String(req.params.address ?? ""), "seller address");
 
   const cacheKey = `seller:${seller}:${JSON.stringify(req.query)}`;
@@ -152,8 +166,10 @@ export async function getListingsBySeller(req: Request, res: Response) {
 
   const q = typeof req.query.q === "string" ? req.query.q.trim() : undefined;
   const category = typeof req.query.category === "string" ? req.query.category.trim() : undefined;
+  const subcategory = typeof req.query.subcategory === "string" ? req.query.subcategory.trim() : undefined;
   const city = typeof req.query.city === "string" ? req.query.city.trim() : undefined;
   const region = typeof req.query.region === "string" ? req.query.region.trim() : undefined;
+  const sort = sortFromQuery(req.query.sort);
 
   const rows = await queryListings(db, {
     seller,
@@ -163,8 +179,11 @@ export async function getListingsBySeller(req: Request, res: Response) {
     maxPrice,
     ...(q ? { q } : {}),
     ...(category ? { category } : {}),
+    ...(subcategory ? { subcategory } : {}),
     ...(city ? { city } : {}),
     ...(region ? { region } : {}),
+    ...(sort ? { sort } : {}),
+    autoHideReportThreshold: env.listingAutoHideReportsThreshold,
     limit,
     offset,
   });

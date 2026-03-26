@@ -23,6 +23,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { fetchJson } from "@/lib/api";
 import { getEnv } from "@/lib/env";
 import { marketplaceRegistryAbi } from "@/lib/contracts/abi/MarketplaceRegistry";
+import { CATEGORY_TREE, subcategoriesFor } from "@/lib/categories";
 
 type SaleType = 0 | 1 | 2;
 
@@ -117,7 +118,10 @@ export default function CreateListingPage() {
       // 1) Upload images
       const form = new FormData();
       for (const f of files.slice(0, 12)) form.append("files", f);
-      const uploadRes = await fetch("/uploads/images", { method: "POST", body: form });
+      const uploadRes = await fetch(`${(env.backendUrl ?? "http://localhost:4000").replace(/\/$/, "")}/uploads/images`, {
+        method: "POST",
+        body: form,
+      });
       if (!uploadRes.ok) {
         const text = await uploadRes.text().catch(() => "");
         throw new Error(text || `Upload failed (${uploadRes.status})`);
@@ -304,14 +308,52 @@ export default function CreateListingPage() {
                 ) : null}
               </div>
 
-              <div className="space-y-2">
+              <div className="space-y-2 sm:col-span-2">
                 <Label>Category</Label>
-                <Input value={category} onChange={(e) => setCategory(e.target.value)} placeholder="e.g. Cars & Vehicles" />
+                <div className="flex flex-wrap gap-2">
+                  {Object.keys(CATEGORY_TREE).map((c) => (
+                    <Button
+                      key={c}
+                      type="button"
+                      size="sm"
+                      variant={category === c ? "default" : "outline"}
+                      onClick={() => {
+                        setCategory(c);
+                        setSubcategory("");
+                      }}
+                    >
+                      {c}
+                    </Button>
+                  ))}
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label>Subcategory</Label>
-                <Input value={subcategory} onChange={(e) => setSubcategory(e.target.value)} placeholder="e.g. Cars & Trucks" />
-              </div>
+
+              {category ? (
+                <div className="space-y-2 sm:col-span-2">
+                  <Label>Subcategory</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {subcategoriesFor(category).map((sc) => (
+                      <Button
+                        key={sc}
+                        type="button"
+                        size="sm"
+                        variant={subcategory === sc ? "secondary" : "outline"}
+                        onClick={() => setSubcategory(sc)}
+                      >
+                        {sc}
+                      </Button>
+                    ))}
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={!subcategory ? "secondary" : "outline"}
+                      onClick={() => setSubcategory("")}
+                    >
+                      All {category}
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
               <div className="space-y-2">
                 <Label>City</Label>
                 <Input value={city} onChange={(e) => setCity(e.target.value)} placeholder="e.g. Toronto" />
