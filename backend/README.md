@@ -22,10 +22,10 @@ npm install
 
 This workspace uses `dotenv` and loads a `.env` file from the `backend/` directory.
 
-An example file is provided at `src/.env.local.example`. To use it locally:
+An example file is provided at `.env.example`. To use it locally:
 
 ```bash
-copy src\.env.local.example .env
+copy .env.example .env
 ```
 
 Required:
@@ -34,6 +34,22 @@ Required:
 - (Optional backup) `SEPOLIA_RPC_URL_FALLBACK`
 - `MARKETPLACE_REGISTRY_ADDRESS`
 - `DATABASE_URL` (managed Postgres connection string)
+
+### Local Postgres (recommended for dev)
+
+If you don't have a managed Postgres instance available (or it refuses external connections), you can run a local Postgres via Docker:
+
+```bash
+docker compose up -d
+```
+
+Then set your `.env` to use:
+
+- `DATABASE_URL=postgres://marketplace:marketplace@localhost:5432/marketplace`
+
+### Managed Postgres notes
+
+If you're using a hosted Postgres URL (e.g. Render) and see `Error: Connection terminated unexpectedly` during startup migrations, it usually means the provider is dropping connections at the protocol level (often because external connections are disabled or you're using an internal-only URL). Verify the database allows external connections and use the provider's "external" connection string.
 
 Optional:
 
