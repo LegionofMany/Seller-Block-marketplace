@@ -1,0 +1,57 @@
+databases:
+  - name: seller-block-postgres
+    databaseName: seller_block_marketplace
+    user: seller_block_marketplace
+
+services:
+  - type: web
+    name: seller-block-marketplace-backend
+    runtime: node
+    rootDir: backend
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: 20
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: seller-block-postgres
+          property: connectionString
+      - key: SEPOLIA_RPC_URL
+        sync: false
+      - key: SEPOLIA_RPC_URL_FALLBACK
+        sync: false
+      - key: MARKETPLACE_REGISTRY_ADDRESS
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
+      - key: START_BLOCK
+        value: 0
+      - key: INDEXER_ENABLED
+        value: true
+      - key: INDEXER_POLL_MS
+        value: 5000
+      - key: INDEXER_CHUNK_SIZE
+        value: 2000
+      - key: CACHE_TTL_MS
+        value: 30000
+      - key: RATE_LIMIT_WINDOW_MS
+        value: 60000
+      - key: RATE_LIMIT_MAX
+        value: 120
+      - key: LISTING_AUTOHIDE_REPORTS_THRESHOLD
+        value: 3
+      - key: AUTH_JWT_SECRET
+        generateValue: true
+      - key: AUTH_TOKEN_TTL_SECONDS
+        value: 28800
+      - key: AUTH_NONCE_TTL_SECONDS
+        value: 600
+      - key: PINATA_JWT
+        sync: false
+      - key: PINATA_GATEWAY_BASE_URL
+        sync: false
