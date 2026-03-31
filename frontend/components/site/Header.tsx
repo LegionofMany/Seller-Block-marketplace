@@ -3,11 +3,16 @@
 import * as React from "react";
 import Link from "next/link";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
+import { useAccount } from "wagmi";
 
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/components/providers/AuthProvider";
+import { shortenHex } from "@/lib/format";
 
 export function SiteHeader() {
   const [open, setOpen] = React.useState(false);
+  const { address } = useAccount();
+  const auth = useAuth();
 
   React.useEffect(() => {
     if (!open) return;
@@ -43,11 +48,29 @@ export function SiteHeader() {
             <Button asChild variant="ghost" size="sm">
               <Link href="/dashboard">Dashboard</Link>
             </Button>
+            <Button asChild variant="ghost" size="sm">
+              <Link href="/messages">Messages</Link>
+            </Button>
           </nav>
         </div>
 
-        <div className="hidden sm:block">
+        <div className="hidden items-center gap-2 sm:flex">
           <ConnectButton showBalance={false} chainStatus="icon" />
+          {address && !auth.isAuthenticated ? (
+            <Button type="button" variant="outline" size="sm" disabled={auth.isLoading} onClick={() => void auth.signIn()}>
+              Sign in
+            </Button>
+          ) : null}
+          {auth.isAuthenticated ? (
+            <>
+              <div className="max-w-36 truncate text-xs text-muted-foreground">
+                {auth.user?.displayName?.trim() || shortenHex(auth.address ?? address ?? "")}
+              </div>
+              <Button type="button" variant="ghost" size="sm" onClick={auth.signOut}>
+                Sign out
+              </Button>
+            </>
+          ) : null}
         </div>
 
         <Button
@@ -131,12 +154,25 @@ export function SiteHeader() {
             <Button asChild variant="ghost" className="h-11 w-full justify-start" onClick={() => setOpen(false)}>
               <Link href="/dashboard">Dashboard</Link>
             </Button>
+            <Button asChild variant="ghost" className="h-11 w-full justify-start" onClick={() => setOpen(false)}>
+              <Link href="/messages">Messages</Link>
+            </Button>
 
             <div className="pt-2">
               <div className="text-xs text-muted-foreground">Wallet</div>
               <div className="mt-2">
                 <ConnectButton showBalance={false} chainStatus="icon" />
               </div>
+              {address && !auth.isAuthenticated ? (
+                <Button type="button" variant="outline" className="mt-3 w-full" disabled={auth.isLoading} onClick={() => void auth.signIn()}>
+                  Sign in
+                </Button>
+              ) : null}
+              {auth.isAuthenticated ? (
+                <Button type="button" variant="ghost" className="mt-3 w-full" onClick={auth.signOut}>
+                  Sign out
+                </Button>
+              ) : null}
             </div>
           </div>
         </div>

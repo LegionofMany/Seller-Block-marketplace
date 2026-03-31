@@ -3,11 +3,12 @@
 import * as React from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { type Address, type Hex, isAddress, parseEther, zeroAddress } from "viem";
 import { useAccount, useReadContract, useWaitForTransactionReceipt, useWalletClient, useWriteContract } from "wagmi";
 import { toast } from "sonner";
 
+import { useAuth } from "@/components/providers/AuthProvider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -35,6 +36,7 @@ function asBytes32(value: string): Hex | null {
 }
 
 export default function ListingDetailPage() {
+  const router = useRouter();
   let env;
   try {
     env = getEnv();
@@ -53,6 +55,7 @@ export default function ListingDetailPage() {
   const { address } = useAccount();
   const { data: walletClient } = useWalletClient();
   const { writeContractAsync } = useWriteContract();
+  const auth = useAuth();
 
   const [bidAmount, setBidAmount] = React.useState("");
   const [ticketCount, setTicketCount] = React.useState("1");
@@ -215,6 +218,32 @@ export default function ListingDetailPage() {
       toast.success("Report submitted");
     } catch (e: any) {
       toast.error(e?.message ?? "Failed to submit report");
+    }
+  }
+
+  async function messageSeller() {
+    if (!listing) return;
+    if (!auth.isAuthenticated) {
+      toast.error("Sign in to message the seller");
+      return;
+    }
+    const body = window.prompt("Write your first message to the seller")?.trim();
+    if (!body) return;
+
+    try {
+      const res = await fetchJson<{ conversation: { id: number } }>("/messages/conversations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          counterparty: listing.seller,
+          listingId,
+          body,
+        }),
+        timeoutMs: 10_000,
+      });
+      router.push(`/messages?conversation=${res.conversation.id}`);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to start conversation");
     }
   }
 
@@ -592,6 +621,9 @@ export default function ListingDetailPage() {
                   <div className="rounded-md border p-4 space-y-2">
                     <div className="text-sm font-medium">Safety</div>
                     <div className="flex flex-col gap-2 sm:flex-row">
+                      <Button type="button" variant="default" size="lg" className="w-full sm:w-auto" onClick={messageSeller}>
+                        Message seller
+                      </Button>
                       <Button type="button" variant="outline" size="lg" className="w-full sm:w-auto" onClick={blockSeller}>
                         Block seller
                       </Button>

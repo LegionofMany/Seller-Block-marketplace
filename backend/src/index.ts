@@ -14,6 +14,9 @@ import { rafflesRouter } from "./routes/raffles";
 import { metadataRouter } from "./routes/metadata";
 import { uploadsRouter } from "./routes/uploads";
 import { safetyRouter } from "./routes/safety";
+import { authRouter } from "./routes/auth";
+import { usersRouter } from "./routes/users";
+import { messagesRouter } from "./routes/messages";
 import { startMarketplaceIndexer } from "./indexer/marketplaceIndexer";
 
 dotenv.config();
@@ -65,6 +68,9 @@ async function main() {
   app.use(metadataRouter());
   app.use(uploadsRouter());
   app.use(safetyRouter());
+  app.use(authRouter());
+  app.use(usersRouter());
+  app.use(messagesRouter());
 
   app.use(notFound);
   app.use(errorHandler);

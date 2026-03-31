@@ -104,7 +104,7 @@ export async function report(req: Request, res: Response) {
     reporter: z.string().optional(),
     signature: z.string().optional(),
     issuedAt: z.union([z.number(), z.string()]).optional(),
-    targetType: z.enum(["listing", "user", "message"]),
+    targetType: z.enum(["listing", "user", "message", "conversation"]),
     targetId: z.string().min(1).max(200),
     reason: z.enum(["spam", "prohibited", "scam", "duplicate", "harassment", "other"]),
     details: z.string().max(1000).optional(),

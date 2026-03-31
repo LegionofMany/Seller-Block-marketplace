@@ -17,6 +17,10 @@ export type Env = {
 
   listingAutoHideReportsThreshold: number;
 
+  authJwtSecret: string;
+  authTokenTtlSeconds: number;
+  authNonceTtlSeconds: number;
+
   pinataJwt?: string;
   pinataGatewayBaseUrl?: string;
 };
@@ -137,6 +141,10 @@ export function getEnv(): Env {
   // Set to 0 to disable auto-hide.
   const listingAutoHideReportsThreshold = numberFromEnv("LISTING_AUTOHIDE_REPORTS_THRESHOLD", 3);
 
+  const authJwtSecret = optional("AUTH_JWT_SECRET") ?? "seller-block-local-dev-secret-change-me";
+  const authTokenTtlSeconds = numberFromEnv("AUTH_TOKEN_TTL_SECONDS", 60 * 60 * 8);
+  const authNonceTtlSeconds = numberFromEnv("AUTH_NONCE_TTL_SECONDS", 60 * 10);
+
   const pinataJwt = optional("PINATA_JWT");
   const pinataGatewayBaseUrl = optional("PINATA_GATEWAY_BASE_URL");
   if (pinataGatewayBaseUrl) validateRpcUrl("PINATA_GATEWAY_BASE_URL", pinataGatewayBaseUrl);
@@ -157,6 +165,10 @@ export function getEnv(): Env {
     rateLimitMax,
 
     listingAutoHideReportsThreshold,
+
+    authJwtSecret,
+    authTokenTtlSeconds,
+    authNonceTtlSeconds,
 
     ...(pinataJwt ? { pinataJwt } : {}),
     ...(pinataGatewayBaseUrl ? { pinataGatewayBaseUrl } : {}),

@@ -4,6 +4,7 @@ import "@rainbow-me/rainbowkit/styles.css";
 
 import { ThemeProvider } from "@/components/providers/ThemeProvider";
 import { Web3Providers } from "@/components/providers/Web3Providers";
+import { AuthProvider } from "@/components/providers/AuthProvider";
 import { SiteHeader } from "@/components/site/Header";
 import { Toaster } from "sonner";
 
@@ -22,16 +23,18 @@ export default function RootLayout({
       <body className="min-h-screen overflow-x-hidden bg-background text-foreground">
         <ThemeProvider>
           <Web3Providers>
-            <Toaster richColors theme="dark" />
-            <div className="min-h-screen">
-              <SiteHeader />
-              <main className="mx-auto w-full max-w-screen-xl px-4 py-6 sm:py-8">{children}</main>
-              <footer className="border-t">
-                <div className="mx-auto w-full max-w-screen-xl px-4 py-6 text-xs text-muted-foreground">
-                  Seller Block Marketplace
-                </div>
-              </footer>
-            </div>
+            <AuthProvider>
+              <Toaster richColors theme="dark" />
+              <div className="min-h-screen">
+                <SiteHeader />
+                <main className="mx-auto w-full max-w-screen-xl px-4 py-6 sm:py-8">{children}</main>
+                <footer className="border-t">
+                  <div className="mx-auto w-full max-w-screen-xl px-4 py-6 text-xs text-muted-foreground">
+                    Seller Block Marketplace
+                  </div>
+                </footer>
+              </div>
+            </AuthProvider>
           </Web3Providers>
         </ThemeProvider>
       </body>

@@ -12,11 +12,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Skeleton } from "@/components/ui/skeleton";
 
 import { fetchJson } from "@/lib/api";
+import { type PublicUserProfileResponse } from "@/lib/auth";
 import { getEnv } from "@/lib/env";
 import { marketplaceRegistryAbi } from "@/lib/contracts/abi/MarketplaceRegistry";
 import { parseListing } from "@/lib/contracts/parse";
 import { isNativeToken, saleTypeLabel, statusLabel, type ListingStatus, type SaleType } from "@/lib/contracts/types";
 import { formatPrice, shortenHex } from "@/lib/format";
+import { ipfsToHttp } from "@/lib/ipfs";
 import { fetchMetadataById, metadataIdFromUri, type MarketplaceMetadata } from "@/lib/metadata";
 
 type ListingSummary = {
@@ -58,6 +60,7 @@ export default function SellerListingsPage({ params }: { params: Promise<{ addre
   const [isLoading, setIsLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   const [metadataById, setMetadataById] = React.useState<Record<string, MarketplaceMetadata>>({});
+  const [profile, setProfile] = React.useState<PublicUserProfileResponse | null>(null);
 
   let env: ReturnType<typeof getEnv>;
   try {
@@ -75,6 +78,16 @@ export default function SellerListingsPage({ params }: { params: Promise<{ addre
 
   React.useEffect(() => {
     let cancelled = false;
+
+    async function loadProfile() {
+      if (!seller) return;
+      try {
+        const data = await fetchJson<PublicUserProfileResponse>(`/users/${seller}`, { timeoutMs: 5_000 });
+        if (!cancelled) setProfile(data);
+      } catch {
+        if (!cancelled) setProfile(null);
+      }
+    }
 
     async function run() {
       try {
@@ -202,6 +215,7 @@ export default function SellerListingsPage({ params }: { params: Promise<{ addre
       }
     }
 
+    void loadProfile();
     run();
     return () => {
       cancelled = true;
@@ -250,6 +264,56 @@ export default function SellerListingsPage({ params }: { params: Promise<{ addre
         <h1 className="text-2xl font-semibold tracking-tight">Seller</h1>
         <p className="text-sm text-muted-foreground break-all">{seller ? seller : address}</p>
       </div>
+
+      {profile ? (
+        <Card>
+          <CardHeader>
+            <div className="flex items-start gap-4">
+              {profile.user.avatarCid ? (
+                <div className="relative h-20 w-20 overflow-hidden rounded-full border bg-muted">
+                  <Image
+                    src={ipfsToHttp(profile.user.avatarCid)}
+                    alt={profile.user.displayName ?? "Seller avatar"}
+                    fill
+                    className="object-cover"
+                    unoptimized
+                  />
+                </div>
+              ) : null}
+              <div className="space-y-2">
+                <CardTitle>{profile.user.displayName?.trim() || shortenHex(profile.user.address)}</CardTitle>
+                <CardDescription>{profile.user.bio?.trim() || "No seller bio yet."}</CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
+            <div>
+              <div className="text-muted-foreground">Listings</div>
+              <div className="font-medium">{profile.stats.listingCount}</div>
+            </div>
+            <div>
+              <div className="text-muted-foreground">Location</div>
+              <div className="font-medium">{[profile.stats.location?.city, profile.stats.location?.region, profile.stats.location?.postalCode].filter(Boolean).join(", ") || "—"}</div>
+            </div>
+            <div>
+              <div className="text-muted-foreground">Joined</div>
+              <div className="font-medium">{new Date(profile.user.createdAt).toLocaleDateString()}</div>
+            </div>
+            <div>
+              <div className="text-muted-foreground">Follower count</div>
+              <div className="font-medium">{profile.stats.followerCount}</div>
+            </div>
+            <div>
+              <div className="text-muted-foreground">Response rate</div>
+              <div className="font-medium">Later</div>
+            </div>
+            <div>
+              <div className="text-muted-foreground">Reputation</div>
+              <div className="font-medium">Later</div>
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
 
       {error ? (
         <Card>

@@ -45,6 +45,53 @@ export type MetadataRow = {
   createdAt: number;
 };
 
+export type UserRow = {
+  address: string;
+  displayName?: string | null;
+  bio?: string | null;
+  avatarCid?: string | null;
+  createdAt: number;
+  updatedAt: number;
+};
+
+export type PublicUserProfileRow = {
+  user: UserRow;
+  listingCount: number;
+  location?: {
+    city?: string | null;
+    region?: string | null;
+    postalCode?: string | null;
+  };
+};
+
+export type AuthNonceRow = {
+  address: string;
+  nonce: string;
+  expiresAt: number;
+  createdAt: number;
+  consumedAt?: number | null;
+};
+
+export type ConversationRow = {
+  id: number;
+  listingId?: string | null;
+  createdBy: string;
+  createdAt: number;
+  updatedAt: number;
+  counterparty?: string | null;
+  lastMessageBody?: string | null;
+  lastMessageAt?: number | null;
+  messageCount?: number;
+};
+
+export type MessageRow = {
+  id: number;
+  conversationId: number;
+  sender: string;
+  body: string;
+  createdAt: number;
+};
+
 let pool: Pool | null = null;
 
 export function openDb(connStr: string) {
@@ -508,7 +555,7 @@ export async function listUserBlocks(_db: Pool | any, blocker: string): Promise<
 
 export type CreateReportInput = {
   reporter?: string | null;
-  targetType: "listing" | "user" | "message";
+  targetType: "listing" | "user" | "message" | "conversation";
   targetId: string;
   reason: string;
   details?: string | null;
@@ -533,4 +580,290 @@ export async function createReport(_db: Pool | any, input: CreateReportInput): P
     ]
   );
   return { id: String(res.rows?.[0]?.id ?? "") };
+}
+
+function toUserRow(r: any): UserRow {
+  return {
+    address: String(r.address),
+    displayName: r.displayName ?? r.displayname ?? null,
+    bio: r.bio ?? null,
+    avatarCid: r.avatarCid ?? r.avatarcid ?? null,
+    createdAt: Number(r.createdAt ?? r.createdat ?? 0),
+    updatedAt: Number(r.updatedAt ?? r.updatedat ?? 0),
+  };
+}
+
+function toAuthNonceRow(r: any): AuthNonceRow {
+  return {
+    address: String(r.address),
+    nonce: String(r.nonce),
+    expiresAt: Number(r.expiresAt ?? r.expiresat ?? 0),
+    createdAt: Number(r.createdAt ?? r.createdat ?? 0),
+    consumedAt: r.consumedAt != null ? Number(r.consumedAt ?? r.consumedat) : null,
+  };
+}
+
+function toConversationRow(r: any): ConversationRow {
+  return {
+    id: Number(r.id),
+    listingId: r.listingId ?? r.listingid ?? null,
+    createdBy: String(r.createdBy ?? r.createdby),
+    createdAt: Number(r.createdAt ?? r.createdat ?? 0),
+    updatedAt: Number(r.updatedAt ?? r.updatedat ?? 0),
+    counterparty: r.counterparty ?? null,
+    lastMessageBody: r.lastMessageBody ?? r.lastmessagebody ?? null,
+    lastMessageAt: r.lastMessageAt != null ? Number(r.lastMessageAt ?? r.lastmessageat) : null,
+    ...(r.messageCount != null || r.messagecount != null
+      ? { messageCount: Number(r.messageCount ?? r.messagecount) }
+      : {}),
+  };
+}
+
+function toMessageRow(r: any): MessageRow {
+  return {
+    id: Number(r.id),
+    conversationId: Number(r.conversationId ?? r.conversationid),
+    sender: String(r.sender),
+    body: String(r.body),
+    createdAt: Number(r.createdAt ?? r.createdat ?? 0),
+  };
+}
+
+export async function createAuthNonce(_db: Pool | any, address: string, nonce: string, expiresAt: number, createdAt: number) {
+  const p = ensurePool(_db);
+  await p.query(
+    `INSERT INTO auth_nonces(address, nonce, expiresAt, createdAt, consumedAt)
+     VALUES($1,$2,$3,$4,NULL)
+     ON CONFLICT (address, nonce) DO UPDATE SET
+       expiresAt = EXCLUDED.expiresAt,
+       createdAt = EXCLUDED.createdAt,
+       consumedAt = NULL`,
+    [address, nonce, expiresAt, createdAt]
+  );
+}
+
+export async function findAuthNonce(_db: Pool | any, address: string, nonce: string): Promise<AuthNonceRow | null> {
+  const p = ensurePool(_db);
+  const res = await p.query(
+    'SELECT address, nonce, expiresat AS "expiresAt", createdat AS "createdAt", consumedat AS "consumedAt" FROM auth_nonces WHERE address = $1 AND nonce = $2',
+    [address, nonce]
+  );
+  return res.rows[0] ? toAuthNonceRow(res.rows[0]) : null;
+}
+
+export async function consumeAuthNonce(_db: Pool | any, address: string, nonce: string, consumedAt: number) {
+  const p = ensurePool(_db);
+  await p.query('UPDATE auth_nonces SET consumedat = $3 WHERE address = $1 AND nonce = $2 AND consumedat IS NULL', [address, nonce, consumedAt]);
+}
+
+export async function ensureUser(_db: Pool | any, address: string, createdAt: number) {
+  const p = ensurePool(_db);
+  await p.query(
+    `INSERT INTO users(address, createdAt, updatedAt)
+     VALUES($1,$2,$2)
+     ON CONFLICT (address) DO NOTHING`,
+    [address, createdAt]
+  );
+}
+
+export async function getUser(_db: Pool | any, address: string): Promise<UserRow | null> {
+  const p = ensurePool(_db);
+  const res = await p.query(
+    'SELECT address, displayname AS "displayName", bio, avatarcid AS "avatarCid", createdat AS "createdAt", updatedat AS "updatedAt" FROM users WHERE address = $1',
+    [address]
+  );
+  return res.rows[0] ? toUserRow(res.rows[0]) : null;
+}
+
+export async function updateUserProfile(_db: Pool | any, row: { address: string; displayName?: string | null; bio?: string | null; avatarCid?: string | null; updatedAt: number }) {
+  const p = ensurePool(_db);
+  await p.query(
+    `INSERT INTO users(address, displayName, bio, avatarCid, createdAt, updatedAt)
+     VALUES($1,$2,$3,$4,$5,$5)
+     ON CONFLICT (address) DO UPDATE SET
+       displayName = EXCLUDED.displayName,
+       bio = EXCLUDED.bio,
+       avatarCid = EXCLUDED.avatarCid,
+       updatedAt = EXCLUDED.updatedAt`,
+    [row.address, row.displayName ?? null, row.bio ?? null, row.avatarCid ?? null, row.updatedAt]
+  );
+}
+
+export async function getPublicUserProfile(_db: Pool | any, address: string): Promise<PublicUserProfileRow | null> {
+  const p = ensurePool(_db);
+  const user = await getUser(p, address);
+
+  const listingCountRes = await p.query(
+    'SELECT COUNT(1) AS count, MIN(createdat) AS "firstCreatedAt" FROM listings WHERE seller = $1',
+    [address]
+  );
+  const listingCount = Number(listingCountRes.rows?.[0]?.count ?? 0);
+  const firstCreatedAt = Number(listingCountRes.rows?.[0]?.firstCreatedAt ?? 0);
+
+  if (!user && listingCount === 0) return null;
+
+  const locationRes = await p.query(
+    `SELECT m.city, m.region, m.postalcode AS "postalCode"
+     FROM listings l
+     LEFT JOIN metadata m ON m.uri = l.metadatauri
+     WHERE l.seller = $1 AND (m.city IS NOT NULL OR m.region IS NOT NULL OR m.postalcode IS NOT NULL)
+     ORDER BY l.blocknumber DESC, l.createdat DESC
+     LIMIT 1`,
+    [address]
+  );
+
+  const fallbackUser: UserRow = user ?? {
+    address,
+    displayName: null,
+    bio: null,
+    avatarCid: null,
+    createdAt: firstCreatedAt || Date.now(),
+    updatedAt: firstCreatedAt || Date.now(),
+  };
+
+  return {
+    user: fallbackUser,
+    listingCount,
+    ...(locationRes.rows[0]
+      ? {
+          location: {
+            city: locationRes.rows[0].city ?? null,
+            region: locationRes.rows[0].region ?? null,
+            postalCode: locationRes.rows[0].postalCode ?? null,
+          },
+        }
+      : {}),
+  };
+}
+
+export async function hasUserBlockBetween(_db: Pool | any, a: string, b: string): Promise<boolean> {
+  const p = ensurePool(_db);
+  const res = await p.query(
+    `SELECT 1 FROM user_blocks WHERE (blocker = $1 AND blocked = $2) OR (blocker = $2 AND blocked = $1) LIMIT 1`,
+    [a, b]
+  );
+  return Boolean(res.rows[0]);
+}
+
+export async function findConversationByParticipants(_db: Pool | any, a: string, b: string, listingId?: string | null): Promise<ConversationRow | null> {
+  const p = ensurePool(_db);
+  const res = await p.query(
+    `SELECT c.id, c.listingid AS "listingId", c.createdby AS "createdBy", c.createdat AS "createdAt", c.updatedat AS "updatedAt"
+     FROM conversations c
+     INNER JOIN conversation_participants p1 ON p1.conversationid = c.id AND p1.participant = $1
+     INNER JOIN conversation_participants p2 ON p2.conversationid = c.id AND p2.participant = $2
+     WHERE (($3::text IS NULL AND c.listingid IS NULL) OR c.listingid = $3)
+     ORDER BY c.updatedat DESC
+     LIMIT 1`,
+    [a, b, listingId ?? null]
+  );
+  return res.rows[0] ? toConversationRow(res.rows[0]) : null;
+}
+
+export async function createConversation(_db: Pool | any, input: { listingId?: string | null; createdBy: string; createdAt: number; updatedAt: number }): Promise<ConversationRow> {
+  const p = ensurePool(_db);
+  const res = await p.query(
+    `INSERT INTO conversations(listingId, createdBy, createdAt, updatedAt)
+     VALUES($1,$2,$3,$4)
+     RETURNING id, listingid AS "listingId", createdby AS "createdBy", createdat AS "createdAt", updatedat AS "updatedAt"`,
+    [input.listingId ?? null, input.createdBy, input.createdAt, input.updatedAt]
+  );
+  return toConversationRow(res.rows[0]);
+}
+
+export async function addConversationParticipant(_db: Pool | any, conversationId: number, participant: string, createdAt: number) {
+  const p = ensurePool(_db);
+  await p.query(
+    `INSERT INTO conversation_participants(conversationId, participant, createdAt)
+     VALUES($1,$2,$3)
+     ON CONFLICT (conversationId, participant) DO NOTHING`,
+    [conversationId, participant, createdAt]
+  );
+}
+
+export async function getConversation(_db: Pool | any, conversationId: number): Promise<ConversationRow | null> {
+  const p = ensurePool(_db);
+  const res = await p.query(
+    'SELECT id, listingid AS "listingId", createdby AS "createdBy", createdat AS "createdAt", updatedat AS "updatedAt" FROM conversations WHERE id = $1',
+    [conversationId]
+  );
+  return res.rows[0] ? toConversationRow(res.rows[0]) : null;
+}
+
+export async function listConversationParticipants(_db: Pool | any, conversationId: number): Promise<string[]> {
+  const p = ensurePool(_db);
+  const res = await p.query('SELECT participant FROM conversation_participants WHERE conversationid = $1 ORDER BY participant ASC', [conversationId]);
+  return res.rows.map((r: any) => String(r.participant));
+}
+
+export async function touchConversation(_db: Pool | any, conversationId: number, updatedAt: number) {
+  const p = ensurePool(_db);
+  await p.query('UPDATE conversations SET updatedat = $2 WHERE id = $1', [conversationId, updatedAt]);
+}
+
+export async function listUserConversations(_db: Pool | any, participant: string): Promise<ConversationRow[]> {
+  const p = ensurePool(_db);
+  const res = await p.query(
+    `SELECT c.id,
+            c.listingid AS "listingId",
+            c.createdby AS "createdBy",
+            c.createdat AS "createdAt",
+            c.updatedat AS "updatedAt",
+            cp.participant AS counterparty,
+            lm.body AS "lastMessageBody",
+            lm.createdat AS "lastMessageAt",
+            COALESCE(mc.count, 0) AS "messageCount"
+     FROM conversations c
+     INNER JOIN conversation_participants selfp ON selfp.conversationid = c.id AND selfp.participant = $1
+     LEFT JOIN LATERAL (
+       SELECT participant FROM conversation_participants WHERE conversationid = c.id AND participant <> $1 ORDER BY participant LIMIT 1
+     ) cp ON true
+     LEFT JOIN LATERAL (
+       SELECT body, createdat FROM messages WHERE conversationid = c.id ORDER BY createdat DESC, id DESC LIMIT 1
+     ) lm ON true
+     LEFT JOIN LATERAL (
+       SELECT COUNT(1) AS count FROM messages WHERE conversationid = c.id
+     ) mc ON true
+     ORDER BY COALESCE(lm.createdat, c.updatedat) DESC, c.id DESC`,
+    [participant]
+  );
+  return res.rows.map(toConversationRow);
+}
+
+export async function listConversationMessages(_db: Pool | any, conversationId: number, opts: { limit: number; beforeId?: number | undefined; since?: number | undefined }): Promise<MessageRow[]> {
+  const p = ensurePool(_db);
+  const where: string[] = ['conversationid = $1'];
+  const params: any[] = [conversationId];
+
+  if (typeof opts.beforeId === 'number' && Number.isFinite(opts.beforeId)) {
+    where.push(`id < $${params.length + 1}`);
+    params.push(opts.beforeId);
+  }
+  if (typeof opts.since === 'number' && Number.isFinite(opts.since)) {
+    where.push(`createdat > $${params.length + 1}`);
+    params.push(opts.since);
+  }
+
+  params.push(Math.min(Math.max(opts.limit, 1), 100));
+  const limitParam = `$${params.length}`;
+  const res = await p.query(
+    `SELECT id, conversationid AS "conversationId", sender, body, createdat AS "createdAt"
+     FROM messages
+     WHERE ${where.join(' AND ')}
+     ORDER BY createdat DESC, id DESC
+     LIMIT ${limitParam}`,
+    params
+  );
+  return res.rows.map(toMessageRow).reverse();
+}
+
+export async function createMessage(_db: Pool | any, input: { conversationId: number; sender: string; body: string; createdAt: number }): Promise<MessageRow> {
+  const p = ensurePool(_db);
+  const res = await p.query(
+    `INSERT INTO messages(conversationId, sender, body, createdAt)
+     VALUES($1,$2,$3,$4)
+     RETURNING id, conversationid AS "conversationId", sender, body, createdat AS "createdAt"`,
+    [input.conversationId, input.sender, input.body, input.createdAt]
+  );
+  return toMessageRow(res.rows[0]);
 }

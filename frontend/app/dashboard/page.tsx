@@ -11,7 +11,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Textarea } from "@/components/ui/textarea";
 
+import { useAuth } from "@/components/providers/AuthProvider";
 import { getEnv } from "@/lib/env";
 import { fetchJson } from "@/lib/api";
 import { marketplaceRegistryAbi } from "@/lib/contracts/abi/MarketplaceRegistry";
@@ -19,6 +21,7 @@ import { escrowVaultAbi } from "@/lib/contracts/abi/EscrowVault";
 import { parseListing } from "@/lib/contracts/parse";
 import { statusLabel } from "@/lib/contracts/types";
 import { shortenHex } from "@/lib/format";
+import { type UserProfile } from "@/lib/auth";
 
 const listingCreatedEvent = parseAbiItem(
   "event ListingCreated(bytes32 indexed id, address seller, uint8 saleType, address token, uint256 price, string metadataURI)"
@@ -28,6 +31,11 @@ export default function DashboardPage() {
   const { address } = useAccount();
   const publicClient = usePublicClient();
   const { writeContractAsync } = useWriteContract();
+  const auth = useAuth();
+
+  const [displayName, setDisplayName] = React.useState("");
+  const [bio, setBio] = React.useState("");
+  const [avatarCid, setAvatarCid] = React.useState("");
 
   const [token, setToken] = React.useState<string>("");
   const [vaultController, setVaultController] = React.useState<string>("");
@@ -52,6 +60,12 @@ export default function DashboardPage() {
   const [creditAmount, setCreditAmount] = React.useState<bigint | null>(null);
   const [myListingIds, setMyListingIds] = React.useState<Hex[] | null>(null);
   const [myListings, setMyListings] = React.useState<Array<{ id: Hex; status: number; buyer: Address }> | null>(null);
+
+  React.useEffect(() => {
+    setDisplayName(auth.user?.displayName ?? "");
+    setBio(auth.user?.bio ?? "");
+    setAvatarCid(auth.user?.avatarCid ?? "");
+  }, [auth.user]);
 
   let env: ReturnType<typeof getEnv>;
   try {
@@ -243,6 +257,66 @@ export default function DashboardPage() {
         <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
         <p className="text-sm text-muted-foreground">Manage your marketplace activity.</p>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Profile</CardTitle>
+          <CardDescription>Sign in with your wallet to edit the public profile shown on your seller page.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {!auth.isAuthenticated ? (
+            <div className="space-y-3 text-sm">
+              <div className="text-muted-foreground">Connect your wallet and complete wallet sign-in to edit your profile.</div>
+              {address ? (
+                <Button type="button" variant="outline" size="lg" className="w-full sm:w-auto" disabled={auth.isLoading} onClick={() => void auth.signIn()}>
+                  Sign in
+                </Button>
+              ) : null}
+            </div>
+          ) : (
+            <div className="grid gap-4">
+              <div className="space-y-2">
+                <Label>Display name</Label>
+                <Input value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder="e.g. Victor's Store" />
+              </div>
+              <div className="space-y-2">
+                <Label>Bio</Label>
+                <Textarea value={bio} onChange={(e) => setBio(e.target.value)} placeholder="Tell buyers what you sell and how to reach you." />
+              </div>
+              <div className="space-y-2">
+                <Label>Avatar URI (optional)</Label>
+                <Input value={avatarCid} onChange={(e) => setAvatarCid(e.target.value)} placeholder="ipfs://... or https://..." />
+              </div>
+              <Button
+                type="button"
+                size="lg"
+                className="w-full sm:w-auto"
+                disabled={auth.isLoading}
+                onClick={async () => {
+                  try {
+                    const res = await fetchJson<{ user: UserProfile }>("/users/me", {
+                      method: "PUT",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        displayName,
+                        bio,
+                        avatarCid,
+                      }),
+                    });
+                    auth.setUser(res.user);
+                    await auth.refresh();
+                    toast.success("Profile updated");
+                  } catch (e: any) {
+                    toast.error(e?.message ?? "Failed to update profile");
+                  }
+                }}
+              >
+                Save profile
+              </Button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

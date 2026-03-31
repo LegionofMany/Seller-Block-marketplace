@@ -1,4 +1,5 @@
 import { getEnv } from "./env";
+import { getStoredAuthToken } from "./auth";
 
 export type ApiError = {
   message: string;
@@ -18,12 +19,17 @@ export async function fetchJson<T>(path: string, init?: RequestInit & { timeoutM
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
+    const headers = new Headers(init?.headers ?? {});
+    headers.set("Accept", "application/json");
+
+    const token = getStoredAuthToken();
+    if (token && !headers.has("Authorization")) {
+      headers.set("Authorization", `Bearer ${token}`);
+    }
+
     const res = await fetch(url, {
       ...init,
-      headers: {
-        Accept: "application/json",
-        ...(init?.headers ?? {}),
-      },
+      headers,
       signal: controller.signal,
     });
 
