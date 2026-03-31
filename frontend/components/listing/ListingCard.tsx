@@ -19,7 +19,7 @@ export function ListingCard({ row }: { row: ListingSummary }) {
   const title = metadata?.title?.trim() || saleTypeLabel(row.saleType);
   const description = metadata?.description?.trim() || row.metadataURI;
   const imageUrl = metadata?.image?.trim() || "";
-  const subtitleParts = [metadata?.category, metadata?.city, metadata?.region].filter(Boolean).join(" • ");
+  const subtitleParts = [metadata?.category, metadata?.city, metadata?.region, metadata?.postalCode].filter(Boolean).join(" • ");
 
   return (
     <Link href={`/listing/${row.id}`} className="block">

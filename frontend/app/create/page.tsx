@@ -83,6 +83,7 @@ export default function CreateListingPage() {
   const [minParticipants, setMinParticipants] = React.useState("2");
   const ZERO_BYTES32 = ("0x" + "00".repeat(32)) as Hex;
   const [reveal, setReveal] = React.useState<Hex>(ZERO_BYTES32);
+  const [previewUrls, setPreviewUrls] = React.useState<string[]>([]);
 
   React.useEffect(() => {
     // Generate a random default reveal once (so user can save it)
@@ -91,6 +92,15 @@ export default function CreateListingPage() {
     crypto.getRandomValues(bytes);
     setReveal(("0x" + Array.from(bytes).map((b) => b.toString(16).padStart(2, "0")).join("")) as Hex);
   }, []);
+
+  React.useEffect(() => {
+    const urls = files.map((file) => URL.createObjectURL(file));
+    setPreviewUrls(urls);
+
+    return () => {
+      for (const url of urls) URL.revokeObjectURL(url);
+    };
+  }, [files]);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -304,7 +314,25 @@ export default function CreateListingPage() {
                   onChange={(e) => setFiles(Array.from(e.target.files ?? []))}
                 />
                 {files.length ? (
-                  <div className="text-xs text-muted-foreground">Selected: {files.map((f) => f.name).join(", ")}</div>
+                  <>
+                    <div className="text-xs text-muted-foreground">Selected: {files.map((f) => f.name).join(", ")}</div>
+                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                      {previewUrls.map((url, index) => (
+                        <div key={`${files[index]?.name ?? "file"}-${index}`} className="overflow-hidden rounded-md border bg-muted">
+                          <div className="relative aspect-square w-full">
+                            <img
+                              src={url}
+                              alt={files[index]?.name ?? `Selected image ${index + 1}`}
+                              className="h-full w-full object-cover"
+                            />
+                          </div>
+                          <div className="truncate border-t px-2 py-1 text-[11px] text-muted-foreground">
+                            {files[index]?.name ?? `Image ${index + 1}`}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </>
                 ) : null}
               </div>
 

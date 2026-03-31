@@ -379,6 +379,7 @@ export type ListingsQuery = {
   subcategory?: string | undefined;
   city?: string | undefined;
   region?: string | undefined;
+  postalCode?: string | undefined;
   sort?: "newest" | "price_asc" | "price_desc" | undefined;
   autoHideReportThreshold?: number | undefined;
   limit: number;
@@ -390,7 +391,7 @@ export async function queryListings(_db: Pool | any, q: ListingsQuery) {
   const where: string[] = [];
   const params: any[] = [];
 
-  const joinMetadata = Boolean(q.q || q.category || q.subcategory || q.city || q.region);
+  const joinMetadata = Boolean(q.q || q.category || q.subcategory || q.city || q.region || q.postalCode);
 
   if (q.seller) {
     where.push(`seller = $${params.length + 1}`);
@@ -428,6 +429,10 @@ export async function queryListings(_db: Pool | any, q: ListingsQuery) {
   if (q.region) {
     where.push(`m.region = $${params.length + 1}`);
     params.push(q.region);
+  }
+  if (q.postalCode) {
+    where.push(`m.postalcode = $${params.length + 1}`);
+    params.push(q.postalCode);
   }
   if (q.q) {
     where.push(`(m.title ILIKE $${params.length + 1} OR m.description ILIKE $${params.length + 1})`);

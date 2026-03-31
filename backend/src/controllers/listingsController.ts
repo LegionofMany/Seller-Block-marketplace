@@ -108,6 +108,7 @@ export async function getListings(req: Request, res: Response) {
   const subcategory = typeof req.query.subcategory === "string" ? req.query.subcategory.trim() : undefined;
   const city = typeof req.query.city === "string" ? req.query.city.trim() : undefined;
   const region = typeof req.query.region === "string" ? req.query.region.trim() : undefined;
+  const postalCode = typeof req.query.postalCode === "string" ? req.query.postalCode.trim() : undefined;
   const sort = sortFromQuery(req.query.sort);
 
   const rows = await queryListings(db, {
@@ -120,6 +121,7 @@ export async function getListings(req: Request, res: Response) {
     ...(subcategory ? { subcategory } : {}),
     ...(city ? { city } : {}),
     ...(region ? { region } : {}),
+    ...(postalCode ? { postalCode } : {}),
     ...(sort ? { sort } : {}),
     autoHideReportThreshold: env.listingAutoHideReportsThreshold,
     limit,
@@ -169,6 +171,7 @@ export async function getListingsBySeller(req: Request, res: Response) {
   const subcategory = typeof req.query.subcategory === "string" ? req.query.subcategory.trim() : undefined;
   const city = typeof req.query.city === "string" ? req.query.city.trim() : undefined;
   const region = typeof req.query.region === "string" ? req.query.region.trim() : undefined;
+  const postalCode = typeof req.query.postalCode === "string" ? req.query.postalCode.trim() : undefined;
   const sort = sortFromQuery(req.query.sort);
 
   const rows = await queryListings(db, {
@@ -182,6 +185,7 @@ export async function getListingsBySeller(req: Request, res: Response) {
     ...(subcategory ? { subcategory } : {}),
     ...(city ? { city } : {}),
     ...(region ? { region } : {}),
+    ...(postalCode ? { postalCode } : {}),
     ...(sort ? { sort } : {}),
     autoHideReportThreshold: env.listingAutoHideReportsThreshold,
     limit,

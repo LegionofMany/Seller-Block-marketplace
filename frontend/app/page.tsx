@@ -20,6 +20,7 @@ export default function ListingsPage() {
   const [subcategory, setSubcategory] = React.useState("");
   const [city, setCity] = React.useState("");
   const [region, setRegion] = React.useState("");
+  const [postalCode, setPostalCode] = React.useState("");
   const [minPrice, setMinPrice] = React.useState("");
   const [maxPrice, setMaxPrice] = React.useState("");
   const [type, setType] = React.useState<"" | "fixed" | "auction" | "raffle">("");
@@ -34,6 +35,7 @@ export default function ListingsPage() {
     ...(subcategory.trim() ? { subcategory: subcategory.trim() } : {}),
     ...(city.trim() ? { city: city.trim() } : {}),
     ...(region.trim() ? { region: region.trim() } : {}),
+    ...(postalCode.trim() ? { postalCode: postalCode.trim() } : {}),
     ...(minPrice.trim() ? { minPrice: minPrice.trim() } : {}),
     ...(maxPrice.trim() ? { maxPrice: maxPrice.trim() } : {}),
     ...(type ? { type } : {}),
@@ -171,6 +173,10 @@ export default function ListingsPage() {
               <Input value={region} onChange={(e) => setRegion(e.target.value)} placeholder="e.g. Ontario" />
             </div>
             <div className="space-y-2">
+              <Label>Postal code</Label>
+              <Input value={postalCode} onChange={(e) => setPostalCode(e.target.value)} placeholder="e.g. M5V" />
+            </div>
+            <div className="space-y-2">
               <Label>Min price (wei/raw)</Label>
               <Input value={minPrice} onChange={(e) => setMinPrice(e.target.value)} placeholder="0" />
             </div>
@@ -190,6 +196,7 @@ export default function ListingsPage() {
                   setSubcategory("");
                   setCity("");
                   setRegion("");
+                  setPostalCode("");
                   setMinPrice("");
                   setMaxPrice("");
                   setType("");

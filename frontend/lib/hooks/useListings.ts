@@ -26,6 +26,7 @@ export type ListingsParams = {
   subcategory?: string;
   city?: string;
   region?: string;
+  postalCode?: string;
   minPrice?: string;
   maxPrice?: string;
   type?: "fixed" | "auction" | "raffle";
@@ -85,6 +86,7 @@ function buildQuery(params: ListingsParams | undefined): string {
   if (p.subcategory) sp.set("subcategory", p.subcategory);
   if (p.city) sp.set("city", p.city);
   if (p.region) sp.set("region", p.region);
+  if (p.postalCode) sp.set("postalCode", p.postalCode);
   if (p.minPrice) sp.set("minPrice", p.minPrice);
   if (p.maxPrice) sp.set("maxPrice", p.maxPrice);
   if (p.type) sp.set("type", p.type);

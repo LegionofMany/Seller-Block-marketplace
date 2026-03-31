@@ -82,6 +82,15 @@ export default function ListingDetailPage() {
   const [metadata, setMetadata] = React.useState<MarketplaceMetadata | null>(null);
   const [isReuploadingMetadata, setIsReuploadingMetadata] = React.useState(false);
 
+  const galleryImages = React.useMemo(() => {
+    const items = Array.isArray(metadata?.images) && metadata.images.length
+      ? metadata.images
+      : metadata?.image
+        ? [metadata.image]
+        : [];
+    return Array.from(new Set(items.filter(Boolean)));
+  }, [metadata?.image, metadata?.images]);
+
   const metadataId = React.useMemo(() => {
     if (!listing?.metadataURI) return null;
     return metadataIdFromUri(listing.metadataURI);
@@ -491,12 +500,12 @@ export default function ListingDetailPage() {
                 </div>
               ) : null}
 
-              {metadata?.image ? (
+              {galleryImages.length ? (
                 <div className="overflow-hidden rounded-md border bg-muted">
                   <div className="relative w-full aspect-[4/3]">
                     <Image
-                      src={metadata.image}
-                      alt={metadata.title ?? "Listing image"}
+                      src={galleryImages[0]}
+                      alt={metadata?.title ?? "Listing image"}
                       fill
                       className="object-cover"
                       sizes="100vw"
@@ -507,8 +516,30 @@ export default function ListingDetailPage() {
                 </div>
               ) : null}
 
-              {metadata?.image ? (
-                <div className="truncate text-xs text-muted-foreground">Image: {metadata.image}</div>
+              {galleryImages.length > 1 ? (
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                  {galleryImages.map((image, index) => (
+                    <div key={`${image}-${index}`} className="overflow-hidden rounded-md border bg-muted">
+                      <div className="relative aspect-square w-full">
+                        <Image
+                          src={image}
+                          alt={`${metadata?.title ?? "Listing"} image ${index + 1}`}
+                          fill
+                          className="object-cover"
+                          sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+                          unoptimized
+                          priority={false}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+
+              {galleryImages.length ? (
+                <div className="truncate text-xs text-muted-foreground">
+                  Images: {galleryImages.length}
+                </div>
               ) : null}
 
               <div className="grid gap-3 sm:grid-cols-2">
