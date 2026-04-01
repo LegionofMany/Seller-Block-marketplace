@@ -80,6 +80,29 @@ function validateRpcUrl(name: string, value: string) {
   }
 }
 
+function validateDatabaseUrl(name: string, value: string) {
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    throw new Error(
+      `Invalid ${name} (expected postgres:// or postgresql:// connection string; ensure special characters in the password are URL-encoded)`
+    );
+  }
+
+  if (!['postgres:', 'postgresql:'].includes(parsed.protocol)) {
+    throw new Error(`Invalid ${name} protocol (expected postgres:// or postgresql://)`);
+  }
+
+  if (!parsed.hostname) {
+    throw new Error(`Invalid ${name} (missing hostname)`);
+  }
+
+  if (!parsed.pathname || parsed.pathname === '/') {
+    throw new Error(`Invalid ${name} (missing database name)`);
+  }
+}
+
 function parseOrigins(raw: string | undefined): string[] | undefined {
   if (!raw) return undefined;
   const parts = raw
@@ -120,6 +143,7 @@ export function getEnv(): Env {
     }
     throw new Error("Missing required env var: DATABASE_URL");
   }
+  validateDatabaseUrl("DATABASE_URL", databaseUrl);
 
   // Kept as dbPath for backward compatibility in the rest of the codebase.
   const dbPath = databaseUrl;
