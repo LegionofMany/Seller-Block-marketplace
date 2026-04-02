@@ -57,6 +57,7 @@ export type UserRow = {
 export type PublicUserProfileRow = {
   user: UserRow;
   listingCount: number;
+  followerCount: number;
   location?: {
     city?: string | null;
     region?: string | null;
@@ -700,6 +701,9 @@ export async function getPublicUserProfile(_db: Pool | any, address: string): Pr
   const listingCount = Number(listingCountRes.rows?.[0]?.count ?? 0);
   const firstCreatedAt = Number(listingCountRes.rows?.[0]?.firstCreatedAt ?? 0);
 
+  const followerCountRes = await p.query('SELECT COUNT(1) AS count FROM user_follows WHERE followed = $1', [address]);
+  const followerCount = Number(followerCountRes.rows?.[0]?.count ?? 0);
+
   if (!user && listingCount === 0) return null;
 
   const locationRes = await p.query(
@@ -724,6 +728,7 @@ export async function getPublicUserProfile(_db: Pool | any, address: string): Pr
   return {
     user: fallbackUser,
     listingCount,
+    followerCount,
     ...(locationRes.rows[0]
       ? {
           location: {
@@ -734,6 +739,27 @@ export async function getPublicUserProfile(_db: Pool | any, address: string): Pr
         }
       : {}),
   };
+}
+
+export async function isUserFollowing(_db: Pool | any, follower: string, followed: string): Promise<boolean> {
+  const p = ensurePool(_db);
+  const res = await p.query('SELECT 1 FROM user_follows WHERE follower = $1 AND followed = $2 LIMIT 1', [follower, followed]);
+  return Boolean(res.rows[0]);
+}
+
+export async function createUserFollow(_db: Pool | any, input: { follower: string; followed: string; createdAt: number }) {
+  const p = ensurePool(_db);
+  await p.query(
+    `INSERT INTO user_follows(follower, followed, createdAt)
+     VALUES($1,$2,$3)
+     ON CONFLICT (follower, followed) DO NOTHING`,
+    [input.follower, input.followed, input.createdAt]
+  );
+}
+
+export async function deleteUserFollow(_db: Pool | any, follower: string, followed: string) {
+  const p = ensurePool(_db);
+  await p.query('DELETE FROM user_follows WHERE follower = $1 AND followed = $2', [follower, followed]);
 }
 
 export async function hasUserBlockBetween(_db: Pool | any, a: string, b: string): Promise<boolean> {

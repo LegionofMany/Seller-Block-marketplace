@@ -4,7 +4,7 @@ import { z } from "zod";
 import { HttpError } from "../middlewares/errors";
 import { requireAuthAddress } from "../middlewares/auth";
 import { getContext } from "../services/context";
-import { ensureUser, getPublicUserProfile, getUser, updateUserProfile } from "../services/db";
+import { createUserFollow, deleteUserFollow, ensureUser, getPublicUserProfile, getUser, isUserFollowing, updateUserProfile } from "../services/db";
 import { requireAddress } from "../utils/validation";
 
 function isAvatarValue(value: string): boolean {
@@ -28,11 +28,50 @@ export async function getUserProfile(req: Request, res: Response) {
     stats: {
       listingCount: profile.listingCount,
       location: profile.location ?? null,
-      followerCount: 0,
+      followerCount: profile.followerCount,
       responseRate: null,
       reputation: null,
     },
   });
+}
+
+export async function getFollowState(req: Request, res: Response) {
+  const { db } = getContext();
+  const follower = requireAuthAddress(req);
+  const followed = requireAddress(String(req.params.address ?? ""), "address");
+
+  if (follower.toLowerCase() === followed.toLowerCase()) {
+    return res.json({ isFollowing: false });
+  }
+
+  const isFollowing = await isUserFollowing(db, follower, followed);
+  return res.json({ isFollowing });
+}
+
+export async function followUser(req: Request, res: Response) {
+  const { db } = getContext();
+  const follower = requireAuthAddress(req);
+  const followed = requireAddress(String(req.params.address ?? ""), "address");
+
+  if (follower.toLowerCase() === followed.toLowerCase()) {
+    throw new HttpError(400, "You cannot follow yourself", "INVALID_FOLLOW");
+  }
+
+  const now = Date.now();
+  await ensureUser(db, follower, now);
+  await ensureUser(db, followed, now);
+  await createUserFollow(db, { follower, followed, createdAt: now });
+
+  return res.status(201).json({ ok: true });
+}
+
+export async function unfollowUser(req: Request, res: Response) {
+  const { db } = getContext();
+  const follower = requireAuthAddress(req);
+  const followed = requireAddress(String(req.params.address ?? ""), "address");
+
+  await deleteUserFollow(db, follower, followed);
+  return res.json({ ok: true });
 }
 
 export async function updateMyProfile(req: Request, res: Response) {

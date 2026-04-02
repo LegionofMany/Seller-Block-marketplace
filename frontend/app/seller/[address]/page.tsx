@@ -8,8 +8,10 @@ import { type Address, type Hex, isAddress, parseAbiItem } from "viem";
 import { usePublicClient } from "wagmi";
 
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useAuth } from "@/components/providers/AuthProvider";
 
 import { fetchJson } from "@/lib/api";
 import { type PublicUserProfileResponse } from "@/lib/auth";
@@ -55,12 +57,15 @@ export default function SellerListingsPage({ params }: { params: Promise<{ addre
   // React 19 `use()` unwraps the promise on the client (suspends if needed).
   const resolvedParams = use(params);
   const publicClient = usePublicClient();
+  const auth = useAuth();
 
   const [listings, setListings] = React.useState<ListingSummary[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   const [metadataById, setMetadataById] = React.useState<Record<string, MarketplaceMetadata>>({});
   const [profile, setProfile] = React.useState<PublicUserProfileResponse | null>(null);
+  const [isFollowing, setIsFollowing] = React.useState(false);
+  const [isFollowLoading, setIsFollowLoading] = React.useState(false);
 
   let env: ReturnType<typeof getEnv>;
   try {
@@ -75,6 +80,7 @@ export default function SellerListingsPage({ params }: { params: Promise<{ addre
 
   const address = resolvedParams?.address;
   const seller = isAddress(address) ? (address as Address) : null;
+  const canFollow = Boolean(seller && auth.address && seller.toLowerCase() !== auth.address.toLowerCase());
 
   React.useEffect(() => {
     let cancelled = false;
@@ -224,6 +230,29 @@ export default function SellerListingsPage({ params }: { params: Promise<{ addre
 
   React.useEffect(() => {
     let cancelled = false;
+
+    async function run() {
+      if (!auth.isAuthenticated || !canFollow || !seller) {
+        if (!cancelled) setIsFollowing(false);
+        return;
+      }
+
+      try {
+        const data = await fetchJson<{ isFollowing: boolean }>(`/users/${seller}/follow-state`, { timeoutMs: 5_000 });
+        if (!cancelled) setIsFollowing(Boolean(data.isFollowing));
+      } catch {
+        if (!cancelled) setIsFollowing(false);
+      }
+    }
+
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [auth.isAuthenticated, canFollow, seller]);
+
+  React.useEffect(() => {
+    let cancelled = false;
     async function run() {
       const ids = listings
         .map((l) => metadataIdFromUri(l.metadataURI))
@@ -258,6 +287,43 @@ export default function SellerListingsPage({ params }: { params: Promise<{ addre
     };
   }, [listings]);
 
+  async function toggleFollow() {
+    if (!seller || !canFollow) return;
+    try {
+      setIsFollowLoading(true);
+      if (isFollowing) {
+        await fetchJson<{ ok: true }>(`/users/${seller}/follow`, {
+          method: "DELETE",
+          timeoutMs: 7_000,
+        });
+      } else {
+        await fetchJson<{ ok: true }>(`/users/${seller}/follow`, {
+          method: "POST",
+          timeoutMs: 7_000,
+        });
+      }
+
+      setIsFollowing((current) => {
+        const next = !current;
+        setProfile((prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            stats: {
+              ...prev.stats,
+              followerCount: Math.max(0, prev.stats.followerCount + (next ? 1 : -1)),
+            },
+          };
+        });
+        return next;
+      });
+    } catch (e: any) {
+      setError(e?.message ?? "Failed to update follow state");
+    } finally {
+      setIsFollowLoading(false);
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-2">
@@ -283,6 +349,13 @@ export default function SellerListingsPage({ params }: { params: Promise<{ addre
               <div className="space-y-2">
                 <CardTitle>{profile.user.displayName?.trim() || shortenHex(profile.user.address)}</CardTitle>
                 <CardDescription>{profile.user.bio?.trim() || "No seller bio yet."}</CardDescription>
+                {canFollow ? (
+                  <div className="pt-1">
+                    <Button type="button" variant={isFollowing ? "outline" : "default"} size="sm" onClick={() => void toggleFollow()} disabled={isFollowLoading}>
+                      {isFollowLoading ? "Saving…" : isFollowing ? "Unfollow" : "Follow"}
+                    </Button>
+                  </div>
+                ) : null}
               </div>
             </div>
           </CardHeader>

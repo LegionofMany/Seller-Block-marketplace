@@ -33,6 +33,8 @@ type MessageItem = {
   createdAt: number;
 };
 
+const MESSAGE_PAGE_SIZE = 50;
+
 export default function MessagesPage() {
   const auth = useAuth();
   const { address } = useAccount();
@@ -46,6 +48,8 @@ export default function MessagesPage() {
   const [draft, setDraft] = React.useState("");
   const [isLoadingConversations, setIsLoadingConversations] = React.useState(false);
   const [isLoadingMessages, setIsLoadingMessages] = React.useState(false);
+  const [isLoadingOlderMessages, setIsLoadingOlderMessages] = React.useState(false);
+  const [hasOlderMessages, setHasOlderMessages] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
   const selectedConversation = React.useMemo(
@@ -54,6 +58,7 @@ export default function MessagesPage() {
   );
 
   const lastMessageAt = messages.length ? messages[messages.length - 1].createdAt : 0;
+  const oldestMessageId = messages.length ? messages[0].id : null;
 
   async function loadConversations() {
     if (!auth.isAuthenticated) return;
@@ -75,16 +80,40 @@ export default function MessagesPage() {
     }
   }
 
-  async function loadMessages(conversationId: number, since?: number) {
+  async function loadMessages(conversationId: number, opts?: { since?: number; beforeId?: number; replace?: boolean }) {
     if (!auth.isAuthenticated) return;
     try {
-      if (!since) setIsLoadingMessages(true);
-      const query = since ? `?since=${since}` : "?limit=50";
+      const since = opts?.since;
+      const beforeId = opts?.beforeId;
+      const replace = opts?.replace ?? false;
+
+      if (beforeId) {
+        setIsLoadingOlderMessages(true);
+      } else if (!since) {
+        setIsLoadingMessages(true);
+      }
+
+      const sp = new URLSearchParams();
+      sp.set("limit", String(MESSAGE_PAGE_SIZE));
+      if (since) sp.set("since", String(since));
+      if (beforeId) sp.set("beforeId", String(beforeId));
+      const query = `?${sp.toString()}`;
       const res = await fetchJson<{ items: MessageItem[] }>(`/messages/conversations/${conversationId}/messages${query}`, {
         timeoutMs: 10_000,
       });
 
+      if (!since) {
+        setHasOlderMessages(res.items.length >= MESSAGE_PAGE_SIZE);
+      }
+
       setMessages((current) => {
+        if (replace) return res.items;
+        if (beforeId) {
+          const seen = new Set(current.map((item) => item.id));
+          const prepended = res.items.filter((item) => !seen.has(item.id));
+          setHasOlderMessages(prepended.length >= MESSAGE_PAGE_SIZE);
+          return prepended.length ? [...prepended, ...current] : current;
+        }
         if (!since) return res.items;
         const seen = new Set(current.map((item) => item.id));
         const appended = res.items.filter((item) => !seen.has(item.id));
@@ -94,6 +123,7 @@ export default function MessagesPage() {
       setError(e?.message ?? "Failed to load messages");
     } finally {
       setIsLoadingMessages(false);
+      setIsLoadingOlderMessages(false);
     }
   }
 
@@ -111,18 +141,24 @@ export default function MessagesPage() {
   React.useEffect(() => {
     if (!selectedId) {
       setMessages([]);
+      setHasOlderMessages(false);
       return;
     }
-    void loadMessages(selectedId);
+    void loadMessages(selectedId, { replace: true });
   }, [selectedId]);
 
   React.useEffect(() => {
     if (!selectedId || !auth.isAuthenticated) return;
     const interval = window.setInterval(() => {
-      void loadMessages(selectedId, lastMessageAt || undefined);
+      void loadMessages(selectedId, { since: lastMessageAt || undefined });
     }, 8000);
     return () => window.clearInterval(interval);
   }, [selectedId, auth.isAuthenticated, lastMessageAt]);
+
+  async function loadOlderMessages() {
+    if (!selectedId || !oldestMessageId || isLoadingOlderMessages) return;
+    await loadMessages(selectedId, { beforeId: oldestMessageId });
+  }
 
   async function sendMessage() {
     if (!selectedId || !draft.trim()) return;
@@ -306,21 +342,31 @@ export default function MessagesPage() {
               ) : messages.length === 0 ? (
                 <div className="text-sm text-muted-foreground">No messages yet.</div>
               ) : (
-                messages.map((item) => {
-                  const mine = auth.address?.toLowerCase() === item.sender.toLowerCase();
-                  return (
-                    <div key={item.id} className={mine ? "ml-auto max-w-[85%] rounded-md bg-accent p-3" : "max-w-[85%] rounded-md border p-3"}>
-                      <div className="mb-1 flex items-center justify-between gap-3 text-[11px] text-muted-foreground">
-                        <span>{mine ? "You" : shortenHex(item.sender)}</span>
-                        <button type="button" className="underline" onClick={() => void reportMessage(item.id)}>
-                          Report
-                        </button>
-                      </div>
-                      <div className="whitespace-pre-wrap text-sm">{item.body}</div>
-                      <div className="mt-2 text-[11px] text-muted-foreground">{new Date(item.createdAt).toLocaleString()}</div>
+                <>
+                  {hasOlderMessages ? (
+                    <div className="pb-2">
+                      <Button type="button" variant="outline" size="sm" onClick={() => void loadOlderMessages()} disabled={isLoadingOlderMessages}>
+                        {isLoadingOlderMessages ? "Loading…" : "Load older messages"}
+                      </Button>
                     </div>
-                  );
-                })
+                  ) : null}
+
+                  {messages.map((item) => {
+                    const mine = auth.address?.toLowerCase() === item.sender.toLowerCase();
+                    return (
+                      <div key={item.id} className={mine ? "ml-auto max-w-[85%] rounded-md bg-accent p-3" : "max-w-[85%] rounded-md border p-3"}>
+                        <div className="mb-1 flex items-center justify-between gap-3 text-[11px] text-muted-foreground">
+                          <span>{mine ? "You" : shortenHex(item.sender)}</span>
+                          <button type="button" className="underline" onClick={() => void reportMessage(item.id)}>
+                            Report
+                          </button>
+                        </div>
+                        <div className="whitespace-pre-wrap text-sm">{item.body}</div>
+                        <div className="mt-2 text-[11px] text-muted-foreground">{new Date(item.createdAt).toLocaleString()}</div>
+                      </div>
+                    );
+                  })}
+                </>
               )}
             </div>
 
