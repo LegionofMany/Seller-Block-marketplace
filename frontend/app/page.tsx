@@ -7,13 +7,17 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useAuth } from "@/components/providers/AuthProvider";
 import { useListings } from "@/lib/hooks/useListings";
 import { CATEGORY_TREE, subcategoriesFor } from "@/lib/categories";
 import { getBlockedSellers } from "@/lib/blocks";
+import { fetchJson } from "@/lib/api";
 import { useAccount } from "wagmi";
+import { toast } from "sonner";
 
 export default function ListingsPage() {
   const { address } = useAccount();
+  const auth = useAuth();
 
   const [q, setQ] = React.useState("");
   const [category, setCategory] = React.useState("");
@@ -27,6 +31,9 @@ export default function ListingsPage() {
   const [sort, setSort] = React.useState<"newest" | "price_asc" | "price_desc">("newest");
 
   const [offset, setOffset] = React.useState(0);
+  const [savedSearchName, setSavedSearchName] = React.useState("");
+  const [savedSearchEmail, setSavedSearchEmail] = React.useState("");
+  const [isSavingSearch, setIsSavingSearch] = React.useState(false);
   const limit = 24;
 
   const params = {
@@ -59,6 +66,50 @@ export default function ListingsPage() {
   function applyFilters(e: React.FormEvent) {
     e.preventDefault();
     setOffset(0);
+  }
+
+  async function saveCurrentSearch() {
+    if (!auth.isAuthenticated) {
+      toast.error("Sign in to save searches");
+      return;
+    }
+
+    const filters = {
+      ...(q.trim() ? { q: q.trim() } : {}),
+      ...(category.trim() ? { category: category.trim() } : {}),
+      ...(subcategory.trim() ? { subcategory: subcategory.trim() } : {}),
+      ...(city.trim() ? { city: city.trim() } : {}),
+      ...(region.trim() ? { region: region.trim() } : {}),
+      ...(postalCode.trim() ? { postalCode: postalCode.trim() } : {}),
+      ...(minPrice.trim() ? { minPrice: minPrice.trim() } : {}),
+      ...(maxPrice.trim() ? { maxPrice: maxPrice.trim() } : {}),
+      ...(type ? { type } : {}),
+      ...(sort ? { sort } : {}),
+    };
+
+    if (Object.keys(filters).length === 0) {
+      toast.error("Apply at least one filter before saving a search");
+      return;
+    }
+
+    setIsSavingSearch(true);
+    try {
+      await fetchJson<{ item: { id: number } }>("/saved-searches", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: savedSearchName.trim() || q.trim() || category.trim() || "Saved search",
+          email: savedSearchEmail.trim() || undefined,
+          filters,
+        }),
+      });
+      setSavedSearchName("");
+      toast.success("Saved search created");
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to save search");
+    } finally {
+      setIsSavingSearch(false);
+    }
   }
 
   return (
@@ -208,6 +259,29 @@ export default function ListingsPage() {
               </Button>
             </div>
           </form>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Saved search alerts</CardTitle>
+          <CardDescription>Save the current filters and get in-app alerts. Email is optional.</CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4 lg:grid-cols-[1fr_1fr_auto] lg:items-end">
+          <div className="space-y-2">
+            <Label>Search name</Label>
+            <Input value={savedSearchName} onChange={(e) => setSavedSearchName(e.target.value)} placeholder="e.g. Toronto electronics" />
+          </div>
+          <div className="space-y-2">
+            <Label>Email alerts (optional)</Label>
+            <Input value={savedSearchEmail} onChange={(e) => setSavedSearchEmail(e.target.value)} placeholder="name@example.com" />
+          </div>
+          <div className="flex gap-2">
+            <Button type="button" size="lg" disabled={!auth.isAuthenticated || isSavingSearch} onClick={() => void saveCurrentSearch()}>
+              Save search
+            </Button>
+          </div>
+          {!auth.isAuthenticated ? <div className="text-sm text-muted-foreground lg:col-span-3">Sign in with your wallet to save alerts for the current filters.</div> : null}
         </CardContent>
       </Card>
 

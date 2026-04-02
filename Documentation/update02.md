@@ -12,7 +12,9 @@ Deliver a Kijiji-like classifieds product on top of the existing web3 marketplac
 - Phase 1 is complete: listings UX parity is implemented, including multi-image uploads, metadata pinning, categories, location-first browse filters, search, sorting, and pagination.
 - Phase 2 is complete: wallet sign-in, short-lived JWT auth, protected write endpoints, profile editing, seller profile rendering, and a minimal follow/follower system are implemented.
 - Phase 3 is complete: conversations, polling-based message delivery, block/report safety flows, and end-user message pagination via "load older messages" are implemented.
-- Phases 4, 5, and 6 are not yet implemented in this repo.
+- Phase 4 is complete: `saved_searches` and `notifications` tables, saved-search CRUD APIs, listings-page save flow, dashboard edit/delete management, in-app notifications, optional Postmark email delivery, and a background saved-search scan worker are implemented.
+- Phase 5 is complete: Stripe-backed checkout sessions, `payments` and `promotions` tables, dashboard purchase/history UI, active promotion ranking in listings queries, and promoted listing badges/highlighting are implemented.
+- Phase 6 is not yet implemented in this repo.
 
 **Steps**
 1. Phase 0 — Product alignment & guardrails (blocking)
@@ -99,7 +101,7 @@ Deliver a Kijiji-like classifieds product on top of the existing web3 marketplac
   - backend/src/services/jobs/* (new) — scheduled job runner
   - backend/src/routes/savedSearches.ts (new), notifications routes
 - Monetization
-  - backend/src/routes/promotions.ts (new)
+   - backend/src/routes/promotions.ts (new)
 
 **Verification**
 1. Listings parity

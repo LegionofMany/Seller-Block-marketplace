@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { type Address, type Hex, isAddress, parseAbiItem, zeroAddress } from "viem";
 import { useAccount, usePublicClient, useReadContract, useWriteContract } from "wagmi";
 import { toast } from "sonner";
@@ -16,6 +17,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { getEnv } from "@/lib/env";
 import { fetchJson } from "@/lib/api";
+import { CATEGORY_TREE, subcategoriesFor } from "@/lib/categories";
 import { marketplaceRegistryAbi } from "@/lib/contracts/abi/MarketplaceRegistry";
 import { escrowVaultAbi } from "@/lib/contracts/abi/EscrowVault";
 import { parseListing } from "@/lib/contracts/parse";
@@ -27,8 +29,120 @@ const listingCreatedEvent = parseAbiItem(
   "event ListingCreated(bytes32 indexed id, address seller, uint8 saleType, address token, uint256 price, string metadataURI)"
 );
 
+type SavedSearch = {
+  id: number;
+  name: string;
+  email?: string | null;
+  filters: SavedSearchFilters;
+  createdAt: number;
+  updatedAt: number;
+};
+
+type SavedSearchFilters = {
+  q?: string;
+  category?: string;
+  subcategory?: string;
+  city?: string;
+  region?: string;
+  postalCode?: string;
+  minPrice?: string;
+  maxPrice?: string;
+  type?: "fixed" | "auction" | "raffle";
+  sort?: "newest" | "price_asc" | "price_desc";
+};
+
+type SavedSearchDraft = {
+  name: string;
+  email: string;
+  filters: SavedSearchFilters;
+};
+
+type NotificationItem = {
+  id: number;
+  title: string;
+  body: string;
+  payload: Record<string, unknown>;
+  readAt?: number | null;
+  createdAt: number;
+};
+
+type PromotionOption = {
+  type: "bump" | "top" | "featured";
+  label: string;
+  description: string;
+  amountCents: number;
+  durationHours: number;
+};
+
+type PromotionItem = {
+  id: number;
+  listingId: string;
+  type: "bump" | "top" | "featured";
+  status: string;
+  endsAt: number;
+};
+
+type PaymentItem = {
+  id: number;
+  listingId?: string | null;
+  promotionType?: string | null;
+  status: string;
+  amount: number;
+  createdAt: number;
+};
+
+function formatFilters(filters: SavedSearchFilters) {
+  return Object.entries(filters)
+    .map(([key, value]) => `${key}: ${value}`)
+    .join(" • ");
+}
+
+function formatMoneyFromCents(value: number) {
+  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(value / 100);
+}
+
+function formatDateTime(value: number) {
+  return new Date(value).toLocaleString();
+}
+
+function toSavedSearchDraft(item: SavedSearch): SavedSearchDraft {
+  return {
+    name: item.name,
+    email: item.email ?? "",
+    filters: {
+      ...(item.filters.q ? { q: item.filters.q } : {}),
+      ...(item.filters.category ? { category: item.filters.category } : {}),
+      ...(item.filters.subcategory ? { subcategory: item.filters.subcategory } : {}),
+      ...(item.filters.city ? { city: item.filters.city } : {}),
+      ...(item.filters.region ? { region: item.filters.region } : {}),
+      ...(item.filters.postalCode ? { postalCode: item.filters.postalCode } : {}),
+      ...(item.filters.minPrice ? { minPrice: item.filters.minPrice } : {}),
+      ...(item.filters.maxPrice ? { maxPrice: item.filters.maxPrice } : {}),
+      ...(item.filters.type ? { type: item.filters.type } : {}),
+      ...(item.filters.sort ? { sort: item.filters.sort } : {}),
+    },
+  };
+}
+
+function cleanSavedSearchDraft(draft: SavedSearchDraft) {
+  const filters = Object.fromEntries(
+    Object.entries(draft.filters).flatMap(([key, value]) => {
+      if (typeof value !== "string") return [];
+      const trimmed = value.trim();
+      return trimmed ? [[key, trimmed]] : [];
+    })
+  ) as SavedSearchFilters;
+
+  return {
+    name: draft.name.trim(),
+    email: draft.email.trim(),
+    filters,
+  };
+}
+
 export default function DashboardPage() {
   const { address } = useAccount();
+  const searchParams = useSearchParams();
   const publicClient = usePublicClient();
   const { writeContractAsync } = useWriteContract();
   const auth = useAuth();
@@ -60,12 +174,104 @@ export default function DashboardPage() {
   const [creditAmount, setCreditAmount] = React.useState<bigint | null>(null);
   const [myListingIds, setMyListingIds] = React.useState<Hex[] | null>(null);
   const [myListings, setMyListings] = React.useState<Array<{ id: Hex; status: number; buyer: Address }> | null>(null);
+  const [savedSearches, setSavedSearches] = React.useState<SavedSearch[]>([]);
+  const [notifications, setNotifications] = React.useState<NotificationItem[]>([]);
+  const [notificationUnreadCount, setNotificationUnreadCount] = React.useState(0);
+  const [promotionOptions, setPromotionOptions] = React.useState<PromotionOption[]>([]);
+  const [promotions, setPromotions] = React.useState<PromotionItem[]>([]);
+  const [payments, setPayments] = React.useState<PaymentItem[]>([]);
+  const [promotionListingId, setPromotionListingId] = React.useState("");
+  const [promotionType, setPromotionType] = React.useState<PromotionOption["type"]>("bump");
+  const [isCreatingPromotion, setIsCreatingPromotion] = React.useState(false);
+  const [editingSavedSearchId, setEditingSavedSearchId] = React.useState<number | null>(null);
+  const [savedSearchDraft, setSavedSearchDraft] = React.useState<SavedSearchDraft | null>(null);
+  const [isSavingSavedSearch, setIsSavingSavedSearch] = React.useState(false);
+  const [dashboardRefreshKey, setDashboardRefreshKey] = React.useState(0);
 
   React.useEffect(() => {
     setDisplayName(auth.user?.displayName ?? "");
     setBio(auth.user?.bio ?? "");
     setAvatarCid(auth.user?.avatarCid ?? "");
   }, [auth.user]);
+
+  React.useEffect(() => {
+    if (!myListings || myListings.length === 0 || promotionListingId) return;
+    setPromotionListingId(myListings[0].id);
+  }, [myListings, promotionListingId]);
+
+  React.useEffect(() => {
+    let cancelled = false;
+
+    async function run() {
+      if (!auth.isAuthenticated) {
+        setSavedSearches([]);
+        setNotifications([]);
+        setNotificationUnreadCount(0);
+        setPayments([]);
+        setPromotions([]);
+        return;
+      }
+
+      try {
+        const [savedSearchRes, notificationRes, promotionRes] = await Promise.all([
+          fetchJson<{ items: SavedSearch[] }>("/saved-searches", { timeoutMs: 5_000 }),
+          fetchJson<{ items: NotificationItem[]; unreadCount: number }>("/notifications?limit=12", { timeoutMs: 5_000 }),
+          fetchJson<{ payments: PaymentItem[]; promotions: PromotionItem[]; options: PromotionOption[] }>("/promotions/me", { timeoutMs: 5_000 }),
+        ]);
+        if (cancelled) return;
+        setSavedSearches(savedSearchRes.items ?? []);
+        setNotifications(notificationRes.items ?? []);
+        setNotificationUnreadCount(notificationRes.unreadCount ?? 0);
+        setPayments(promotionRes.payments ?? []);
+        setPromotions(promotionRes.promotions ?? []);
+        setPromotionOptions(promotionRes.options ?? []);
+      } catch (e: any) {
+        if (!cancelled) {
+          toast.error(e?.message ?? "Failed to load dashboard alerts and promotions");
+        }
+      }
+    }
+
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [auth.isAuthenticated, dashboardRefreshKey]);
+
+  React.useEffect(() => {
+    let cancelled = false;
+
+    async function run() {
+      const sessionId = searchParams.get("promotion_session");
+      if (!sessionId || !auth.isAuthenticated) return;
+
+      try {
+        const res = await fetchJson<{ activated: boolean }>("/promotions/confirm-session", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sessionId }),
+          timeoutMs: 10_000,
+        });
+        if (!cancelled) {
+          toast.success(res.activated ? "Promotion activated" : "Payment is still pending");
+          setDashboardRefreshKey((value) => value + 1);
+          window.history.replaceState({}, "", "/dashboard");
+        }
+      } catch (e: any) {
+        if (!cancelled) toast.error(e?.message ?? "Failed to confirm promotion payment");
+      }
+    }
+
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [auth.isAuthenticated, searchParams]);
+
+  const activeSavedSearchSubcategories = React.useMemo(() => {
+    if (!savedSearchDraft?.filters.category) return [];
+    return subcategoriesFor(savedSearchDraft.filters.category);
+  }, [savedSearchDraft?.filters.category]);
 
   let env: ReturnType<typeof getEnv>;
   try {
@@ -314,6 +520,424 @@ export default function DashboardPage() {
                 Save profile
               </Button>
             </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Saved searches</CardTitle>
+          <CardDescription>Review, edit, and remove the alert searches you saved from the listings page.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {!auth.isAuthenticated ? (
+            <div className="text-sm text-muted-foreground">Sign in to manage saved search alerts.</div>
+          ) : savedSearches.length === 0 ? (
+            <div className="text-sm text-muted-foreground">No saved searches yet.</div>
+          ) : (
+            savedSearches.map((item) => (
+              <div key={item.id} className="rounded-md border p-3">
+                <div className="space-y-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="space-y-1">
+                      <div className="font-medium">{item.name}</div>
+                      <div className="text-xs text-muted-foreground">{formatFilters(item.filters)}</div>
+                      {item.email ? <div className="text-xs text-muted-foreground">Email: {item.email}</div> : null}
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setEditingSavedSearchId(item.id);
+                          setSavedSearchDraft(toSavedSearchDraft(item));
+                        }}
+                      >
+                        Edit
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={async () => {
+                          try {
+                            await fetchJson(`/saved-searches/${item.id}`, { method: "DELETE" });
+                            setSavedSearches((current) => current.filter((entry) => entry.id !== item.id));
+                            if (editingSavedSearchId === item.id) {
+                              setEditingSavedSearchId(null);
+                              setSavedSearchDraft(null);
+                            }
+                            toast.success("Saved search removed");
+                          } catch (e: any) {
+                            toast.error(e?.message ?? "Failed to remove saved search");
+                          }
+                        }}
+                      >
+                        Delete
+                      </Button>
+                    </div>
+                  </div>
+
+                  {editingSavedSearchId === item.id && savedSearchDraft ? (
+                    <div className="grid gap-4 rounded-md border bg-muted/20 p-4 lg:grid-cols-3">
+                      <div className="space-y-2">
+                        <Label>Name</Label>
+                        <Input
+                          value={savedSearchDraft.name}
+                          onChange={(e) => setSavedSearchDraft((current) => (current ? { ...current, name: e.target.value } : current))}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Email</Label>
+                        <Input
+                          value={savedSearchDraft.email}
+                          onChange={(e) => setSavedSearchDraft((current) => (current ? { ...current, email: e.target.value } : current))}
+                          placeholder="name@example.com"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Keywords</Label>
+                        <Input
+                          value={savedSearchDraft.filters.q ?? ""}
+                          onChange={(e) => setSavedSearchDraft((current) => current ? { ...current, filters: { ...current.filters, q: e.target.value } } : current)}
+                          placeholder="Search title or description"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Category</Label>
+                        <select
+                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                          value={savedSearchDraft.filters.category ?? ""}
+                          onChange={(e) => setSavedSearchDraft((current) => current ? {
+                            ...current,
+                            filters: {
+                              ...current.filters,
+                              category: e.target.value || undefined,
+                              subcategory: undefined,
+                            },
+                          } : current)}
+                        >
+                          <option value="">All</option>
+                          {Object.keys(CATEGORY_TREE).map((category) => (
+                            <option key={category} value={category}>{category}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Subcategory</Label>
+                        <select
+                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                          value={savedSearchDraft.filters.subcategory ?? ""}
+                          onChange={(e) => setSavedSearchDraft((current) => current ? { ...current, filters: { ...current.filters, subcategory: e.target.value || undefined } } : current)}
+                          disabled={!savedSearchDraft.filters.category}
+                        >
+                          <option value="">All</option>
+                          {activeSavedSearchSubcategories.map((subcategory) => (
+                            <option key={subcategory} value={subcategory}>{subcategory}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Sale type</Label>
+                        <select
+                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                          value={savedSearchDraft.filters.type ?? ""}
+                          onChange={(e) => setSavedSearchDraft((current) => current ? { ...current, filters: { ...current.filters, type: (e.target.value || undefined) as SavedSearchFilters["type"] } } : current)}
+                        >
+                          <option value="">All</option>
+                          <option value="fixed">Fixed</option>
+                          <option value="auction">Auction</option>
+                          <option value="raffle">Raffle</option>
+                        </select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Sort</Label>
+                        <select
+                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                          value={savedSearchDraft.filters.sort ?? "newest"}
+                          onChange={(e) => setSavedSearchDraft((current) => current ? { ...current, filters: { ...current.filters, sort: e.target.value as SavedSearchFilters["sort"] } } : current)}
+                        >
+                          <option value="newest">Newest</option>
+                          <option value="price_asc">Price low to high</option>
+                          <option value="price_desc">Price high to low</option>
+                        </select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>City</Label>
+                        <Input
+                          value={savedSearchDraft.filters.city ?? ""}
+                          onChange={(e) => setSavedSearchDraft((current) => current ? { ...current, filters: { ...current.filters, city: e.target.value } } : current)}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Region/State</Label>
+                        <Input
+                          value={savedSearchDraft.filters.region ?? ""}
+                          onChange={(e) => setSavedSearchDraft((current) => current ? { ...current, filters: { ...current.filters, region: e.target.value } } : current)}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Postal code</Label>
+                        <Input
+                          value={savedSearchDraft.filters.postalCode ?? ""}
+                          onChange={(e) => setSavedSearchDraft((current) => current ? { ...current, filters: { ...current.filters, postalCode: e.target.value } } : current)}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Min price</Label>
+                        <Input
+                          value={savedSearchDraft.filters.minPrice ?? ""}
+                          onChange={(e) => setSavedSearchDraft((current) => current ? { ...current, filters: { ...current.filters, minPrice: e.target.value } } : current)}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Max price</Label>
+                        <Input
+                          value={savedSearchDraft.filters.maxPrice ?? ""}
+                          onChange={(e) => setSavedSearchDraft((current) => current ? { ...current, filters: { ...current.filters, maxPrice: e.target.value } } : current)}
+                        />
+                      </div>
+                      <div className="flex flex-wrap items-end gap-2 lg:col-span-3">
+                        <Button
+                          type="button"
+                          disabled={isSavingSavedSearch}
+                          onClick={async () => {
+                            if (!savedSearchDraft) return;
+
+                            const cleaned = cleanSavedSearchDraft(savedSearchDraft);
+                            if (!cleaned.name) {
+                              toast.error("Saved search name is required");
+                              return;
+                            }
+                            if (Object.keys(cleaned.filters).length === 0) {
+                              toast.error("Add at least one saved-search filter");
+                              return;
+                            }
+
+                            try {
+                              setIsSavingSavedSearch(true);
+                              const res = await fetchJson<{ item: SavedSearch }>(`/saved-searches/${item.id}`, {
+                                method: "PUT",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({
+                                  name: cleaned.name,
+                                  email: cleaned.email,
+                                  filters: cleaned.filters,
+                                }),
+                              });
+                              setSavedSearches((current) => current.map((entry) => (entry.id === item.id ? res.item : entry)));
+                              setEditingSavedSearchId(null);
+                              setSavedSearchDraft(null);
+                              toast.success("Saved search updated");
+                            } catch (e: any) {
+                              toast.error(e?.message ?? "Failed to update saved search");
+                            } finally {
+                              setIsSavingSavedSearch(false);
+                            }
+                          }}
+                        >
+                          Save changes
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          disabled={isSavingSavedSearch}
+                          onClick={() => {
+                            setEditingSavedSearchId(null);
+                            setSavedSearchDraft(null);
+                          }}
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            ))
+          )}
+        </CardContent>
+      </Card>
+
+      <Card id="notifications">
+        <CardHeader>
+          <CardTitle>Notifications</CardTitle>
+          <CardDescription>In-app alerts for new saved-search matches and promotion activity.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+            <div>Unread: {notificationUnreadCount}</div>
+            {auth.isAuthenticated && notificationUnreadCount > 0 ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={async () => {
+                  try {
+                    await fetchJson("/notifications/read-all", { method: "POST" });
+                    setNotifications((current) => current.map((item) => ({ ...item, readAt: item.readAt ?? Date.now() })));
+                    setNotificationUnreadCount(0);
+                  } catch (e: any) {
+                    toast.error(e?.message ?? "Failed to mark notifications as read");
+                  }
+                }}
+              >
+                Mark all read
+              </Button>
+            ) : null}
+          </div>
+
+          {!auth.isAuthenticated ? (
+            <div className="text-sm text-muted-foreground">Sign in to view alerts.</div>
+          ) : notifications.length === 0 ? (
+            <div className="text-sm text-muted-foreground">No notifications yet.</div>
+          ) : (
+            notifications.map((item) => {
+              const listingId = typeof item.payload.listingId === "string" ? item.payload.listingId : null;
+              return (
+                <div key={item.id} className={item.readAt ? "rounded-md border p-3" : "rounded-md border border-primary/40 bg-primary/5 p-3"}>
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="space-y-1">
+                      <div className="font-medium">{item.title}</div>
+                      <div className="text-sm text-muted-foreground">{item.body}</div>
+                      <div className="text-xs text-muted-foreground">{formatDateTime(item.createdAt)}</div>
+                      {listingId ? <Link className="text-sm underline" href={`/listing/${listingId}`}>Open listing</Link> : null}
+                    </div>
+                    {!item.readAt ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={async () => {
+                          try {
+                            await fetchJson(`/notifications/${item.id}/read`, { method: "POST" });
+                            setNotifications((current) => current.map((entry) => (entry.id === item.id ? { ...entry, readAt: Date.now() } : entry)));
+                            setNotificationUnreadCount((current) => Math.max(0, current - 1));
+                          } catch (e: any) {
+                            toast.error(e?.message ?? "Failed to mark notification as read");
+                          }
+                        }}
+                      >
+                        Mark read
+                      </Button>
+                    ) : null}
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Promote listings</CardTitle>
+          <CardDescription>Purchase bump, top, or featured placement for your active listings.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {!auth.isAuthenticated ? (
+            <div className="text-sm text-muted-foreground">Sign in to purchase listing promotions.</div>
+          ) : (
+            <>
+              <div className="grid gap-4 lg:grid-cols-[1fr_1fr_auto]">
+                <div className="space-y-2">
+                  <Label>Listing</Label>
+                  <select
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    value={promotionListingId}
+                    onChange={(e) => setPromotionListingId(e.target.value)}
+                  >
+                    <option value="">Select a listing</option>
+                    {(myListings ?? []).map((row) => (
+                      <option key={row.id} value={row.id}>{row.id}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Placement</Label>
+                  <select
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    value={promotionType}
+                    onChange={(e) => setPromotionType(e.target.value as PromotionOption["type"])}
+                  >
+                    {promotionOptions.map((option) => (
+                      <option key={option.type} value={option.type}>
+                        {option.label} - {formatMoneyFromCents(option.amountCents)} / {option.durationHours}h
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex items-end">
+                  <Button
+                    type="button"
+                    size="lg"
+                    disabled={!promotionListingId || isCreatingPromotion}
+                    onClick={async () => {
+                      try {
+                        setIsCreatingPromotion(true);
+                        const res = await fetchJson<{ url?: string | null }>("/promotions/checkout-session", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ listingId: promotionListingId, promotionType }),
+                          timeoutMs: 10_000,
+                        });
+                        if (!res.url) throw new Error("Stripe did not return a checkout URL");
+                        window.location.assign(res.url);
+                      } catch (e: any) {
+                        toast.error(e?.message ?? "Failed to start promotion checkout");
+                      } finally {
+                        setIsCreatingPromotion(false);
+                      }
+                    }}
+                  >
+                    Buy placement
+                  </Button>
+                </div>
+              </div>
+
+              <div className="grid gap-3 lg:grid-cols-3">
+                {promotionOptions.map((option) => (
+                  <div key={option.type} className="rounded-md border p-3">
+                    <div className="font-medium">{option.label}</div>
+                    <div className="mt-1 text-sm text-muted-foreground">{option.description}</div>
+                    <div className="mt-2 text-sm">{formatMoneyFromCents(option.amountCents)} for {option.durationHours} hours</div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="grid gap-4 lg:grid-cols-2">
+                <div className="space-y-2">
+                  <div className="text-sm font-semibold">Active and past promotions</div>
+                  {promotions.length === 0 ? (
+                    <div className="text-sm text-muted-foreground">No promotions yet.</div>
+                  ) : (
+                    promotions.map((item) => (
+                      <div key={item.id} className="rounded-md border p-3 text-sm">
+                        <div className="font-medium">{item.type} on {item.listingId}</div>
+                        <div className="text-muted-foreground">Status: {item.status}</div>
+                        <div className="text-muted-foreground">Ends: {formatDateTime(item.endsAt)}</div>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <div className="text-sm font-semibold">Payment history</div>
+                  {payments.length === 0 ? (
+                    <div className="text-sm text-muted-foreground">No promotion payments yet.</div>
+                  ) : (
+                    payments.map((item) => (
+                      <div key={item.id} className="rounded-md border p-3 text-sm">
+                        <div className="font-medium">{item.promotionType ?? "promotion"} payment</div>
+                        <div className="text-muted-foreground">{formatMoneyFromCents(item.amount)} • {item.status}</div>
+                        <div className="text-muted-foreground">{item.listingId ?? "No listing"}</div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </>
           )}
         </CardContent>
       </Card>

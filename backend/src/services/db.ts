@@ -12,6 +12,9 @@ export type ListingRow = {
   active: 0 | 1;
   createdAt: number;
   blockNumber: number;
+  promotionType?: "bump" | "top" | "featured" | null;
+  promotionEndsAt?: number | null;
+  promotionPriority?: number;
 };
 
 export type AuctionRow = {
@@ -91,6 +94,70 @@ export type MessageRow = {
   sender: string;
   body: string;
   createdAt: number;
+};
+
+export type SavedSearchFilters = {
+  q?: string;
+  category?: string;
+  subcategory?: string;
+  city?: string;
+  region?: string;
+  postalCode?: string;
+  minPrice?: string;
+  maxPrice?: string;
+  type?: "fixed" | "auction" | "raffle";
+  sort?: "newest" | "price_asc" | "price_desc";
+};
+
+export type SavedSearchRow = {
+  id: number;
+  userAddress: string;
+  name: string;
+  email?: string | null;
+  filters: SavedSearchFilters;
+  lastCheckedAt: number;
+  createdAt: number;
+  updatedAt: number;
+};
+
+export type NotificationRow = {
+  id: number;
+  userAddress: string;
+  type: string;
+  title: string;
+  body: string;
+  dedupeKey?: string | null;
+  payload: Record<string, unknown>;
+  readAt?: number | null;
+  createdAt: number;
+};
+
+export type PaymentRow = {
+  id: number;
+  userAddress: string;
+  listingId?: string | null;
+  provider: string;
+  providerSessionId?: string | null;
+  status: string;
+  amount: number;
+  currency: string;
+  promotionType?: string | null;
+  metadata: Record<string, unknown>;
+  createdAt: number;
+  updatedAt: number;
+};
+
+export type PromotionRow = {
+  id: number;
+  listingId: string;
+  paymentId?: number | null;
+  type: "bump" | "top" | "featured";
+  status: string;
+  priority: number;
+  startsAt: number;
+  endsAt: number;
+  createdAt: number;
+  updatedAt: number;
 };
 
 let pool: Pool | null = null;
@@ -198,6 +265,87 @@ function toListingRow(r: any): ListingRow {
     active: Number(r.active) ? 1 : 0,
     createdAt: Number(r.createdAt ?? r.createdat ?? r.created_at),
     blockNumber: Number(r.blockNumber ?? r.blocknumber ?? r.block_number),
+    ...(r.promotionType != null || r.promotiontype != null
+      ? { promotionType: (r.promotionType ?? r.promotiontype) as "bump" | "top" | "featured" | null }
+      : {}),
+    ...(r.promotionEndsAt != null || r.promotionendsat != null
+      ? { promotionEndsAt: Number(r.promotionEndsAt ?? r.promotionendsat) }
+      : {}),
+    ...(r.promotionPriority != null || r.promotionpriority != null
+      ? { promotionPriority: Number(r.promotionPriority ?? r.promotionpriority) }
+      : {}),
+  };
+}
+
+function parseJsonObject(value: unknown): Record<string, unknown> {
+  if (typeof value !== "string" || !value.trim()) return {};
+  try {
+    const parsed = JSON.parse(value);
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>;
+    }
+  } catch {
+    // ignore malformed historical rows
+  }
+  return {};
+}
+
+function toSavedSearchRow(r: any): SavedSearchRow {
+  return {
+    id: Number(r.id),
+    userAddress: String(r.userAddress ?? r.useraddress),
+    name: String(r.name),
+    email: r.email ?? null,
+    filters: parseJsonObject(r.queryJson ?? r.queryjson) as SavedSearchFilters,
+    lastCheckedAt: Number(r.lastCheckedAt ?? r.lastcheckedat ?? 0),
+    createdAt: Number(r.createdAt ?? r.createdat ?? 0),
+    updatedAt: Number(r.updatedAt ?? r.updatedat ?? 0),
+  };
+}
+
+function toNotificationRow(r: any): NotificationRow {
+  return {
+    id: Number(r.id),
+    userAddress: String(r.userAddress ?? r.useraddress),
+    type: String(r.type),
+    title: String(r.title),
+    body: String(r.body),
+    dedupeKey: r.dedupeKey ?? r.dedupekey ?? null,
+    payload: parseJsonObject(r.payloadJson ?? r.payloadjson),
+    readAt: r.readAt != null || r.readat != null ? Number(r.readAt ?? r.readat) : null,
+    createdAt: Number(r.createdAt ?? r.createdat ?? 0),
+  };
+}
+
+function toPaymentRow(r: any): PaymentRow {
+  return {
+    id: Number(r.id),
+    userAddress: String(r.userAddress ?? r.useraddress),
+    listingId: r.listingId ?? r.listingid ?? null,
+    provider: String(r.provider),
+    providerSessionId: r.providerSessionId ?? r.providersessionid ?? null,
+    status: String(r.status),
+    amount: Number(r.amount),
+    currency: String(r.currency),
+    promotionType: r.promotionType ?? r.promotiontype ?? null,
+    metadata: parseJsonObject(r.metadataJson ?? r.metadatajson),
+    createdAt: Number(r.createdAt ?? r.createdat ?? 0),
+    updatedAt: Number(r.updatedAt ?? r.updatedat ?? 0),
+  };
+}
+
+function toPromotionRow(r: any): PromotionRow {
+  return {
+    id: Number(r.id),
+    listingId: String(r.listingId ?? r.listingid),
+    paymentId: r.paymentId != null || r.paymentid != null ? Number(r.paymentId ?? r.paymentid) : null,
+    type: String(r.type) as PromotionRow["type"],
+    status: String(r.status),
+    priority: Number(r.priority),
+    startsAt: Number(r.startsAt ?? r.startsat ?? 0),
+    endsAt: Number(r.endsAt ?? r.endsat ?? 0),
+    createdAt: Number(r.createdAt ?? r.createdat ?? 0),
+    updatedAt: Number(r.updatedAt ?? r.updatedat ?? 0),
   };
 }
 
@@ -420,6 +568,7 @@ export type ListingsQuery = {
   seller?: string | undefined;
   saleType?: number | undefined;
   active?: boolean | undefined;
+  createdAfter?: number | undefined;
   minPrice?: bigint | undefined;
   maxPrice?: bigint | undefined;
   q?: string | undefined;
@@ -450,15 +599,19 @@ export async function queryListings(_db: Pool | any, q: ListingsQuery) {
     params.push(q.saleType);
   }
   if (typeof q.active === "boolean") {
-    where.push(`active = $${params.length + 1}`);
+    where.push(`listings.active = $${params.length + 1}`);
     params.push(q.active ? 1 : 0);
   }
+  if (typeof q.createdAfter === "number" && Number.isFinite(q.createdAfter)) {
+    where.push(`listings.createdat > $${params.length + 1}`);
+    params.push(q.createdAfter);
+  }
   if (typeof q.minPrice === "bigint") {
-    where.push(`CAST(price AS NUMERIC) >= $${params.length + 1}`);
+    where.push(`CAST(listings.price AS NUMERIC) >= $${params.length + 1}`);
     params.push(q.minPrice.toString());
   }
   if (typeof q.maxPrice === "bigint") {
-    where.push(`CAST(price AS NUMERIC) <= $${params.length + 1}`);
+    where.push(`CAST(listings.price AS NUMERIC) <= $${params.length + 1}`);
     params.push(q.maxPrice.toString());
   }
 
@@ -497,9 +650,10 @@ export async function queryListings(_db: Pool | any, q: ListingsQuery) {
   const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
 
   const orderBy = (() => {
-    if (q.sort === "price_asc") return `ORDER BY CAST(price AS NUMERIC) ASC, blocknumber DESC`;
-    if (q.sort === "price_desc") return `ORDER BY CAST(price AS NUMERIC) DESC, blocknumber DESC`;
-    return `ORDER BY blocknumber DESC`;
+    const promotionSort = `COALESCE(ap.priority, 0) DESC, COALESCE(ap.endsat, 0) DESC`;
+    if (q.sort === "price_asc") return `ORDER BY ${promotionSort}, CAST(listings.price AS NUMERIC) ASC, listings.blocknumber DESC`;
+    if (q.sort === "price_desc") return `ORDER BY ${promotionSort}, CAST(listings.price AS NUMERIC) DESC, listings.blocknumber DESC`;
+    return `ORDER BY ${promotionSort}, listings.blocknumber DESC`;
   })();
 
   params.push(q.limit, q.offset);
@@ -507,9 +661,27 @@ export async function queryListings(_db: Pool | any, q: ListingsQuery) {
   const offsetParam = `$${params.length}`;
 
   const res = await p.query(
-    `SELECT id, seller, metadatauri AS "metadataURI", price, token, saletype AS "saleType", active, createdat AS "createdAt", blocknumber AS "blockNumber"
+    `SELECT listings.id,
+            listings.seller,
+            listings.metadatauri AS "metadataURI",
+            listings.price,
+            listings.token,
+            listings.saletype AS "saleType",
+            listings.active,
+            listings.createdat AS "createdAt",
+            listings.blocknumber AS "blockNumber",
+            ap.type AS "promotionType",
+            ap.endsat AS "promotionEndsAt",
+            COALESCE(ap.priority, 0) AS "promotionPriority"
      FROM listings
      ${joinMetadata ? 'LEFT JOIN metadata m ON m.uri = listings.metadataURI' : ''}
+     LEFT JOIN LATERAL (
+       SELECT type, priority, endsat
+       FROM promotions
+       WHERE listingid = listings.id AND status = 'active' AND startsat <= EXTRACT(EPOCH FROM NOW())::BIGINT * 1000 AND endsat > EXTRACT(EPOCH FROM NOW())::BIGINT * 1000
+       ORDER BY priority DESC, endsat DESC, id DESC
+       LIMIT 1
+     ) ap ON true
      ${whereSql}
      ${orderBy}
      LIMIT ${limitParam} OFFSET ${offsetParam}`,
@@ -892,4 +1064,212 @@ export async function createMessage(_db: Pool | any, input: { conversationId: nu
     [input.conversationId, input.sender, input.body, input.createdAt]
   );
   return toMessageRow(res.rows[0]);
+}
+
+export async function listSavedSearchesByUser(_db: Pool | any, userAddress: string): Promise<SavedSearchRow[]> {
+  const p = ensurePool(_db);
+  const res = await p.query(
+    'SELECT id, useraddress AS "userAddress", name, email, queryjson AS "queryJson", lastcheckedat AS "lastCheckedAt", createdat AS "createdAt", updatedat AS "updatedAt" FROM saved_searches WHERE useraddress = $1 ORDER BY updatedat DESC, id DESC',
+    [userAddress]
+  );
+  return res.rows.map(toSavedSearchRow);
+}
+
+export async function listAllSavedSearches(_db: Pool | any): Promise<SavedSearchRow[]> {
+  const p = ensurePool(_db);
+  const res = await p.query(
+    'SELECT id, useraddress AS "userAddress", name, email, queryjson AS "queryJson", lastcheckedat AS "lastCheckedAt", createdat AS "createdAt", updatedat AS "updatedAt" FROM saved_searches ORDER BY updatedat ASC, id ASC'
+  );
+  return res.rows.map(toSavedSearchRow);
+}
+
+export async function findSavedSearchById(_db: Pool | any, id: number): Promise<SavedSearchRow | null> {
+  const p = ensurePool(_db);
+  const res = await p.query(
+    'SELECT id, useraddress AS "userAddress", name, email, queryjson AS "queryJson", lastcheckedat AS "lastCheckedAt", createdat AS "createdAt", updatedat AS "updatedAt" FROM saved_searches WHERE id = $1',
+    [id]
+  );
+  return res.rows[0] ? toSavedSearchRow(res.rows[0]) : null;
+}
+
+export async function createSavedSearch(_db: Pool | any, input: { userAddress: string; name: string; email?: string | null; filters: SavedSearchFilters; createdAt: number; updatedAt: number }): Promise<SavedSearchRow> {
+  const p = ensurePool(_db);
+  const res = await p.query(
+    `INSERT INTO saved_searches(useraddress, name, email, queryjson, lastcheckedat, createdat, updatedat)
+     VALUES($1,$2,$3,$4,$5,$6,$7)
+     RETURNING id, useraddress AS "userAddress", name, email, queryjson AS "queryJson", lastcheckedat AS "lastCheckedAt", createdat AS "createdAt", updatedat AS "updatedAt"`,
+    [input.userAddress, input.name, input.email ?? null, JSON.stringify(input.filters), input.createdAt, input.createdAt, input.updatedAt]
+  );
+  return toSavedSearchRow(res.rows[0]);
+}
+
+export async function updateSavedSearch(_db: Pool | any, input: { id: number; userAddress: string; name: string; email?: string | null; filters: SavedSearchFilters; updatedAt: number }): Promise<SavedSearchRow | null> {
+  const p = ensurePool(_db);
+  const res = await p.query(
+    `UPDATE saved_searches
+     SET name = $3,
+         email = $4,
+         queryjson = $5,
+         updatedat = $6
+     WHERE id = $1 AND useraddress = $2
+     RETURNING id, useraddress AS "userAddress", name, email, queryjson AS "queryJson", lastcheckedat AS "lastCheckedAt", createdat AS "createdAt", updatedat AS "updatedAt"`,
+    [input.id, input.userAddress, input.name, input.email ?? null, JSON.stringify(input.filters), input.updatedAt]
+  );
+  return res.rows[0] ? toSavedSearchRow(res.rows[0]) : null;
+}
+
+export async function updateSavedSearchLastCheckedAt(_db: Pool | any, id: number, lastCheckedAt: number) {
+  const p = ensurePool(_db);
+  await p.query('UPDATE saved_searches SET lastcheckedat = $2, updatedat = GREATEST(updatedat, $2) WHERE id = $1', [id, lastCheckedAt]);
+}
+
+export async function deleteSavedSearch(_db: Pool | any, id: number, userAddress: string) {
+  const p = ensurePool(_db);
+  await p.query('DELETE FROM saved_searches WHERE id = $1 AND useraddress = $2', [id, userAddress]);
+}
+
+export async function listNotificationsByUser(_db: Pool | any, userAddress: string, opts?: { limit?: number; unreadOnly?: boolean }): Promise<NotificationRow[]> {
+  const p = ensurePool(_db);
+  const params: any[] = [userAddress];
+  const where = ['useraddress = $1'];
+  if (opts?.unreadOnly) {
+    where.push('readat IS NULL');
+  }
+  const limit = Math.min(Math.max(opts?.limit ?? 50, 1), 200);
+  params.push(limit);
+  const res = await p.query(
+    `SELECT id, useraddress AS "userAddress", type, title, body, dedupekey AS "dedupeKey", payloadjson AS "payloadJson", readat AS "readAt", createdat AS "createdAt"
+     FROM notifications
+     WHERE ${where.join(' AND ')}
+     ORDER BY createdat DESC, id DESC
+     LIMIT $2`,
+    params
+  );
+  return res.rows.map(toNotificationRow);
+}
+
+export async function countUnreadNotifications(_db: Pool | any, userAddress: string): Promise<number> {
+  const p = ensurePool(_db);
+  const res = await p.query('SELECT COUNT(1) AS count FROM notifications WHERE useraddress = $1 AND readat IS NULL', [userAddress]);
+  return Number(res.rows?.[0]?.count ?? 0);
+}
+
+export async function createNotification(_db: Pool | any, input: { userAddress: string; type: string; title: string; body: string; dedupeKey?: string | null; payload: Record<string, unknown>; createdAt: number }): Promise<NotificationRow | null> {
+  const p = ensurePool(_db);
+  if (input.dedupeKey) {
+    const existing = await p.query('SELECT id, useraddress AS "userAddress", type, title, body, dedupekey AS "dedupeKey", payloadjson AS "payloadJson", readat AS "readAt", createdat AS "createdAt" FROM notifications WHERE dedupekey = $1 LIMIT 1', [input.dedupeKey]);
+    if (existing.rows[0]) return null;
+  }
+  const res = await p.query(
+    `INSERT INTO notifications(useraddress, type, title, body, dedupekey, payloadjson, createdat)
+     VALUES($1,$2,$3,$4,$5,$6,$7)
+     RETURNING id, useraddress AS "userAddress", type, title, body, dedupekey AS "dedupeKey", payloadjson AS "payloadJson", readat AS "readAt", createdat AS "createdAt"`,
+    [input.userAddress, input.type, input.title, input.body, input.dedupeKey ?? null, JSON.stringify(input.payload), input.createdAt]
+  );
+  return toNotificationRow(res.rows[0]);
+}
+
+export async function markNotificationRead(_db: Pool | any, id: number, userAddress: string, readAt: number): Promise<boolean> {
+  const p = ensurePool(_db);
+  const res = await p.query('UPDATE notifications SET readat = COALESCE(readat, $3) WHERE id = $1 AND useraddress = $2', [id, userAddress, readAt]);
+  return (res.rowCount ?? 0) > 0;
+}
+
+export async function markAllNotificationsRead(_db: Pool | any, userAddress: string, readAt: number) {
+  const p = ensurePool(_db);
+  await p.query('UPDATE notifications SET readat = $2 WHERE useraddress = $1 AND readat IS NULL', [userAddress, readAt]);
+}
+
+export async function createPayment(_db: Pool | any, input: { userAddress: string; listingId?: string | null; provider: string; providerSessionId?: string | null; status: string; amount: number; currency: string; promotionType?: string | null; metadata: Record<string, unknown>; createdAt: number; updatedAt: number }): Promise<PaymentRow> {
+  const p = ensurePool(_db);
+  const res = await p.query(
+    `INSERT INTO payments(useraddress, listingid, provider, providersessionid, status, amount, currency, promotiontype, metadatajson, createdat, updatedat)
+     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+     RETURNING id, useraddress AS "userAddress", listingid AS "listingId", provider, providersessionid AS "providerSessionId", status, amount, currency, promotiontype AS "promotionType", metadatajson AS "metadataJson", createdat AS "createdAt", updatedat AS "updatedAt"`,
+    [input.userAddress, input.listingId ?? null, input.provider, input.providerSessionId ?? null, input.status, input.amount, input.currency, input.promotionType ?? null, JSON.stringify(input.metadata), input.createdAt, input.updatedAt]
+  );
+  return toPaymentRow(res.rows[0]);
+}
+
+export async function findPaymentByProviderSessionId(_db: Pool | any, providerSessionId: string): Promise<PaymentRow | null> {
+  const p = ensurePool(_db);
+  const res = await p.query(
+    'SELECT id, useraddress AS "userAddress", listingid AS "listingId", provider, providersessionid AS "providerSessionId", status, amount, currency, promotiontype AS "promotionType", metadatajson AS "metadataJson", createdat AS "createdAt", updatedat AS "updatedAt" FROM payments WHERE providersessionid = $1 LIMIT 1',
+    [providerSessionId]
+  );
+  return res.rows[0] ? toPaymentRow(res.rows[0]) : null;
+}
+
+export async function updatePaymentStatus(_db: Pool | any, input: { id: number; status: string; metadata: Record<string, unknown>; updatedAt: number }): Promise<PaymentRow | null> {
+  const p = ensurePool(_db);
+  const res = await p.query(
+    `UPDATE payments
+     SET status = $2,
+         metadatajson = $3,
+         updatedat = $4
+     WHERE id = $1
+     RETURNING id, useraddress AS "userAddress", listingid AS "listingId", provider, providersessionid AS "providerSessionId", status, amount, currency, promotiontype AS "promotionType", metadatajson AS "metadataJson", createdat AS "createdAt", updatedat AS "updatedAt"`,
+    [input.id, input.status, JSON.stringify(input.metadata), input.updatedAt]
+  );
+  return res.rows[0] ? toPaymentRow(res.rows[0]) : null;
+}
+
+export async function listPaymentsByUser(_db: Pool | any, userAddress: string): Promise<PaymentRow[]> {
+  const p = ensurePool(_db);
+  const res = await p.query(
+    'SELECT id, useraddress AS "userAddress", listingid AS "listingId", provider, providersessionid AS "providerSessionId", status, amount, currency, promotiontype AS "promotionType", metadatajson AS "metadataJson", createdat AS "createdAt", updatedat AS "updatedAt" FROM payments WHERE useraddress = $1 ORDER BY createdat DESC, id DESC',
+    [userAddress]
+  );
+  return res.rows.map(toPaymentRow);
+}
+
+export async function findActivePromotionByListing(_db: Pool | any, listingId: string, now: number): Promise<PromotionRow | null> {
+  const p = ensurePool(_db);
+  const res = await p.query(
+    `SELECT id, listingid AS "listingId", paymentid AS "paymentId", type, status, priority, startsat AS "startsAt", endsat AS "endsAt", createdat AS "createdAt", updatedat AS "updatedAt"
+     FROM promotions
+     WHERE listingid = $1 AND status = 'active' AND startsat <= $2 AND endsat > $2
+     ORDER BY priority DESC, endsat DESC, id DESC
+     LIMIT 1`,
+    [listingId, now]
+  );
+  return res.rows[0] ? toPromotionRow(res.rows[0]) : null;
+}
+
+export async function createPromotion(_db: Pool | any, input: { listingId: string; paymentId?: number | null; type: PromotionRow['type']; status: string; priority: number; startsAt: number; endsAt: number; createdAt: number; updatedAt: number }): Promise<PromotionRow> {
+  const p = ensurePool(_db);
+  const res = await p.query(
+    `INSERT INTO promotions(listingid, paymentid, type, status, priority, startsat, endsat, createdat, updatedat)
+     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)
+     RETURNING id, listingid AS "listingId", paymentid AS "paymentId", type, status, priority, startsat AS "startsAt", endsat AS "endsAt", createdat AS "createdAt", updatedat AS "updatedAt"`,
+    [input.listingId, input.paymentId ?? null, input.type, input.status, input.priority, input.startsAt, input.endsAt, input.createdAt, input.updatedAt]
+  );
+  return toPromotionRow(res.rows[0]);
+}
+
+export async function expirePromotions(_db: Pool | any, now: number) {
+  const p = ensurePool(_db);
+  await p.query("UPDATE promotions SET status = 'expired', updatedat = $2 WHERE status = 'active' AND endsat <= $1", [now, now]);
+}
+
+export async function listPromotionsByUser(_db: Pool | any, userAddress: string): Promise<PromotionRow[]> {
+  const p = ensurePool(_db);
+  const res = await p.query(
+    `SELECT pr.id,
+            pr.listingid AS "listingId",
+            pr.paymentid AS "paymentId",
+            pr.type,
+            pr.status,
+            pr.priority,
+            pr.startsat AS "startsAt",
+            pr.endsat AS "endsAt",
+            pr.createdat AS "createdAt",
+            pr.updatedat AS "updatedAt"
+     FROM promotions pr
+     INNER JOIN listings l ON l.id = pr.listingid
+     WHERE l.seller = $1
+     ORDER BY pr.createdat DESC, pr.id DESC`,
+    [userAddress]
+  );
+  return res.rows.map(toPromotionRow);
 }

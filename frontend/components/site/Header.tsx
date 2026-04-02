@@ -7,12 +7,37 @@ import { useAccount } from "wagmi";
 
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/components/providers/AuthProvider";
+import { fetchJson } from "@/lib/api";
 import { shortenHex } from "@/lib/format";
 
 export function SiteHeader() {
   const [open, setOpen] = React.useState(false);
+  const [unreadCount, setUnreadCount] = React.useState(0);
   const { address } = useAccount();
   const auth = useAuth();
+
+  React.useEffect(() => {
+    let cancelled = false;
+
+    async function run() {
+      if (!auth.isAuthenticated) {
+        setUnreadCount(0);
+        return;
+      }
+
+      try {
+        const res = await fetchJson<{ unreadCount: number }>("/notifications?limit=1", { timeoutMs: 4_000 });
+        if (!cancelled) setUnreadCount(res.unreadCount ?? 0);
+      } catch {
+        if (!cancelled) setUnreadCount(0);
+      }
+    }
+
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [auth.isAuthenticated]);
 
   React.useEffect(() => {
     if (!open) return;
@@ -51,6 +76,11 @@ export function SiteHeader() {
             <Button asChild variant="ghost" size="sm">
               <Link href="/messages">Messages</Link>
             </Button>
+            {auth.isAuthenticated ? (
+              <Button asChild variant="ghost" size="sm">
+                <Link href="/dashboard#notifications">Alerts{unreadCount > 0 ? ` (${unreadCount})` : ""}</Link>
+              </Button>
+            ) : null}
           </nav>
         </div>
 
@@ -157,6 +187,11 @@ export function SiteHeader() {
             <Button asChild variant="ghost" className="h-11 w-full justify-start" onClick={() => setOpen(false)}>
               <Link href="/messages">Messages</Link>
             </Button>
+            {auth.isAuthenticated ? (
+              <Button asChild variant="ghost" className="h-11 w-full justify-start" onClick={() => setOpen(false)}>
+                <Link href="/dashboard#notifications">Alerts{unreadCount > 0 ? ` (${unreadCount})` : ""}</Link>
+              </Button>
+            ) : null}
 
             <div className="pt-2">
               <div className="text-xs text-muted-foreground">Wallet</div>
