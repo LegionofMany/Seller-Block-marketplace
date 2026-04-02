@@ -46,6 +46,28 @@ services:
         value: 28800
       - key: AUTH_NONCE_TTL_SECONDS
         value: 600
+      - key: FRONTEND_APP_URL
+        sync: false
+      - key: NOTIFICATIONS_SCAN_MS
+        value: 60000
+      - key: NOTIFICATION_EMAIL_FROM
+        sync: false
+      - key: POSTMARK_SERVER_TOKEN
+        sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: PROMOTION_BUMP_PRICE_CENTS
+        value: 500
+      - key: PROMOTION_TOP_PRICE_CENTS
+        value: 1500
+      - key: PROMOTION_FEATURED_PRICE_CENTS
+        value: 3000
+      - key: PROMOTION_BUMP_DURATION_HOURS
+        value: 24
+      - key: PROMOTION_TOP_DURATION_HOURS
+        value: 72
+      - key: PROMOTION_FEATURED_DURATION_HOURS
+        value: 168
       - key: PINATA_JWT
         sync: false
       - key: PINATA_GATEWAY_BASE_URL
