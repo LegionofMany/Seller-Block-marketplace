@@ -1,4 +1,4 @@
-import { formatEther, type Address } from "viem";
+import { formatEther, formatUnits, type Address } from "viem";
 
 export function shortenHex(value: string, start = 6, end = 4) {
   if (!value) return "";
@@ -10,10 +10,10 @@ export function shortAddress(address?: Address) {
   return address ? shortenHex(address) : "";
 }
 
-export function formatPrice(price: bigint, isNative: boolean) {
-  return isNative ? `${formatEther(price)} ETH` : price.toString();
+export function formatPrice(price: bigint, isNative: boolean, symbol = "ETH", decimals = 18) {
+  return isNative ? `${formatEther(price)} ${symbol}` : `${formatUnits(price, decimals)} ${symbol}`;
 }
 
-export function formatAmount(amount: bigint, isNative: boolean) {
-  return formatPrice(amount, isNative);
+export function formatAmount(amount: bigint, isNative: boolean, symbol = "ETH", decimals = 18) {
+  return formatPrice(amount, isNative, symbol, decimals);
 }

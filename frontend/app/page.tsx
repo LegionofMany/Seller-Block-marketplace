@@ -12,12 +12,14 @@ import { useListings } from "@/lib/hooks/useListings";
 import { CATEGORY_TREE, subcategoriesFor } from "@/lib/categories";
 import { getBlockedSellers } from "@/lib/blocks";
 import { fetchJson } from "@/lib/api";
+import { getEnv } from "@/lib/env";
 import { useAccount } from "wagmi";
 import { toast } from "sonner";
 
 export default function ListingsPage() {
   const { address } = useAccount();
   const auth = useAuth();
+  const env = getEnv();
 
   const [q, setQ] = React.useState("");
   const [category, setCategory] = React.useState("");
@@ -116,7 +118,7 @@ export default function ListingsPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-2">
         <h1 className="text-2xl font-semibold tracking-tight">Listings</h1>
-        <p className="text-sm text-muted-foreground">Browse listings created on Sepolia.</p>
+        <p className="text-sm text-muted-foreground">Browse listings created on {env.defaultChain.name}.</p>
       </div>
 
       <Card>

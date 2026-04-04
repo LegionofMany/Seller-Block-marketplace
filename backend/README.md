@@ -4,7 +4,7 @@ Express + TypeScript backend workspace for the Seller Block Marketplace monorepo
 
 This backend is a production-ready MVP API layer that:
 
-- Indexes Sepolia `MarketplaceRegistry` events into Postgres
+- Indexes configured `MarketplaceRegistry` events into Postgres
 - Serves listings/auctions/raffles from the DB
 - Provides a metadata upload endpoint (fake URI for now)
 
@@ -30,10 +30,21 @@ copy .env.example .env
 
 Required:
 
+- Either `CHAIN_CONFIG_JSON` for multi-chain support, or the legacy single-chain variables below
+- `DATABASE_URL` (managed Postgres connection string)
+
+Legacy single-chain fallback:
+
 - `SEPOLIA_RPC_URL`
 - (Optional backup) `SEPOLIA_RPC_URL_FALLBACK`
 - `MARKETPLACE_REGISTRY_ADDRESS`
-- `DATABASE_URL` (managed Postgres connection string)
+
+Optional chain metadata for the legacy single-chain fallback:
+
+- `CHAIN_KEY`
+- `CHAIN_NAME`
+- `CHAIN_ID`
+- `CHAIN_NATIVE_CURRENCY_SYMBOL`
 
 ### Local Postgres (recommended for dev)
 
@@ -54,7 +65,7 @@ If you're using a hosted Postgres URL (e.g. Render) and see `Error: Connection t
 Optional:
 
 - `PORT` (defaults to `4000`)
-- `START_BLOCK` (recommended: set to your deploy block to speed up first sync)
+- `START_BLOCK` (legacy single-chain fallback only; when using `CHAIN_CONFIG_JSON`, prefer per-chain `startBlock` values)
 - `INDEXER_ENABLED` (default `true`; set to `false` to run API without the background indexer)
 - `INDEXER_POLL_MS`, `INDEXER_CHUNK_SIZE`
 - `CACHE_TTL_MS`
@@ -62,6 +73,18 @@ Optional:
 - `LISTING_AUTOHIDE_REPORTS_THRESHOLD` (default `3`; set to `0` to disable auto-hide)
 - `CORS_ORIGINS` (comma-separated list of allowed origins; set this to your Vercel domain in production)
 - `LOG_LEVEL`, `NODE_ENV`
+
+### Multi-chain config format
+
+`CHAIN_CONFIG_JSON` accepts either an array of chains or an object with `defaultChainKey` and `chains`.
+Each chain entry supports:
+
+- `key`, `name`, `chainId`
+- `rpcUrl`, optional `rpcFallbackUrl`
+- `marketplaceRegistryAddress`
+- optional `startBlock`
+- `nativeCurrencySymbol`
+- optional `stablecoins` with `symbol`, `name`, `address`, `decimals`, and optional `isStablecoin`
 
 ## Run
 

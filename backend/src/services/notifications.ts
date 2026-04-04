@@ -80,17 +80,18 @@ async function processSavedSearches() {
         type: "saved_search_match",
         title: `New match for ${search.name}`,
         body: `Listing ${row.id} matched your saved search.` ,
-        dedupeKey: `saved-search:${search.id}:listing:${row.id}`,
+        dedupeKey: `saved-search:${search.id}:listing:${row.chainKey}:${row.id}`,
         payload: {
           savedSearchId: search.id,
           listingId: row.id,
+          chainKey: row.chainKey,
           promotionType: row.promotionType ?? null,
         },
         createdAt: now,
       });
 
       if (notification && search.email && env.frontendAppUrl) {
-        const listingUrl = `${env.frontendAppUrl.replace(/\/$/, "")}/listing/${row.id}`;
+        const listingUrl = `${env.frontendAppUrl.replace(/\/$/, "")}/listing/${row.id}?chain=${encodeURIComponent(row.chainKey)}`;
         await sendPostmarkEmail(
           search.email,
           `Seller Block alert: ${search.name}`,

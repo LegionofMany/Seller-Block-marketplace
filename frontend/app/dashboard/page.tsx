@@ -24,6 +24,7 @@ import { parseListing } from "@/lib/contracts/parse";
 import { statusLabel } from "@/lib/contracts/types";
 import { shortenHex } from "@/lib/format";
 import { type UserProfile } from "@/lib/auth";
+import { buildListingHref } from "@/lib/listings";
 
 const listingCreatedEvent = parseAbiItem(
   "event ListingCreated(bytes32 indexed id, address seller, uint8 saleType, address token, uint256 price, string metadataURI)"
@@ -77,6 +78,7 @@ type PromotionOption = {
 type PromotionItem = {
   id: number;
   listingId: string;
+  listingChainKey: string;
   type: "bump" | "top" | "featured";
   status: string;
   endsAt: number;
@@ -85,6 +87,7 @@ type PromotionItem = {
 type PaymentItem = {
   id: number;
   listingId?: string | null;
+  listingChainKey?: string | null;
   promotionType?: string | null;
   status: string;
   amount: number;
@@ -795,6 +798,7 @@ export default function DashboardPage() {
           ) : (
             notifications.map((item) => {
               const listingId = typeof item.payload.listingId === "string" ? item.payload.listingId : null;
+              const listingChainKey = typeof item.payload.chainKey === "string" ? item.payload.chainKey : null;
               return (
                 <div key={item.id} className={item.readAt ? "rounded-md border p-3" : "rounded-md border border-primary/40 bg-primary/5 p-3"}>
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -802,7 +806,7 @@ export default function DashboardPage() {
                       <div className="font-medium">{item.title}</div>
                       <div className="text-sm text-muted-foreground">{item.body}</div>
                       <div className="text-xs text-muted-foreground">{formatDateTime(item.createdAt)}</div>
-                      {listingId ? <Link className="text-sm underline" href={`/listing/${listingId}`}>Open listing</Link> : null}
+                      {listingId ? <Link className="text-sm underline" href={buildListingHref(listingId, listingChainKey)}>Open listing</Link> : null}
                     </div>
                     {!item.readAt ? (
                       <Button
@@ -879,7 +883,7 @@ export default function DashboardPage() {
                         const res = await fetchJson<{ url?: string | null }>("/promotions/checkout-session", {
                           method: "POST",
                           headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({ listingId: promotionListingId, promotionType }),
+                          body: JSON.stringify({ listingId: promotionListingId, chainKey: env.defaultChain.key, promotionType }),
                           timeoutMs: 10_000,
                         });
                         if (!res.url) throw new Error("Stripe did not return a checkout URL");
@@ -914,7 +918,7 @@ export default function DashboardPage() {
                   ) : (
                     promotions.map((item) => (
                       <div key={item.id} className="rounded-md border p-3 text-sm">
-                        <div className="font-medium">{item.type} on {item.listingId}</div>
+                        <div className="font-medium">{item.type} on <Link className="underline" href={buildListingHref(item.listingId, item.listingChainKey)}>{item.listingId}</Link></div>
                         <div className="text-muted-foreground">Status: {item.status}</div>
                         <div className="text-muted-foreground">Ends: {formatDateTime(item.endsAt)}</div>
                       </div>
@@ -931,7 +935,7 @@ export default function DashboardPage() {
                       <div key={item.id} className="rounded-md border p-3 text-sm">
                         <div className="font-medium">{item.promotionType ?? "promotion"} payment</div>
                         <div className="text-muted-foreground">{formatMoneyFromCents(item.amount)} • {item.status}</div>
-                        <div className="text-muted-foreground">{item.listingId ?? "No listing"}</div>
+                        <div className="text-muted-foreground">{item.listingId ? <Link className="underline" href={buildListingHref(item.listingId, item.listingChainKey)}>{item.listingId}</Link> : "No listing"}</div>
                       </div>
                     ))
                   )}
@@ -956,7 +960,7 @@ export default function DashboardPage() {
             <div className="text-muted-foreground">Last listing</div>
             <div className="font-medium break-all sm:text-right">
               {lastListingId && lastListingId !== ("0x" + "00".repeat(32)) ? (
-                <Link className="underline" href={`/listing/${lastListingId}`}> {shortenHex(lastListingId)} </Link>
+                <Link className="underline" href={buildListingHref(String(lastListingId), env.defaultChain.key)}> {shortenHex(lastListingId)} </Link>
               ) : (
                 "—"
               )}
@@ -973,7 +977,7 @@ export default function DashboardPage() {
         <CardContent className="space-y-3">
           <div className="space-y-2">
             <Label>Token address (optional)</Label>
-            <Input value={token} onChange={(e) => setToken(e.target.value)} placeholder="Leave empty for ETH" />
+            <Input value={token} onChange={(e) => setToken(e.target.value)} placeholder={`Leave empty for ${env.defaultChain.nativeCurrencySymbol}`} />
           </div>
           <Button
             variant="outline"
@@ -1152,7 +1156,7 @@ export default function DashboardPage() {
 
                 <div className="space-y-2">
                   <Label>Withdraw protocol fees (token optional)</Label>
-                  <Input value={feesToken} onChange={(e) => setFeesToken(e.target.value)} placeholder="Leave empty for ETH" />
+                  <Input value={feesToken} onChange={(e) => setFeesToken(e.target.value)} placeholder={`Leave empty for ${env.defaultChain.nativeCurrencySymbol}`} />
                   <Button
                     variant="outline"
                     onClick={async () => {
@@ -1231,7 +1235,7 @@ export default function DashboardPage() {
               <div className="space-y-2">
                 <Label>Check credits (recipient + token)</Label>
                 <Input value={creditRecipient} onChange={(e) => setCreditRecipient(e.target.value)} placeholder="Recipient 0x..." />
-                <Input value={creditToken} onChange={(e) => setCreditToken(e.target.value)} placeholder="Token 0x... (empty = ETH)" />
+                <Input value={creditToken} onChange={(e) => setCreditToken(e.target.value)} placeholder={`Token 0x... (empty = ${env.defaultChain.nativeCurrencySymbol})`} />
                 <Button
                   variant="outline"
                   disabled={env.escrowVaultAddress === zeroAddress || !creditRecipient.trim().length}
@@ -1296,7 +1300,7 @@ export default function DashboardPage() {
           ) : (
             <div className="space-y-2">
               {(myListings ?? []).map((row) => (
-                <Link key={row.id} href={`/listing/${row.id}`} className="block rounded-md border px-3 py-2 text-sm hover:bg-accent/30">
+                <Link key={row.id} href={buildListingHref(String(row.id), env.defaultChain.key)} className="block rounded-md border px-3 py-2 text-sm hover:bg-accent/30">
                   <div className="flex items-center justify-between gap-3">
                     <div className="break-all">{row.id}</div>
                     <div className="text-xs text-muted-foreground">{statusLabel(row.status as any)}</div>

@@ -8,13 +8,13 @@ export function generateNonce(): string {
   return crypto.randomBytes(16).toString("hex");
 }
 
-export function buildAuthMessage(address: string, nonce: string): string {
+export function buildAuthMessage(address: string, nonce: string, env: Env): string {
   return [
     "Seller-Block Marketplace",
     "Action: Sign in",
     `Address: ${address}`,
     `Nonce: ${nonce}`,
-    "ChainId: 11155111",
+    `ChainId: ${env.chainId}`,
   ].join("\n");
 }
 

@@ -1,10 +1,34 @@
 import { isAddress, getAddress } from "ethers";
 
+export type SupportedChainToken = {
+  symbol: string;
+  name: string;
+  address: string;
+  decimals: number;
+  isStablecoin?: boolean;
+};
+
+export type SupportedChainConfig = {
+  key: string;
+  name: string;
+  chainId: number;
+  rpcUrl: string;
+  rpcFallbackUrl?: string;
+  marketplaceRegistryAddress: string;
+  startBlock?: number;
+  nativeCurrencySymbol: string;
+  stablecoins: SupportedChainToken[];
+};
+
 export type Env = {
   port: number;
+  chainKey: string;
+  chainName: string;
+  chainId: number;
   sepoliaRpcUrl: string;
   sepoliaRpcUrlFallback?: string;
   marketplaceRegistryAddress: string;
+  supportedChains: SupportedChainConfig[];
   dbPath: string;
   corsOrigins?: string[];
   indexerEnabled: boolean;
@@ -136,17 +160,120 @@ function parseOrigins(raw: string | undefined): string[] | undefined {
   return parts;
 }
 
+function parseSupportedChains(raw: string | undefined): { defaultChainKey?: string; chains: SupportedChainConfig[] } | null {
+  if (!raw) return null;
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new Error("Invalid CHAIN_CONFIG_JSON");
+  }
+
+  const root = parsed as Record<string, unknown>;
+  const chainsRaw = Array.isArray(root?.chains) ? root.chains : Array.isArray(parsed) ? parsed : null;
+  if (!chainsRaw?.length) throw new Error("CHAIN_CONFIG_JSON must include at least one chain");
+
+  const chains = chainsRaw.map((entry, index) => {
+    if (!entry || typeof entry !== "object") throw new Error(`Invalid chain config at index ${index}`);
+    const chain = entry as Record<string, unknown>;
+    const key = typeof chain.key === "string" ? chain.key.trim() : "";
+    const name = typeof chain.name === "string" ? chain.name.trim() : "";
+    const chainId = Number(chain.chainId);
+    const rpcUrl = typeof chain.rpcUrl === "string" ? chain.rpcUrl.trim() : "";
+    const rpcFallbackUrl = typeof chain.rpcFallbackUrl === "string" ? chain.rpcFallbackUrl.trim() : undefined;
+    const marketplaceRegistryAddressRaw = typeof chain.marketplaceRegistryAddress === "string" ? chain.marketplaceRegistryAddress.trim() : "";
+    const startBlock = chain.startBlock == null || chain.startBlock === "" ? undefined : Number(chain.startBlock);
+    const nativeCurrencySymbol = typeof chain.nativeCurrencySymbol === "string" && chain.nativeCurrencySymbol.trim() ? chain.nativeCurrencySymbol.trim() : "ETH";
+    const stablecoins = Array.isArray(chain.stablecoins)
+      ? chain.stablecoins.map((token, tokenIndex) => {
+          if (!token || typeof token !== "object") throw new Error(`Invalid token config at index ${tokenIndex} for chain ${key || index}`);
+          const value = token as Record<string, unknown>;
+          const symbol = typeof value.symbol === "string" ? value.symbol.trim() : "";
+          const tokenName = typeof value.name === "string" ? value.name.trim() : symbol;
+          const address = typeof value.address === "string" ? value.address.trim() : "";
+          const decimals = Number(value.decimals ?? 18);
+          if (!symbol) throw new Error(`Missing token symbol for chain ${key || index}`);
+          if (!isAddress(address)) throw new Error(`Invalid token address for ${symbol} on chain ${key || index}`);
+          if (!Number.isInteger(decimals) || decimals < 0 || decimals > 36) {
+            throw new Error(`Invalid token decimals for ${symbol} on chain ${key || index}`);
+          }
+          return {
+            symbol,
+            name: tokenName || symbol,
+            address: getAddress(address),
+            decimals,
+            ...(value.isStablecoin === true ? { isStablecoin: true } : {}),
+          } satisfies SupportedChainToken;
+        })
+      : [];
+
+    if (!key) throw new Error(`Missing chain key at index ${index}`);
+    if (!name) throw new Error(`Missing chain name for ${key}`);
+    if (!Number.isInteger(chainId) || chainId <= 0) throw new Error(`Invalid chainId for ${key}`);
+    validateRpcUrl(`rpcUrl for ${key}`, rpcUrl);
+    if (rpcFallbackUrl) validateRpcUrl(`rpcFallbackUrl for ${key}`, rpcFallbackUrl);
+    if (!isAddress(marketplaceRegistryAddressRaw)) throw new Error(`Invalid marketplaceRegistryAddress for ${key}`);
+    if (startBlock != null && (!Number.isFinite(startBlock) || startBlock < 0)) throw new Error(`Invalid startBlock for ${key}`);
+
+    return {
+      key,
+      name,
+      chainId,
+      rpcUrl,
+      ...(rpcFallbackUrl ? { rpcFallbackUrl } : {}),
+      marketplaceRegistryAddress: getAddress(marketplaceRegistryAddressRaw),
+      ...(startBlock != null ? { startBlock } : {}),
+      nativeCurrencySymbol,
+      stablecoins,
+    } satisfies SupportedChainConfig;
+  });
+
+  const defaultChainKey = typeof root?.defaultChainKey === "string" ? root.defaultChainKey.trim() : undefined;
+  return { ...(defaultChainKey ? { defaultChainKey } : {}), chains };
+}
+
 export function getEnv(): Env {
   const port = numberFromEnv("PORT", 4000);
-  const sepoliaRpcUrl = required("SEPOLIA_RPC_URL");
-  validateRpcUrl("SEPOLIA_RPC_URL", sepoliaRpcUrl);
+  const chainConfigs = parseSupportedChains(optional("CHAIN_CONFIG_JSON"));
 
-  const sepoliaRpcUrlFallback = optional("SEPOLIA_RPC_URL_FALLBACK");
-  if (sepoliaRpcUrlFallback) validateRpcUrl("SEPOLIA_RPC_URL_FALLBACK", sepoliaRpcUrlFallback);
+  const primaryChain: SupportedChainConfig = (() => {
+    if (chainConfigs) {
+      const selected: SupportedChainConfig | undefined = chainConfigs.defaultChainKey
+        ? chainConfigs.chains.find((chain) => chain.key === chainConfigs.defaultChainKey)
+        : undefined;
+      const fallback: SupportedChainConfig | undefined = chainConfigs.chains[0];
+      if (!selected && !fallback) throw new Error("CHAIN_CONFIG_JSON must include at least one chain");
+      if (selected) return selected;
+      return fallback as SupportedChainConfig;
+    }
 
-  const marketplaceRegistryAddressRaw = required("MARKETPLACE_REGISTRY_ADDRESS");
-  if (!isAddress(marketplaceRegistryAddressRaw)) throw new Error("Invalid MARKETPLACE_REGISTRY_ADDRESS");
-  const marketplaceRegistryAddress = getAddress(marketplaceRegistryAddressRaw);
+    const sepoliaRpcUrl = required("SEPOLIA_RPC_URL");
+    validateRpcUrl("SEPOLIA_RPC_URL", sepoliaRpcUrl);
+
+    const sepoliaRpcUrlFallback = optional("SEPOLIA_RPC_URL_FALLBACK");
+    if (sepoliaRpcUrlFallback) validateRpcUrl("SEPOLIA_RPC_URL_FALLBACK", sepoliaRpcUrlFallback);
+
+    const marketplaceRegistryAddressRaw = required("MARKETPLACE_REGISTRY_ADDRESS");
+    if (!isAddress(marketplaceRegistryAddressRaw)) throw new Error("Invalid MARKETPLACE_REGISTRY_ADDRESS");
+
+    return {
+      key: optional("CHAIN_KEY") ?? "sepolia",
+      name: optional("CHAIN_NAME") ?? "Ethereum Sepolia",
+      chainId: numberFromEnv("CHAIN_ID", 11155111),
+      rpcUrl: sepoliaRpcUrl,
+      ...(sepoliaRpcUrlFallback ? { rpcFallbackUrl: sepoliaRpcUrlFallback } : {}),
+      marketplaceRegistryAddress: getAddress(marketplaceRegistryAddressRaw),
+      ...(optional("START_BLOCK") ? { startBlock: Number(optional("START_BLOCK")) } : {}),
+      nativeCurrencySymbol: optional("CHAIN_NATIVE_CURRENCY_SYMBOL") ?? "ETH",
+      stablecoins: [],
+    } satisfies SupportedChainConfig;
+  })();
+
+  const sepoliaRpcUrl = primaryChain.rpcUrl;
+  const sepoliaRpcUrlFallback = primaryChain.rpcFallbackUrl;
+  const marketplaceRegistryAddress = primaryChain.marketplaceRegistryAddress;
+  const supportedChains: SupportedChainConfig[] = chainConfigs?.chains ?? [primaryChain];
 
   const databaseUrl = optional("DATABASE_URL");
   if (!databaseUrl) {
@@ -166,7 +293,7 @@ export function getEnv(): Env {
   const indexerPollMs = numberFromEnv("INDEXER_POLL_MS", 5_000);
   const indexerChunkSize = numberFromEnv("INDEXER_CHUNK_SIZE", 2_000);
   const startBlockRaw = optional("START_BLOCK");
-  const startBlock = startBlockRaw ? Number(startBlockRaw) : undefined;
+  const startBlock = startBlockRaw ? Number(startBlockRaw) : primaryChain.startBlock;
   if (startBlockRaw && (!Number.isFinite(startBlock) || (startBlock ?? 0) < 0)) throw new Error("Invalid START_BLOCK");
 
   const cacheTtlMs = numberFromEnv("CACHE_TTL_MS", 30_000);
@@ -202,9 +329,13 @@ export function getEnv(): Env {
 
   return {
     port,
+    chainKey: primaryChain.key,
+    chainName: primaryChain.name,
+    chainId: primaryChain.chainId,
     sepoliaRpcUrl,
     ...(sepoliaRpcUrlFallback ? { sepoliaRpcUrlFallback } : {}),
     marketplaceRegistryAddress,
+    supportedChains,
     dbPath,
     ...(corsOrigins ? { corsOrigins } : {}),
     indexerEnabled,

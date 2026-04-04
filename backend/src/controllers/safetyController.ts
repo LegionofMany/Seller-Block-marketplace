@@ -5,6 +5,7 @@ import { verifyMessage } from "ethers";
 import { HttpError } from "../middlewares/errors";
 import { getContext } from "../services/context";
 import { createReport, listUserBlocks, upsertUserBlock } from "../services/db";
+import { buildListingReportTargetId, normalizeChainKey } from "../utils/listings";
 import { requireAddress, requireBytes32 } from "../utils/validation";
 
 const MAX_SKEW_MS = 10 * 60 * 1000;
@@ -24,6 +25,7 @@ function buildReportMessage(params: {
   reporter: string;
   targetType: string;
   targetId: string;
+  chainKey?: string;
   reason: string;
   issuedAt: number;
 }): string {
@@ -34,6 +36,7 @@ function buildReportMessage(params: {
     `Reporter: ${params.reporter}`,
     `TargetType: ${params.targetType}`,
     `TargetId: ${params.targetId}`,
+    ...(params.chainKey ? [`ChainKey: ${params.chainKey}`] : []),
     `Reason: ${params.reason}`,
     `IssuedAt: ${issuedAtIso}`,
   ].join("\n");
@@ -106,6 +109,7 @@ export async function report(req: Request, res: Response) {
     issuedAt: z.union([z.number(), z.string()]).optional(),
     targetType: z.enum(["listing", "user", "message", "conversation"]),
     targetId: z.string().min(1).max(200),
+    chainKey: z.string().max(64).optional(),
     reason: z.enum(["spam", "prohibited", "scam", "duplicate", "harassment", "other"]),
     details: z.string().max(1000).optional(),
   });
@@ -114,6 +118,7 @@ export async function report(req: Request, res: Response) {
   if (!parsed.success) throw new HttpError(400, "Invalid report payload", "INVALID_REPORT");
 
   let reporter: string | null = null;
+  const listingChainKey = parsed.data.targetType === "listing" ? normalizeChainKey(parsed.data.chainKey) : undefined;
 
   if (parsed.data.reporter && parsed.data.signature && parsed.data.issuedAt !== undefined) {
     const addr = requireAddress(parsed.data.reporter, "reporter");
@@ -122,6 +127,7 @@ export async function report(req: Request, res: Response) {
       reporter: addr,
       targetType: parsed.data.targetType,
       targetId: parsed.data.targetId,
+      ...(listingChainKey ? { chainKey: listingChainKey } : {}),
       reason: parsed.data.reason,
       issuedAt,
     });
@@ -134,7 +140,9 @@ export async function report(req: Request, res: Response) {
     }
   }
 
-  const targetId = parsed.data.targetType === "listing" ? requireBytes32(parsed.data.targetId, "listing id") : parsed.data.targetId;
+  const targetId = parsed.data.targetType === "listing"
+    ? buildListingReportTargetId(listingChainKey ?? getContext().env.chainKey, requireBytes32(parsed.data.targetId, "listing id"))
+    : parsed.data.targetId;
 
   const createdAt = Date.now();
   const reporterIp = String((req.headers["x-forwarded-for"] as string) ?? req.ip ?? "").slice(0, 80) || null;

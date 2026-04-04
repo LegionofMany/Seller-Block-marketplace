@@ -148,6 +148,11 @@ After `npm run deploy:<network>`, the script writes deployed addresses to:
 
 - `contracts/deployments/<network>.json`
 
+Phase 6 note:
+
+- Use the existing Sepolia deployment files as the live source of truth.
+- Use the `*.example.json` files in `contracts/deployments/` as templates when preparing a low-gas testnet or mainnet rollout.
+
 ## Directory layout
 
 - `contracts/` — Solidity sources

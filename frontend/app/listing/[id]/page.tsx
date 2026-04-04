@@ -3,7 +3,7 @@
 import * as React from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { type Address, type Hex, isAddress, parseEther, zeroAddress } from "viem";
 import { useAccount, useReadContract, useWaitForTransactionReceipt, useWalletClient, useWriteContract } from "wagmi";
 import { toast } from "sonner";
@@ -17,7 +17,7 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
 
-import { getEnv } from "@/lib/env";
+import { getChainConfigByKey, getEnv } from "@/lib/env";
 import { marketplaceRegistryAbi } from "@/lib/contracts/abi/MarketplaceRegistry";
 import { erc20Abi } from "@/lib/contracts/abi/ERC20";
 import { raffleModuleAbi } from "@/lib/contracts/abi/RaffleModule";
@@ -25,6 +25,7 @@ import { parseListing } from "@/lib/contracts/parse";
 import { isNativeToken, saleTypeLabel, statusLabel } from "@/lib/contracts/types";
 import { formatPrice, shortenHex } from "@/lib/format";
 import { useToastTx } from "@/lib/hooks/useToastTx";
+import { buildListingHref } from "@/lib/listings";
 import { fetchMetadataById, fetchMetadataByUri, metadataIdFromUri, type MarketplaceMetadata } from "@/lib/metadata";
 import { fetchJson } from "@/lib/api";
 import { addBlockedSeller } from "@/lib/blocks";
@@ -37,7 +38,8 @@ function asBytes32(value: string): Hex | null {
 
 export default function ListingDetailPage() {
   const router = useRouter();
-  let env;
+  const searchParams = useSearchParams();
+  let env: ReturnType<typeof getEnv>;
   try {
     env = getEnv();
   } catch (e: any) {
@@ -51,6 +53,12 @@ export default function ListingDetailPage() {
   const params = useParams<{ id: string }>();
   const id = params?.id;
   const listingId = asBytes32(id);
+  const chainKey = searchParams.get("chain") ?? env.defaultChain.key;
+  const activeChain = getChainConfigByKey(env, chainKey);
+  const registryAddress = activeChain.marketplaceRegistryAddress;
+  const escrowVaultAddress = activeChain.escrowVaultAddress;
+  const auctionModuleAddress = activeChain.auctionModuleAddress;
+  const raffleModuleAddress = activeChain.raffleModuleAddress;
 
   const { address } = useAccount();
   const { data: walletClient } = useWalletClient();
@@ -62,7 +70,8 @@ export default function ListingDetailPage() {
   const [reveal, setReveal] = React.useState<Hex>(("0x" + "00".repeat(32)) as Hex);
 
   const { data: raw, isLoading, isError, error } = useReadContract({
-    address: env.marketplaceRegistryAddress,
+    address: registryAddress,
+    chainId: activeChain.chainId,
     abi: marketplaceRegistryAbi,
     functionName: "listings",
     args: listingId ? [listingId] : undefined,
@@ -76,7 +85,8 @@ export default function ListingDetailPage() {
   const native = listing ? isNativeToken(listing.token as Address) : true;
 
   const { data: arbiterAddress } = useReadContract({
-    address: env.marketplaceRegistryAddress,
+    address: registryAddress,
+    chainId: activeChain.chainId,
     abi: marketplaceRegistryAbi,
     functionName: "arbiter",
     query: { retry: 1 },
@@ -196,6 +206,7 @@ export default function ListingDetailPage() {
             issuedAt,
             targetType: "listing",
             targetId: listingId,
+            chainKey: activeChain.key,
             reason: reasonRaw,
             ...(details ? { details: details.slice(0, 1000) } : {}),
           }),
@@ -208,6 +219,7 @@ export default function ListingDetailPage() {
           body: JSON.stringify({
             targetType: "listing",
             targetId: listingId,
+            chainKey: activeChain.key,
             reason: reasonRaw,
             ...(details ? { details: details.slice(0, 1000) } : {}),
           }),
@@ -237,6 +249,7 @@ export default function ListingDetailPage() {
         body: JSON.stringify({
           counterparty: listing.seller,
           listingId,
+          listingChainKey: activeChain.key,
           body,
         }),
         timeoutMs: 10_000,
@@ -305,7 +318,7 @@ export default function ListingDetailPage() {
   const needsErc20Approval = Boolean(
     listing &&
       !native &&
-      env.escrowVaultAddress !== zeroAddress &&
+      escrowVaultAddress !== zeroAddress &&
       address &&
       listing.status === 1 &&
       listing.saleType === 0
@@ -313,11 +326,12 @@ export default function ListingDetailPage() {
 
   const { data: allowance } = useReadContract({
     address: (listing?.token ?? zeroAddress) as Address,
+    chainId: activeChain.chainId,
     abi: erc20Abi,
     functionName: "allowance",
     args:
       needsErc20Approval && address
-        ? [address as Address, env.escrowVaultAddress]
+        ? [address as Address, escrowVaultAddress]
         : undefined,
     query: { enabled: Boolean(needsErc20Approval && address && listing?.token && isAddress(listing.token)) },
   });
@@ -335,13 +349,14 @@ export default function ListingDetailPage() {
 
   const { data: bidAllowance } = useReadContract({
     address: (listing?.token ?? zeroAddress) as Address,
+    chainId: activeChain.chainId,
     abi: erc20Abi,
     functionName: "allowance",
     args:
-      !native && address && parsedBidAmount && env.auctionModuleAddress !== zeroAddress
-        ? [address as Address, env.auctionModuleAddress]
+      !native && address && parsedBidAmount && auctionModuleAddress !== zeroAddress
+        ? [address as Address, auctionModuleAddress]
         : undefined,
-    query: { enabled: Boolean(!native && address && parsedBidAmount && env.auctionModuleAddress !== zeroAddress) },
+    query: { enabled: Boolean(!native && address && parsedBidAmount && auctionModuleAddress !== zeroAddress) },
   });
 
   const bidApproved = !native && typeof bidAllowance === "bigint" && parsedBidAmount ? bidAllowance >= parsedBidAmount : false;
@@ -357,7 +372,8 @@ export default function ListingDetailPage() {
   }, [ticketCount]);
 
   const { data: raffleQuote } = useReadContract({
-    address: env.raffleModuleAddress,
+    address: raffleModuleAddress,
+    chainId: activeChain.chainId,
     abi: raffleModuleAbi,
     functionName: "quoteEntry",
     args:
@@ -365,7 +381,7 @@ export default function ListingDetailPage() {
       listing.saleType === 2 &&
       listing.moduleId !== ("0x" + "00".repeat(32)) &&
       parsedTicketCount &&
-      env.raffleModuleAddress !== zeroAddress
+      raffleModuleAddress !== zeroAddress
         ? [listing.moduleId, parsedTicketCount]
         : undefined,
     query: {
@@ -374,13 +390,14 @@ export default function ListingDetailPage() {
           listing.saleType === 2 &&
           listing.moduleId !== ("0x" + "00".repeat(32)) &&
           parsedTicketCount &&
-          env.raffleModuleAddress !== zeroAddress
+          raffleModuleAddress !== zeroAddress
       ),
     },
   });
 
   const { data: raffleAllowance } = useReadContract({
     address: (listing?.token ?? zeroAddress) as Address,
+    chainId: activeChain.chainId,
     abi: erc20Abi,
     functionName: "allowance",
     args:
@@ -388,17 +405,17 @@ export default function ListingDetailPage() {
       !native &&
       address &&
       typeof raffleQuote === "bigint" &&
-      env.raffleModuleAddress !== zeroAddress
-        ? [address as Address, env.raffleModuleAddress]
+      raffleModuleAddress !== zeroAddress
+        ? [address as Address, raffleModuleAddress]
         : undefined,
-    query: { enabled: Boolean(listing && !native && address && typeof raffleQuote === "bigint" && env.raffleModuleAddress !== zeroAddress) },
+    query: { enabled: Boolean(listing && !native && address && typeof raffleQuote === "bigint" && raffleModuleAddress !== zeroAddress) },
   });
 
   const raffleApproved = !native && typeof raffleAllowance === "bigint" && typeof raffleQuote === "bigint" ? raffleAllowance >= raffleQuote : false;
 
   const [pendingHash, setPendingHash] = React.useState<`0x${string}` | undefined>();
   const toastTx = useToastTx(pendingHash, "Transaction pending");
-  const receipt = useWaitForTransactionReceipt({ hash: pendingHash, query: { enabled: Boolean(pendingHash) } });
+  const receipt = useWaitForTransactionReceipt({ chainId: activeChain.chainId, hash: pendingHash, query: { enabled: Boolean(pendingHash) } });
 
   React.useEffect(() => {
     if (receipt.isSuccess) {
@@ -440,8 +457,8 @@ export default function ListingDetailPage() {
             {listingReadError?.shortMessage ?? listingReadError?.message ?? "RPC request failed"}
           </div>
           <div className="text-xs text-muted-foreground break-words">
-            This is commonly caused by a rate-limited RPC URL (for example Infura 429). Set a higher-limit
-            `NEXT_PUBLIC_SEPOLIA_RPC_URL` and restart `npm run dev`.
+            This is commonly caused by a rate-limited RPC URL. Update the RPC in NEXT_PUBLIC_CHAIN_CONFIG_JSON,
+            or set a higher-limit legacy NEXT_PUBLIC_SEPOLIA_RPC_URL, and restart npm run dev.
           </div>
         </CardContent>
       </Card>
@@ -588,11 +605,11 @@ export default function ListingDetailPage() {
                 ) : null}
                 <div className="text-sm">
                   <div className="text-muted-foreground">Price</div>
-                  <div className="font-medium">{formatPrice(listing.price, native)}</div>
+                  <div className="font-medium">{formatPrice(listing.price, native, activeChain.nativeCurrencySymbol)}</div>
                 </div>
                 <div className="text-sm">
                   <div className="text-muted-foreground">Token</div>
-                  <div className="font-medium break-all">{native ? "ETH" : listing.token}</div>
+                  <div className="font-medium break-all">{native ? activeChain.nativeCurrencySymbol : listing.token}</div>
                 </div>
                 <div className="text-sm">
                   <div className="text-muted-foreground">Seller</div>
@@ -648,7 +665,8 @@ export default function ListingDetailPage() {
                     className="w-full sm:w-auto"
                     disabled={receipt.isLoading}
                     onClick={() => send(writeContractAsync({
-                      address: env.marketplaceRegistryAddress,
+                      address: registryAddress,
+                      chainId: activeChain.chainId,
                       abi: marketplaceRegistryAbi,
                       functionName: "cancelListing",
                       args: [listingId],
@@ -674,9 +692,10 @@ export default function ListingDetailPage() {
                             disabled={approvedEnough || receipt.isLoading}
                             onClick={() => send(writeContractAsync({
                               address: listing.token,
+                              chainId: activeChain.chainId,
                               abi: erc20Abi,
                               functionName: "approve",
-                              args: [env.escrowVaultAddress, listing.price],
+                              args: [escrowVaultAddress, listing.price],
                             }))}
                           >
                             {approvedEnough ? "Approved" : "Approve"}
@@ -686,7 +705,8 @@ export default function ListingDetailPage() {
                             className="w-full sm:w-auto"
                             disabled={!approvedEnough || receipt.isLoading}
                             onClick={() => send(writeContractAsync({
-                              address: env.marketplaceRegistryAddress,
+                              address: registryAddress,
+                              chainId: activeChain.chainId,
                               abi: marketplaceRegistryAbi,
                               functionName: "buy",
                               args: [listingId],
@@ -702,14 +722,15 @@ export default function ListingDetailPage() {
                         className="w-full sm:w-auto"
                         disabled={receipt.isLoading}
                         onClick={() => send(writeContractAsync({
-                          address: env.marketplaceRegistryAddress,
+                          address: registryAddress,
+                          chainId: activeChain.chainId,
                           abi: marketplaceRegistryAbi,
                           functionName: "buy",
                           args: [listingId],
                           value: listing.price,
                         }))}
                       >
-                        Buy ({formatPrice(listing.price, true)})
+                        Buy ({formatPrice(listing.price, true, activeChain.nativeCurrencySymbol)})
                       </Button>
                     )}
                   </div>
@@ -722,7 +743,8 @@ export default function ListingDetailPage() {
                       className="w-full sm:w-auto"
                       disabled={receipt.isLoading}
                       onClick={() => send(writeContractAsync({
-                        address: env.marketplaceRegistryAddress,
+                        address: registryAddress,
+                        chainId: activeChain.chainId,
                         abi: marketplaceRegistryAbi,
                         functionName: "confirmDelivery",
                         args: [listingId],
@@ -736,7 +758,8 @@ export default function ListingDetailPage() {
                       className="w-full sm:w-auto"
                       disabled={receipt.isLoading}
                       onClick={() => send(writeContractAsync({
-                        address: env.marketplaceRegistryAddress,
+                        address: registryAddress,
+                        chainId: activeChain.chainId,
                         abi: marketplaceRegistryAbi,
                         functionName: "requestRefund",
                         args: [listingId],
@@ -775,7 +798,8 @@ export default function ListingDetailPage() {
                         className="w-full sm:w-auto"
                         disabled={receipt.isLoading}
                         onClick={() => send(writeContractAsync({
-                          address: env.marketplaceRegistryAddress,
+                          address: registryAddress,
+                          chainId: activeChain.chainId,
                           abi: marketplaceRegistryAbi,
                           functionName: "arbiterRelease",
                           args: [listingId],
@@ -789,7 +813,8 @@ export default function ListingDetailPage() {
                         className="w-full sm:w-auto"
                         disabled={receipt.isLoading}
                         onClick={() => send(writeContractAsync({
-                          address: env.marketplaceRegistryAddress,
+                          address: registryAddress,
+                          chainId: activeChain.chainId,
                           abi: marketplaceRegistryAbi,
                           functionName: "arbiterRefund",
                           args: [listingId],
@@ -813,7 +838,8 @@ export default function ListingDetailPage() {
                       className="w-full sm:w-auto"
                       disabled={receipt.isLoading}
                       onClick={() => send(writeContractAsync({
-                        address: env.marketplaceRegistryAddress,
+                        address: registryAddress,
+                        chainId: activeChain.chainId,
                         abi: marketplaceRegistryAbi,
                         functionName: "withdrawPayout",
                         args: [listing.token],
@@ -839,7 +865,8 @@ export default function ListingDetailPage() {
                       className="w-full sm:w-auto"
                       disabled={receipt.isLoading}
                       onClick={() => send(writeContractAsync({
-                        address: env.marketplaceRegistryAddress,
+                        address: registryAddress,
+                        chainId: activeChain.chainId,
                         abi: marketplaceRegistryAbi,
                         functionName: "withdrawPayout",
                         args: [listing.token],
@@ -857,8 +884,8 @@ export default function ListingDetailPage() {
                   <div className="rounded-md border p-4 space-y-3">
                     <div className="text-sm font-medium">Place bid</div>
                     <div className="grid gap-2">
-                      <Label>Bid amount {native ? "(ETH)" : "(raw units)"}</Label>
-                      <Input value={bidAmount} onChange={(e) => setBidAmount(e.target.value)} placeholder={native ? "0.05" : "1000000"} />
+                      <Label>Bid amount {native ? `(${activeChain.nativeCurrencySymbol})` : "(token units)"}</Label>
+                      <Input value={bidAmount} onChange={(e) => setBidAmount(e.target.value)} placeholder={native ? "0.05" : "1.0"} />
                     </div>
                     {!native ? (
                       <div className="flex flex-col gap-2 sm:flex-row">
@@ -866,14 +893,15 @@ export default function ListingDetailPage() {
                           variant="secondary"
                           size="lg"
                           className="w-full sm:w-auto"
-                          disabled={receipt.isLoading || !parsedBidAmount || bidApproved || env.auctionModuleAddress === zeroAddress}
+                          disabled={receipt.isLoading || !parsedBidAmount || bidApproved || auctionModuleAddress === zeroAddress}
                           onClick={() =>
                             send(
                               writeContractAsync({
                                 address: listing.token,
+                                chainId: activeChain.chainId,
                                 abi: erc20Abi,
                                 functionName: "approve",
-                                args: [env.auctionModuleAddress, parsedBidAmount ?? BigInt(0)],
+                                args: [auctionModuleAddress, parsedBidAmount ?? BigInt(0)],
                               })
                             )
                           }
@@ -887,7 +915,8 @@ export default function ListingDetailPage() {
                           onClick={() =>
                             send(
                               writeContractAsync({
-                                address: env.marketplaceRegistryAddress,
+                                address: registryAddress,
+                                chainId: activeChain.chainId,
                                 abi: marketplaceRegistryAbi,
                                 functionName: "bid",
                                 args: [listingId, parsedBidAmount ?? BigInt(0)],
@@ -906,7 +935,8 @@ export default function ListingDetailPage() {
                         onClick={() =>
                           send(
                             writeContractAsync({
-                              address: env.marketplaceRegistryAddress,
+                                address: registryAddress,
+                                chainId: activeChain.chainId,
                               abi: marketplaceRegistryAbi,
                               functionName: "bid",
                               args: [listingId, parsedBidAmount ?? BigInt(0)],
@@ -926,7 +956,8 @@ export default function ListingDetailPage() {
                         className="w-full sm:w-auto"
                         disabled={receipt.isLoading}
                         onClick={() => send(writeContractAsync({
-                          address: env.marketplaceRegistryAddress,
+                          address: registryAddress,
+                          chainId: activeChain.chainId,
                           abi: marketplaceRegistryAbi,
                           functionName: "closeAuction",
                           args: [listingId],
@@ -946,7 +977,7 @@ export default function ListingDetailPage() {
                       <Input value={ticketCount} onChange={(e) => setTicketCount(e.target.value)} />
                     </div>
                     <div className="text-xs text-muted-foreground">
-                      Quote: {typeof raffleQuote === "bigint" ? formatPrice(raffleQuote, native) : "—"}
+                      Quote: {typeof raffleQuote === "bigint" ? formatPrice(raffleQuote, native, activeChain.nativeCurrencySymbol) : "—"}
                     </div>
 
                     {!native ? (
@@ -955,14 +986,15 @@ export default function ListingDetailPage() {
                           variant="secondary"
                           size="lg"
                           className="w-full sm:w-auto"
-                          disabled={receipt.isLoading || env.raffleModuleAddress === zeroAddress || typeof raffleQuote !== "bigint" || raffleApproved}
+                          disabled={receipt.isLoading || raffleModuleAddress === zeroAddress || typeof raffleQuote !== "bigint" || raffleApproved}
                           onClick={() =>
                             send(
                               writeContractAsync({
                                 address: listing.token,
+                                chainId: activeChain.chainId,
                                 abi: erc20Abi,
                                 functionName: "approve",
-                                args: [env.raffleModuleAddress, (raffleQuote as bigint) ?? BigInt(0)],
+                                args: [raffleModuleAddress, (raffleQuote as bigint) ?? BigInt(0)],
                               })
                             )
                           }
@@ -976,7 +1008,8 @@ export default function ListingDetailPage() {
                           onClick={() =>
                             send(
                               writeContractAsync({
-                                address: env.marketplaceRegistryAddress,
+                                address: registryAddress,
+                                chainId: activeChain.chainId,
                                 abi: marketplaceRegistryAbi,
                                 functionName: "enterRaffle",
                                 args: [listingId, parsedTicketCount ?? 0],
@@ -995,7 +1028,8 @@ export default function ListingDetailPage() {
                         onClick={() =>
                           send(
                             writeContractAsync({
-                              address: env.marketplaceRegistryAddress,
+                                address: registryAddress,
+                                chainId: activeChain.chainId,
                               abi: marketplaceRegistryAbi,
                               functionName: "enterRaffle",
                               args: [listingId, parsedTicketCount ?? 0],
@@ -1018,7 +1052,8 @@ export default function ListingDetailPage() {
                           className="w-full sm:w-auto"
                           disabled={receipt.isLoading}
                           onClick={() => send(writeContractAsync({
-                            address: env.marketplaceRegistryAddress,
+                            address: registryAddress,
+                            chainId: activeChain.chainId,
                             abi: marketplaceRegistryAbi,
                             functionName: "closeRaffle",
                             args: [listingId, reveal],
@@ -1045,13 +1080,14 @@ export default function ListingDetailPage() {
                       className="w-full sm:w-auto"
                       disabled={receipt.isLoading}
                       onClick={() => send(writeContractAsync({
-                        address: env.marketplaceRegistryAddress,
+                        address: registryAddress,
+                        chainId: activeChain.chainId,
                         abi: marketplaceRegistryAbi,
                         functionName: "withdrawPayout",
                         args: [zeroAddress],
                       }))}
                     >
-                      Withdraw ETH
+                      Withdraw native payout
                     </Button>
                   </div>
                 </div>

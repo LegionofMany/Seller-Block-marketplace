@@ -24,7 +24,7 @@ export async function issueNonce(req: Request, res: Response) {
   return res.status(201).json({
     address,
     nonce,
-    message: buildAuthMessage(address, nonce),
+    message: buildAuthMessage(address, nonce, env),
     expiresAt,
   });
 }
@@ -49,7 +49,7 @@ export async function verifyNonce(req: Request, res: Response) {
     throw new HttpError(401, "Nonce has expired", "EXPIRED_AUTH_NONCE");
   }
 
-  const message = buildAuthMessage(address, nonce);
+  const message = buildAuthMessage(address, nonce, env);
   let recovered: string;
   try {
     recovered = requireAddress(verifyMessage(message, parsed.data.signature), "signature");

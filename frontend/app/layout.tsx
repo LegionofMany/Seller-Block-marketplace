@@ -10,7 +10,7 @@ import { Toaster } from "sonner";
 
 export const metadata: Metadata = {
   title: "Seller Block Marketplace",
-  description: "A Web3 marketplace powered by MarketplaceRegistry on Sepolia.",
+  description: "A Web3 marketplace powered by MarketplaceRegistry.",
 };
 
 export default function RootLayout({

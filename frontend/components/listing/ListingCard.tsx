@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { type ListingSummary } from "@/lib/hooks/useListings";
+import { buildListingHref } from "@/lib/listings";
 import { saleTypeLabel, statusLabel } from "@/lib/contracts/types";
 import { formatPrice, shortAddress } from "@/lib/format";
 import { useMarketplaceMetadata } from "@/lib/metadata";
@@ -30,7 +31,7 @@ export function ListingCard({ row }: { row: ListingSummary }) {
   const subtitleParts = [metadata?.category, metadata?.city, metadata?.region, metadata?.postalCode].filter(Boolean).join(" • ");
 
   return (
-    <Link href={`/listing/${row.id}`} className="block">
+    <Link href={buildListingHref(row.id, row.chainKey)} className="block">
       <Card className={promotedLabel ? "h-full border-amber-300/70 bg-amber-50/40 transition-colors hover:bg-amber-100/50 active:bg-amber-100/70" : "h-full transition-colors hover:bg-accent/30 active:bg-accent/40"}>
         <CardHeader>
           <div className="flex items-start justify-between gap-3">

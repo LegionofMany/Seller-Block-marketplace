@@ -86,15 +86,17 @@ async function main() {
     logger.info({ port: env.port }, "API running");
   });
 
-  const indexer = startMarketplaceIndexer();
+  const indexers = env.supportedChains.map((chain) => startMarketplaceIndexer(chain));
   const notificationsWorker = startNotificationsWorker();
 
   async function shutdown(signal: string) {
     logger.info({ signal }, "shutting down");
-    try {
-      indexer.stop();
-    } catch {
-      // ignore
+    for (const indexer of indexers) {
+      try {
+        indexer.stop();
+      } catch {
+        // ignore
+      }
     }
     try {
       notificationsWorker.stop();

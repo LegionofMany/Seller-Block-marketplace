@@ -29,25 +29,29 @@ const raffleAbi = [
   "function quoteEntry(bytes32 raffleId, uint32 ticketCount) view returns (uint256 amount)",
 ] as const;
 
-let providerSingleton: AbstractProvider | null = null;
-let protocolAddrCache: { value: ProtocolAddresses; fetchedAt: number } | null = null;
+const providerCache = new Map<string, AbstractProvider>();
+const protocolAddrCache = new Map<string, { value: ProtocolAddresses; fetchedAt: number }>();
 
 export function getProvider(rpcUrl: string | Array<string | undefined>) {
-  if (providerSingleton) return providerSingleton;
-
   const urls = (Array.isArray(rpcUrl) ? rpcUrl : [rpcUrl]).filter((u): u is string => Boolean(u && u.trim().length));
   if (urls.length === 0) throw new Error("Missing RPC URL");
 
+  const cacheKey = urls.join("|");
+  const cached = providerCache.get(cacheKey);
+  if (cached) return cached;
+
   if (urls.length === 1) {
-    providerSingleton = new JsonRpcProvider(urls[0]);
-    return providerSingleton;
+    const provider = new JsonRpcProvider(urls[0]);
+    providerCache.set(cacheKey, provider);
+    return provider;
   }
 
   const providers = urls.map((u) => new JsonRpcProvider(u));
-  providerSingleton = new FallbackProvider(
+  const provider = new FallbackProvider(
     providers.map((p, i) => ({ provider: p, priority: i + 1, stallTimeout: 2_500, weight: 1 }))
   );
-  return providerSingleton;
+  providerCache.set(cacheKey, provider);
+  return provider;
 }
 
 export function getRegistryContract(provider: AbstractProvider, registryAddress: string) {
@@ -72,7 +76,9 @@ export async function getProtocolAddresses(
   cacheMs: number
 ): Promise<ProtocolAddresses> {
   const now = Date.now();
-  if (protocolAddrCache && now - protocolAddrCache.fetchedAt < cacheMs) return protocolAddrCache.value;
+  const cacheKey = `${registryAddress.toLowerCase()}:${cacheMs}`;
+  const cached = protocolAddrCache.get(cacheKey);
+  if (cached && now - cached.fetchedAt < cacheMs) return cached.value;
 
   const registry = getRegistryContract(provider, registryAddress);
   const [escrowVault, auctionModule, raffleModule] = await Promise.all([
@@ -87,7 +93,7 @@ export async function getProtocolAddresses(
     raffleModule: getAddress(raffleModule),
   };
 
-  protocolAddrCache = { value, fetchedAt: now };
+  protocolAddrCache.set(cacheKey, { value, fetchedAt: now });
   return value;
 }
 

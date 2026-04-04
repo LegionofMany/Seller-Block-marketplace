@@ -3,6 +3,8 @@ import path from "node:path";
 import { Pool } from "pg";
 
 export type ListingRow = {
+  chainKey: string;
+  chainId: number;
   id: string;
   seller: string;
   metadataURI: string;
@@ -18,6 +20,7 @@ export type ListingRow = {
 };
 
 export type AuctionRow = {
+  chainKey: string;
   listingId: string;
   highestBid: string;
   highestBidder: string;
@@ -25,6 +28,7 @@ export type AuctionRow = {
 };
 
 export type RaffleRow = {
+  chainKey: string;
   listingId: string;
   ticketsSold: number;
   endTime: number;
@@ -79,6 +83,7 @@ export type AuthNonceRow = {
 export type ConversationRow = {
   id: number;
   listingId?: string | null;
+  listingChainKey?: string | null;
   createdBy: string;
   createdAt: number;
   updatedAt: number;
@@ -136,6 +141,7 @@ export type PaymentRow = {
   id: number;
   userAddress: string;
   listingId?: string | null;
+  listingChainKey?: string | null;
   provider: string;
   providerSessionId?: string | null;
   status: string;
@@ -150,6 +156,7 @@ export type PaymentRow = {
 export type PromotionRow = {
   id: number;
   listingId: string;
+  listingChainKey: string;
   paymentId?: number | null;
   type: "bump" | "top" | "featured";
   status: string;
@@ -256,6 +263,8 @@ export async function closeDb(db: Pool): Promise<void> {
 
 function toListingRow(r: any): ListingRow {
   return {
+    chainKey: String(r.chainKey ?? r.chainkey),
+    chainId: Number(r.chainId ?? r.chainid ?? 0),
     id: String(r.id),
     seller: String(r.seller),
     metadataURI: String(r.metadataURI ?? r.metadatauri ?? r.metadata_uri),
@@ -322,6 +331,7 @@ function toPaymentRow(r: any): PaymentRow {
     id: Number(r.id),
     userAddress: String(r.userAddress ?? r.useraddress),
     listingId: r.listingId ?? r.listingid ?? null,
+    listingChainKey: r.listingChainKey ?? r.listingchainkey ?? null,
     provider: String(r.provider),
     providerSessionId: r.providerSessionId ?? r.providersessionid ?? null,
     status: String(r.status),
@@ -338,6 +348,7 @@ function toPromotionRow(r: any): PromotionRow {
   return {
     id: Number(r.id),
     listingId: String(r.listingId ?? r.listingid),
+    listingChainKey: String(r.listingChainKey ?? r.listingchainkey),
     paymentId: r.paymentId != null || r.paymentid != null ? Number(r.paymentId ?? r.paymentid) : null,
     type: String(r.type) as PromotionRow["type"],
     status: String(r.status),
@@ -351,6 +362,7 @@ function toPromotionRow(r: any): PromotionRow {
 
 function toAuctionRow(r: any): AuctionRow {
   return {
+    chainKey: String(r.chainKey ?? r.chainkey),
     listingId: String(r.listingId ?? r.listingid ?? r.listing_id),
     highestBid: String(r.highestBid ?? r.highestbid ?? r.highest_bid),
     highestBidder: String(r.highestBidder ?? r.highestbidder ?? r.highest_bidder),
@@ -360,6 +372,7 @@ function toAuctionRow(r: any): AuctionRow {
 
 function toRaffleRow(r: any): RaffleRow {
   return {
+    chainKey: String(r.chainKey ?? r.chainkey),
     listingId: String(r.listingId ?? r.listingid ?? r.listing_id),
     ticketsSold: Number(r.ticketsSold ?? r.ticketssold ?? r.tickets_sold),
     endTime: Number(r.endTime ?? r.endtime ?? r.end_time),
@@ -407,9 +420,10 @@ export async function setCheckpoint(_db: Pool | any, key: string, value: number)
 export async function upsertListing(_db: Pool | any, row: ListingRow) {
   const p = ensurePool(_db);
   await p.query(
-    `INSERT INTO listings(id, seller, metadataURI, price, token, saleType, active, createdAt, blockNumber)
-     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)
-     ON CONFLICT (id) DO UPDATE SET
+    `INSERT INTO listings(chainkey, chainid, id, seller, metadataURI, price, token, saleType, active, createdAt, blockNumber)
+     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+     ON CONFLICT (chainkey, id) DO UPDATE SET
+       chainid = EXCLUDED.chainid,
        seller = EXCLUDED.seller,
        metadataURI = EXCLUDED.metadataURI,
        price = EXCLUDED.price,
@@ -419,87 +433,97 @@ export async function upsertListing(_db: Pool | any, row: ListingRow) {
        createdAt = EXCLUDED.createdAt,
        blockNumber = EXCLUDED.blockNumber
     `,
-    [row.id, row.seller, row.metadataURI, row.price, row.token, row.saleType, row.active, row.createdAt, row.blockNumber]
+    [row.chainKey, row.chainId, row.id, row.seller, row.metadataURI, row.price, row.token, row.saleType, row.active, row.createdAt, row.blockNumber]
   );
 }
 
-export async function setListingActive(_db: Pool | any, listingId: string, active: 0 | 1) {
+export async function setListingActive(_db: Pool | any, listingId: string, chainKey: string, active: 0 | 1) {
   const p = ensurePool(_db);
-  await p.query("UPDATE listings SET active = $1 WHERE id = $2", [active, listingId]);
+  await p.query("UPDATE listings SET active = $1 WHERE chainkey = $2 AND id = $3", [active, chainKey, listingId]);
 }
 
 export async function upsertAuction(_db: Pool | any, row: AuctionRow) {
   const p = ensurePool(_db);
   await p.query(
-    `INSERT INTO auctions(listingId, highestBid, highestBidder, endTime)
-     VALUES($1,$2,$3,$4)
-     ON CONFLICT (listingId) DO UPDATE SET
+    `INSERT INTO auctions(chainkey, listingId, highestBid, highestBidder, endTime)
+     VALUES($1,$2,$3,$4,$5)
+     ON CONFLICT (chainkey, listingId) DO UPDATE SET
        highestBid = EXCLUDED.highestBid,
        highestBidder = EXCLUDED.highestBidder,
        endTime = EXCLUDED.endTime
     `,
-    [row.listingId, row.highestBid, row.highestBidder, row.endTime]
+    [row.chainKey, row.listingId, row.highestBid, row.highestBidder, row.endTime]
   );
 }
 
-export async function updateAuctionBid(_db: Pool | any, listingId: string, bidder: string, amount: bigint) {
+export async function updateAuctionBid(_db: Pool | any, listingId: string, chainKey: string, bidder: string, amount: bigint) {
   const p = ensurePool(_db);
-  const res = await p.query('SELECT highestbid AS "highestBid" FROM auctions WHERE listingid = $1', [listingId]);
+  const res = await p.query('SELECT highestbid AS "highestBid" FROM auctions WHERE chainkey = $1 AND listingid = $2', [chainKey, listingId]);
   const current = res.rows.length ? BigInt(res.rows[0].highestBid) : 0n;
   if (amount <= current) return;
   await p.query(
-    `INSERT INTO auctions(listingId, highestBid, highestBidder, endTime)
-     VALUES($1,$2,$3,0)
-     ON CONFLICT (listingId) DO UPDATE SET highestBid = EXCLUDED.highestBid, highestBidder = EXCLUDED.highestBidder`,
-    [listingId, amount.toString(), bidder]
+    `INSERT INTO auctions(chainkey, listingId, highestBid, highestBidder, endTime)
+     VALUES($1,$2,$3,$4,0)
+     ON CONFLICT (chainkey, listingId) DO UPDATE SET highestBid = EXCLUDED.highestBid, highestBidder = EXCLUDED.highestBidder`,
+    [chainKey, listingId, amount.toString(), bidder]
   );
 }
 
 export async function upsertRaffle(_db: Pool | any, row: RaffleRow) {
   const p = ensurePool(_db);
   await p.query(
-    `INSERT INTO raffles(listingId, ticketsSold, endTime)
-     VALUES($1,$2,$3)
-     ON CONFLICT (listingId) DO UPDATE SET
+    `INSERT INTO raffles(chainkey, listingId, ticketsSold, endTime)
+     VALUES($1,$2,$3,$4)
+     ON CONFLICT (chainkey, listingId) DO UPDATE SET
        ticketsSold = EXCLUDED.ticketsSold,
        endTime = EXCLUDED.endTime`,
-    [row.listingId, row.ticketsSold, row.endTime]
+    [row.chainKey, row.listingId, row.ticketsSold, row.endTime]
   );
 }
 
-export async function incrementRaffleTickets(_db: Pool | any, listingId: string, tickets: number) {
+export async function incrementRaffleTickets(_db: Pool | any, listingId: string, chainKey: string, tickets: number) {
   const p = ensurePool(_db);
   await p.query(
-    `INSERT INTO raffles(listingId, ticketsSold, endTime)
-     VALUES($1,$2,0)
-     ON CONFLICT (listingId) DO UPDATE SET ticketsSold = raffles.ticketsSold + EXCLUDED.ticketsSold`,
-    [listingId, tickets]
+    `INSERT INTO raffles(chainkey, listingId, ticketsSold, endTime)
+     VALUES($1,$2,$3,0)
+     ON CONFLICT (chainkey, listingId) DO UPDATE SET ticketsSold = raffles.ticketsSold + EXCLUDED.ticketsSold`,
+    [chainKey, listingId, tickets]
   );
 }
 
-export async function findListing(_db: Pool | any, id: string): Promise<ListingRow | null> {
+export async function findListing(_db: Pool | any, id: string, chainKey?: string): Promise<ListingRow | null> {
   const p = ensurePool(_db);
   const res = await p.query(
-    'SELECT id, seller, metadatauri AS "metadataURI", price, token, saletype AS "saleType", active, createdat AS "createdAt", blocknumber AS "blockNumber" FROM listings WHERE id = $1',
-    [id]
+    `SELECT chainkey AS "chainKey", chainid AS "chainId", id, seller, metadatauri AS "metadataURI", price, token, saletype AS "saleType", active, createdat AS "createdAt", blocknumber AS "blockNumber"
+     FROM listings
+     WHERE id = $1${chainKey ? ' AND chainkey = $2' : ''}
+     ORDER BY blocknumber DESC
+     LIMIT 1`,
+    chainKey ? [id, chainKey] : [id]
   );
   return res.rows[0] ? toListingRow(res.rows[0]) : null;
 }
 
-export async function findAuction(_db: Pool | any, listingId: string): Promise<AuctionRow | null> {
+export async function findAuction(_db: Pool | any, listingId: string, chainKey?: string): Promise<AuctionRow | null> {
   const p = ensurePool(_db);
   const res = await p.query(
-    'SELECT listingid AS "listingId", highestbid AS "highestBid", highestbidder AS "highestBidder", endtime AS "endTime" FROM auctions WHERE listingid = $1',
-    [listingId]
+    `SELECT chainkey AS "chainKey", listingid AS "listingId", highestbid AS "highestBid", highestbidder AS "highestBidder", endtime AS "endTime"
+     FROM auctions
+     WHERE listingid = $1${chainKey ? ' AND chainkey = $2' : ''}
+     LIMIT 1`,
+    chainKey ? [listingId, chainKey] : [listingId]
   );
   return res.rows[0] ? toAuctionRow(res.rows[0]) : null;
 }
 
-export async function findRaffle(_db: Pool | any, listingId: string): Promise<RaffleRow | null> {
+export async function findRaffle(_db: Pool | any, listingId: string, chainKey?: string): Promise<RaffleRow | null> {
   const p = ensurePool(_db);
   const res = await p.query(
-    'SELECT listingid AS "listingId", ticketssold AS "ticketsSold", endtime AS "endTime" FROM raffles WHERE listingid = $1',
-    [listingId]
+    `SELECT chainkey AS "chainKey", listingid AS "listingId", ticketssold AS "ticketsSold", endtime AS "endTime"
+     FROM raffles
+     WHERE listingid = $1${chainKey ? ' AND chainkey = $2' : ''}
+     LIMIT 1`,
+    chainKey ? [listingId, chainKey] : [listingId]
   );
   return res.rows[0] ? toRaffleRow(res.rows[0]) : null;
 }
@@ -565,6 +589,7 @@ export async function findMetadataByUri(_db: Pool | any, uri: string): Promise<M
 }
 
 export type ListingsQuery = {
+  chainKey?: string | undefined;
   seller?: string | undefined;
   saleType?: number | undefined;
   active?: boolean | undefined;
@@ -593,6 +618,10 @@ export async function queryListings(_db: Pool | any, q: ListingsQuery) {
   if (q.seller) {
     where.push(`seller = $${params.length + 1}`);
     params.push(q.seller);
+  }
+  if (q.chainKey) {
+    where.push(`listings.chainkey = $${params.length + 1}`);
+    params.push(q.chainKey);
   }
   if (typeof q.saleType === "number") {
     where.push(`saleType = $${params.length + 1}`);
@@ -642,7 +671,7 @@ export async function queryListings(_db: Pool | any, q: ListingsQuery) {
 
   if (typeof q.autoHideReportThreshold === "number" && q.autoHideReportThreshold > 0) {
     where.push(
-      `(SELECT COUNT(1) FROM reports r WHERE r.targettype = 'listing' AND r.targetid = listings.id) < $${params.length + 1}`
+      `(SELECT COUNT(1) FROM reports r WHERE r.targettype = 'listing' AND r.targetid = CONCAT(listings.chainkey, ':', listings.id)) < $${params.length + 1}`
     );
     params.push(q.autoHideReportThreshold);
   }
@@ -661,7 +690,9 @@ export async function queryListings(_db: Pool | any, q: ListingsQuery) {
   const offsetParam = `$${params.length}`;
 
   const res = await p.query(
-    `SELECT listings.id,
+      `SELECT listings.chainkey AS "chainKey",
+        listings.chainid AS "chainId",
+        listings.id,
             listings.seller,
             listings.metadatauri AS "metadataURI",
             listings.price,
@@ -678,7 +709,7 @@ export async function queryListings(_db: Pool | any, q: ListingsQuery) {
      LEFT JOIN LATERAL (
        SELECT type, priority, endsat
        FROM promotions
-       WHERE listingid = listings.id AND status = 'active' AND startsat <= EXTRACT(EPOCH FROM NOW())::BIGINT * 1000 AND endsat > EXTRACT(EPOCH FROM NOW())::BIGINT * 1000
+       WHERE listingchainkey = listings.chainkey AND listingid = listings.id AND status = 'active' AND startsat <= EXTRACT(EPOCH FROM NOW())::BIGINT * 1000 AND endsat > EXTRACT(EPOCH FROM NOW())::BIGINT * 1000
        ORDER BY priority DESC, endsat DESC, id DESC
        LIMIT 1
      ) ap ON true
@@ -780,6 +811,7 @@ function toConversationRow(r: any): ConversationRow {
   return {
     id: Number(r.id),
     listingId: r.listingId ?? r.listingid ?? null,
+    listingChainKey: r.listingChainKey ?? r.listingchainkey ?? null,
     createdBy: String(r.createdBy ?? r.createdby),
     createdAt: Number(r.createdAt ?? r.createdat ?? 0),
     updatedAt: Number(r.updatedAt ?? r.updatedat ?? 0),
@@ -943,28 +975,28 @@ export async function hasUserBlockBetween(_db: Pool | any, a: string, b: string)
   return Boolean(res.rows[0]);
 }
 
-export async function findConversationByParticipants(_db: Pool | any, a: string, b: string, listingId?: string | null): Promise<ConversationRow | null> {
+export async function findConversationByParticipants(_db: Pool | any, a: string, b: string, listingId?: string | null, listingChainKey?: string | null): Promise<ConversationRow | null> {
   const p = ensurePool(_db);
   const res = await p.query(
-    `SELECT c.id, c.listingid AS "listingId", c.createdby AS "createdBy", c.createdat AS "createdAt", c.updatedat AS "updatedAt"
+    `SELECT c.id, c.listingid AS "listingId", c.listingchainkey AS "listingChainKey", c.createdby AS "createdBy", c.createdat AS "createdAt", c.updatedat AS "updatedAt"
      FROM conversations c
      INNER JOIN conversation_participants p1 ON p1.conversationid = c.id AND p1.participant = $1
      INNER JOIN conversation_participants p2 ON p2.conversationid = c.id AND p2.participant = $2
-     WHERE (($3::text IS NULL AND c.listingid IS NULL) OR c.listingid = $3)
+     WHERE (($3::text IS NULL AND c.listingid IS NULL) OR (c.listingid = $3 AND (($4::text IS NULL AND c.listingchainkey IS NULL) OR c.listingchainkey = $4 OR c.listingchainkey IS NULL)))
      ORDER BY c.updatedat DESC
      LIMIT 1`,
-    [a, b, listingId ?? null]
+    [a, b, listingId ?? null, listingChainKey ?? null]
   );
   return res.rows[0] ? toConversationRow(res.rows[0]) : null;
 }
 
-export async function createConversation(_db: Pool | any, input: { listingId?: string | null; createdBy: string; createdAt: number; updatedAt: number }): Promise<ConversationRow> {
+export async function createConversation(_db: Pool | any, input: { listingId?: string | null; listingChainKey?: string | null; createdBy: string; createdAt: number; updatedAt: number }): Promise<ConversationRow> {
   const p = ensurePool(_db);
   const res = await p.query(
-    `INSERT INTO conversations(listingId, createdBy, createdAt, updatedAt)
-     VALUES($1,$2,$3,$4)
-     RETURNING id, listingid AS "listingId", createdby AS "createdBy", createdat AS "createdAt", updatedat AS "updatedAt"`,
-    [input.listingId ?? null, input.createdBy, input.createdAt, input.updatedAt]
+    `INSERT INTO conversations(listingId, listingchainkey, createdBy, createdAt, updatedAt)
+     VALUES($1,$2,$3,$4,$5)
+     RETURNING id, listingid AS "listingId", listingchainkey AS "listingChainKey", createdby AS "createdBy", createdat AS "createdAt", updatedat AS "updatedAt"`,
+    [input.listingId ?? null, input.listingChainKey ?? null, input.createdBy, input.createdAt, input.updatedAt]
   );
   return toConversationRow(res.rows[0]);
 }
@@ -982,7 +1014,7 @@ export async function addConversationParticipant(_db: Pool | any, conversationId
 export async function getConversation(_db: Pool | any, conversationId: number): Promise<ConversationRow | null> {
   const p = ensurePool(_db);
   const res = await p.query(
-    'SELECT id, listingid AS "listingId", createdby AS "createdBy", createdat AS "createdAt", updatedat AS "updatedAt" FROM conversations WHERE id = $1',
+    'SELECT id, listingid AS "listingId", listingchainkey AS "listingChainKey", createdby AS "createdBy", createdat AS "createdAt", updatedat AS "updatedAt" FROM conversations WHERE id = $1',
     [conversationId]
   );
   return res.rows[0] ? toConversationRow(res.rows[0]) : null;
@@ -1004,6 +1036,7 @@ export async function listUserConversations(_db: Pool | any, participant: string
   const res = await p.query(
     `SELECT c.id,
             c.listingid AS "listingId",
+          c.listingchainkey AS "listingChainKey",
             c.createdby AS "createdBy",
             c.createdat AS "createdAt",
             c.updatedat AS "updatedAt",
@@ -1180,13 +1213,13 @@ export async function markAllNotificationsRead(_db: Pool | any, userAddress: str
   await p.query('UPDATE notifications SET readat = $2 WHERE useraddress = $1 AND readat IS NULL', [userAddress, readAt]);
 }
 
-export async function createPayment(_db: Pool | any, input: { userAddress: string; listingId?: string | null; provider: string; providerSessionId?: string | null; status: string; amount: number; currency: string; promotionType?: string | null; metadata: Record<string, unknown>; createdAt: number; updatedAt: number }): Promise<PaymentRow> {
+export async function createPayment(_db: Pool | any, input: { userAddress: string; listingId?: string | null; listingChainKey?: string | null; provider: string; providerSessionId?: string | null; status: string; amount: number; currency: string; promotionType?: string | null; metadata: Record<string, unknown>; createdAt: number; updatedAt: number }): Promise<PaymentRow> {
   const p = ensurePool(_db);
   const res = await p.query(
-    `INSERT INTO payments(useraddress, listingid, provider, providersessionid, status, amount, currency, promotiontype, metadatajson, createdat, updatedat)
-     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
-     RETURNING id, useraddress AS "userAddress", listingid AS "listingId", provider, providersessionid AS "providerSessionId", status, amount, currency, promotiontype AS "promotionType", metadatajson AS "metadataJson", createdat AS "createdAt", updatedat AS "updatedAt"`,
-    [input.userAddress, input.listingId ?? null, input.provider, input.providerSessionId ?? null, input.status, input.amount, input.currency, input.promotionType ?? null, JSON.stringify(input.metadata), input.createdAt, input.updatedAt]
+    `INSERT INTO payments(useraddress, listingid, listingchainkey, provider, providersessionid, status, amount, currency, promotiontype, metadatajson, createdat, updatedat)
+     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+     RETURNING id, useraddress AS "userAddress", listingid AS "listingId", listingchainkey AS "listingChainKey", provider, providersessionid AS "providerSessionId", status, amount, currency, promotiontype AS "promotionType", metadatajson AS "metadataJson", createdat AS "createdAt", updatedat AS "updatedAt"`,
+    [input.userAddress, input.listingId ?? null, input.listingChainKey ?? null, input.provider, input.providerSessionId ?? null, input.status, input.amount, input.currency, input.promotionType ?? null, JSON.stringify(input.metadata), input.createdAt, input.updatedAt]
   );
   return toPaymentRow(res.rows[0]);
 }
@@ -1194,7 +1227,7 @@ export async function createPayment(_db: Pool | any, input: { userAddress: strin
 export async function findPaymentByProviderSessionId(_db: Pool | any, providerSessionId: string): Promise<PaymentRow | null> {
   const p = ensurePool(_db);
   const res = await p.query(
-    'SELECT id, useraddress AS "userAddress", listingid AS "listingId", provider, providersessionid AS "providerSessionId", status, amount, currency, promotiontype AS "promotionType", metadatajson AS "metadataJson", createdat AS "createdAt", updatedat AS "updatedAt" FROM payments WHERE providersessionid = $1 LIMIT 1',
+    'SELECT id, useraddress AS "userAddress", listingid AS "listingId", listingchainkey AS "listingChainKey", provider, providersessionid AS "providerSessionId", status, amount, currency, promotiontype AS "promotionType", metadatajson AS "metadataJson", createdat AS "createdAt", updatedat AS "updatedAt" FROM payments WHERE providersessionid = $1 LIMIT 1',
     [providerSessionId]
   );
   return res.rows[0] ? toPaymentRow(res.rows[0]) : null;
@@ -1208,7 +1241,7 @@ export async function updatePaymentStatus(_db: Pool | any, input: { id: number; 
          metadatajson = $3,
          updatedat = $4
      WHERE id = $1
-     RETURNING id, useraddress AS "userAddress", listingid AS "listingId", provider, providersessionid AS "providerSessionId", status, amount, currency, promotiontype AS "promotionType", metadatajson AS "metadataJson", createdat AS "createdAt", updatedat AS "updatedAt"`,
+     RETURNING id, useraddress AS "userAddress", listingid AS "listingId", listingchainkey AS "listingChainKey", provider, providersessionid AS "providerSessionId", status, amount, currency, promotiontype AS "promotionType", metadatajson AS "metadataJson", createdat AS "createdAt", updatedat AS "updatedAt"`,
     [input.id, input.status, JSON.stringify(input.metadata), input.updatedAt]
   );
   return res.rows[0] ? toPaymentRow(res.rows[0]) : null;
@@ -1217,32 +1250,32 @@ export async function updatePaymentStatus(_db: Pool | any, input: { id: number; 
 export async function listPaymentsByUser(_db: Pool | any, userAddress: string): Promise<PaymentRow[]> {
   const p = ensurePool(_db);
   const res = await p.query(
-    'SELECT id, useraddress AS "userAddress", listingid AS "listingId", provider, providersessionid AS "providerSessionId", status, amount, currency, promotiontype AS "promotionType", metadatajson AS "metadataJson", createdat AS "createdAt", updatedat AS "updatedAt" FROM payments WHERE useraddress = $1 ORDER BY createdat DESC, id DESC',
+    'SELECT id, useraddress AS "userAddress", listingid AS "listingId", listingchainkey AS "listingChainKey", provider, providersessionid AS "providerSessionId", status, amount, currency, promotiontype AS "promotionType", metadatajson AS "metadataJson", createdat AS "createdAt", updatedat AS "updatedAt" FROM payments WHERE useraddress = $1 ORDER BY createdat DESC, id DESC',
     [userAddress]
   );
   return res.rows.map(toPaymentRow);
 }
 
-export async function findActivePromotionByListing(_db: Pool | any, listingId: string, now: number): Promise<PromotionRow | null> {
+export async function findActivePromotionByListing(_db: Pool | any, listingId: string, listingChainKey: string, now: number): Promise<PromotionRow | null> {
   const p = ensurePool(_db);
   const res = await p.query(
-    `SELECT id, listingid AS "listingId", paymentid AS "paymentId", type, status, priority, startsat AS "startsAt", endsat AS "endsAt", createdat AS "createdAt", updatedat AS "updatedAt"
+    `SELECT id, listingid AS "listingId", listingchainkey AS "listingChainKey", paymentid AS "paymentId", type, status, priority, startsat AS "startsAt", endsat AS "endsAt", createdat AS "createdAt", updatedat AS "updatedAt"
      FROM promotions
-     WHERE listingid = $1 AND status = 'active' AND startsat <= $2 AND endsat > $2
+     WHERE listingchainkey = $1 AND listingid = $2 AND status = 'active' AND startsat <= $3 AND endsat > $3
      ORDER BY priority DESC, endsat DESC, id DESC
      LIMIT 1`,
-    [listingId, now]
+    [listingChainKey, listingId, now]
   );
   return res.rows[0] ? toPromotionRow(res.rows[0]) : null;
 }
 
-export async function createPromotion(_db: Pool | any, input: { listingId: string; paymentId?: number | null; type: PromotionRow['type']; status: string; priority: number; startsAt: number; endsAt: number; createdAt: number; updatedAt: number }): Promise<PromotionRow> {
+export async function createPromotion(_db: Pool | any, input: { listingId: string; listingChainKey: string; paymentId?: number | null; type: PromotionRow['type']; status: string; priority: number; startsAt: number; endsAt: number; createdAt: number; updatedAt: number }): Promise<PromotionRow> {
   const p = ensurePool(_db);
   const res = await p.query(
-    `INSERT INTO promotions(listingid, paymentid, type, status, priority, startsat, endsat, createdat, updatedat)
-     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)
-     RETURNING id, listingid AS "listingId", paymentid AS "paymentId", type, status, priority, startsat AS "startsAt", endsat AS "endsAt", createdat AS "createdAt", updatedat AS "updatedAt"`,
-    [input.listingId, input.paymentId ?? null, input.type, input.status, input.priority, input.startsAt, input.endsAt, input.createdAt, input.updatedAt]
+    `INSERT INTO promotions(listingid, listingchainkey, paymentid, type, status, priority, startsat, endsat, createdat, updatedat)
+     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+     RETURNING id, listingid AS "listingId", listingchainkey AS "listingChainKey", paymentid AS "paymentId", type, status, priority, startsat AS "startsAt", endsat AS "endsAt", createdat AS "createdAt", updatedat AS "updatedAt"`,
+    [input.listingId, input.listingChainKey, input.paymentId ?? null, input.type, input.status, input.priority, input.startsAt, input.endsAt, input.createdAt, input.updatedAt]
   );
   return toPromotionRow(res.rows[0]);
 }
@@ -1257,6 +1290,7 @@ export async function listPromotionsByUser(_db: Pool | any, userAddress: string)
   const res = await p.query(
     `SELECT pr.id,
             pr.listingid AS "listingId",
+          pr.listingchainkey AS "listingChainKey",
             pr.paymentid AS "paymentId",
             pr.type,
             pr.status,
@@ -1266,7 +1300,7 @@ export async function listPromotionsByUser(_db: Pool | any, userAddress: string)
             pr.createdat AS "createdAt",
             pr.updatedat AS "updatedAt"
      FROM promotions pr
-     INNER JOIN listings l ON l.id = pr.listingid
+               INNER JOIN listings l ON l.chainkey = pr.listingchainkey AND l.id = pr.listingid
      WHERE l.seller = $1
      ORDER BY pr.createdat DESC, pr.id DESC`,
     [userAddress]

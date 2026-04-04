@@ -6,10 +6,12 @@ import { HttpError } from "../middlewares/errors";
 import { getContext } from "../services/context";
 import { createNotification, createPayment, createPromotion, findActivePromotionByListing, findListing, findPaymentByProviderSessionId, listPaymentsByUser, listPromotionsByUser, updatePaymentStatus } from "../services/db";
 import { getPromotionConfig, getPromotionConfigs, getStripeClient, type PromotionType } from "../services/promotions";
+import { normalizeChainKey } from "../utils/listings";
 import { requireBytes32 } from "../utils/validation";
 
 const checkoutSchema = z.object({
   listingId: z.string().min(1),
+  chainKey: z.string().min(1).optional(),
   promotionType: z.enum(["bump", "top", "featured"]),
 });
 
@@ -36,13 +38,14 @@ export async function createPromotionCheckoutSession(req: Request, res: Response
   if (!env.frontendAppUrl) throw new HttpError(503, "FRONTEND_APP_URL is not configured", "FRONTEND_URL_NOT_CONFIGURED");
 
   const listingId = requireBytes32(parsed.data.listingId, "listingId");
-  const listing = await findListing(db, listingId);
+  const listingChainKey = normalizeChainKey(parsed.data.chainKey) ?? env.chainKey;
+  const listing = await findListing(db, listingId, listingChainKey);
   if (!listing) throw new HttpError(404, "Listing not found", "LISTING_NOT_FOUND");
   if (listing.seller.toLowerCase() !== address.toLowerCase()) {
     throw new HttpError(403, "You can only promote your own listing", "PROMOTION_FORBIDDEN");
   }
 
-  const existing = await findActivePromotionByListing(db, listingId, Date.now());
+  const existing = await findActivePromotionByListing(db, listingId, listing.chainKey, Date.now());
   if (existing && existing.type === parsed.data.promotionType) {
     throw new HttpError(409, "This listing already has an active promotion of that type", "PROMOTION_ALREADY_ACTIVE");
   }
@@ -70,6 +73,7 @@ export async function createPromotionCheckoutSession(req: Request, res: Response
     ],
     metadata: {
       listingId,
+      chainKey: listing.chainKey,
       promotionType: parsed.data.promotionType,
       userAddress: address,
     },
@@ -79,6 +83,7 @@ export async function createPromotionCheckoutSession(req: Request, res: Response
   await createPayment(db, {
     userAddress: address,
     listingId,
+    listingChainKey: listing.chainKey,
     provider: "stripe",
     providerSessionId: session.id,
     status: "pending",
@@ -96,7 +101,7 @@ export async function createPromotionCheckoutSession(req: Request, res: Response
 }
 
 export async function confirmPromotionCheckoutSession(req: Request, res: Response) {
-  const { db } = getContext();
+  const { db, env } = getContext();
   const address = requireAuthAddress(req);
   const parsed = confirmSchema.safeParse(req.body);
   if (!parsed.success) throw new HttpError(400, "Invalid promotion confirm payload", "INVALID_PROMOTION_CONFIRM");
@@ -129,7 +134,8 @@ export async function confirmPromotionCheckoutSession(req: Request, res: Respons
     throw new HttpError(500, "Payment is missing promotion metadata", "INVALID_PAYMENT_STATE");
   }
 
-  const alreadyActive = await findActivePromotionByListing(db, payment.listingId, Date.now());
+  const listingChainKey = payment.listingChainKey ?? env.chainKey;
+  const alreadyActive = await findActivePromotionByListing(db, payment.listingId, listingChainKey, Date.now());
   if (payment.status === "completed" && alreadyActive) {
     return res.json({ payment, promotion: alreadyActive, activated: true });
   }
@@ -138,6 +144,7 @@ export async function confirmPromotionCheckoutSession(req: Request, res: Respons
   const now = Date.now();
   const promotion = await createPromotion(db, {
     listingId: payment.listingId,
+    listingChainKey,
     paymentId: payment.id,
     type: payment.promotionType as PromotionType,
     status: "active",
@@ -167,6 +174,7 @@ export async function confirmPromotionCheckoutSession(req: Request, res: Respons
     dedupeKey: `promotion-activated:${payment.id}`,
     payload: {
       listingId: payment.listingId,
+      chainKey: listingChainKey,
       promotionId: promotion.id,
       promotionType: promotion.type,
       paymentId: payment.id,

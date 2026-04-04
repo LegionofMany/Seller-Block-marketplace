@@ -2,17 +2,21 @@ import type { Request, Response } from "express";
 import { getContext } from "../services/context";
 import { findRaffle, upsertRaffle, type RaffleRow } from "../services/db";
 import { fetchListingFromChain, getRegistryInterface } from "../services/blockchain";
+import { normalizeChainKey } from "../utils/listings";
 import { requireBytes32 } from "../utils/validation";
 
 export async function getRaffleByListingId(req: Request, res: Response) {
-  const { env, db, cache, provider } = getContext();
+  const { db, cache, getProviderForChain, getSupportedChain } = getContext();
   const listingId = requireBytes32(String(req.params.listingId ?? ""), "listing id");
+  const chainKey = normalizeChainKey(req.query.chainKey ?? req.query.chain);
+  const chain = getSupportedChain(chainKey);
+  const provider = getProviderForChain(chain.key);
 
-  const cacheKey = `raffle:${listingId}`;
+  const cacheKey = `raffle:${chain.key}:${listingId}`;
   const cached = cache.get<any>(cacheKey);
   if (cached) return res.json(cached);
 
-  const existing = await findRaffle(db, listingId);
+  const existing = await findRaffle(db, listingId, chain.key);
   if (existing) {
     const body = { raffle: existing };
     cache.set(cacheKey, body);
@@ -20,7 +24,7 @@ export async function getRaffleByListingId(req: Request, res: Response) {
   }
 
   // Fallback: estimate ticketsSold from on-chain logs (only on miss).
-  const listing = await fetchListingFromChain(provider, env.marketplaceRegistryAddress, listingId);
+  const listing = await fetchListingFromChain(provider, chain.marketplaceRegistryAddress, listingId);
   if (listing.saleType !== 2) return res.status(404).json({ error: { message: "Raffle not found" } });
 
   const iface = getRegistryInterface();
@@ -28,8 +32,8 @@ export async function getRaffleByListingId(req: Request, res: Response) {
   if (!event) return res.status(500).json({ error: { message: "Indexer ABI misconfigured" } });
 
   const logs = await provider.getLogs({
-    address: env.marketplaceRegistryAddress,
-    fromBlock: env.startBlock ?? 0,
+    address: chain.marketplaceRegistryAddress,
+    fromBlock: chain.startBlock ?? 0,
     toBlock: "latest",
     topics: [event.topicHash, listingId],
   });
@@ -47,6 +51,7 @@ export async function getRaffleByListingId(req: Request, res: Response) {
   }
 
   const row: RaffleRow = {
+    chainKey: chain.key,
     listingId,
     ticketsSold,
     endTime: listing.endTime ?? 0,

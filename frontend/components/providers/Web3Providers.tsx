@@ -2,8 +2,8 @@
 
 import * as React from "react";
 import { WagmiProvider, createConfig, fallback, http } from "wagmi";
-import { sepolia } from "wagmi/chains";
 import { injected, walletConnect } from "wagmi/connectors";
+import { defineChain, type Chain } from "viem";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RainbowKitProvider, darkTheme } from "@rainbow-me/rainbowkit";
 
@@ -29,6 +29,30 @@ export function Web3Providers({ children }: { children: React.ReactNode }) {
   React.useEffect(() => {
     try {
       const env = getEnv();
+      const chains = env.chains.map((chain) =>
+        defineChain({
+          id: chain.chainId,
+          name: chain.name,
+          nativeCurrency: {
+            name: chain.nativeCurrencyName,
+            symbol: chain.nativeCurrencySymbol,
+            decimals: 18,
+          },
+          rpcUrls: {
+            default: { http: [chain.rpcUrl, ...(chain.rpcFallbackUrl ? [chain.rpcFallbackUrl] : [])] },
+            public: { http: [chain.rpcUrl, ...(chain.rpcFallbackUrl ? [chain.rpcFallbackUrl] : [])] },
+          },
+          ...(chain.blockExplorerUrl
+            ? {
+                blockExplorers: {
+                  default: { name: `${chain.name} Explorer`, url: chain.blockExplorerUrl },
+                },
+              }
+            : {}),
+        })
+      );
+      if (!chains.length) throw new Error("No frontend chains configured");
+      const configuredChains = [chains[0], ...chains.slice(1)] as readonly [Chain, ...Chain[]];
       const connectors = [
         injected(),
         ...(env.walletConnectProjectId
@@ -36,24 +60,24 @@ export function Web3Providers({ children }: { children: React.ReactNode }) {
           : []),
       ];
       const config = createConfig({
-        chains: [sepolia],
+        chains: configuredChains,
         connectors,
-        transports: {
-          [sepolia.id]: (() => {
-            // If a fallback URL is provided, treat it as the preferred RPC.
-            // This helps when the default RPC (often Infura) is rate-limited.
-            const primary = env.sepoliaRpcFallbackUrl ?? env.sepoliaRpcUrl;
-            const secondary = env.sepoliaRpcFallbackUrl ? env.sepoliaRpcUrl : "https://rpc.sepolia.org";
-
-            return fallback(
-              [
-                http(primary, { timeout: 15_000, retryCount: 0 }),
-                http(secondary, { timeout: 15_000, retryCount: 0 }),
-              ],
-              { rank: false }
-            );
-          })(),
-        },
+        transports: Object.fromEntries(
+          env.chains.map((chain) => {
+            const primary = chain.rpcFallbackUrl ?? chain.rpcUrl;
+            const secondary = chain.rpcFallbackUrl ? chain.rpcUrl : chain.rpcUrl;
+            return [
+              chain.chainId,
+              fallback(
+                [
+                  http(primary, { timeout: 15_000, retryCount: 0 }),
+                  http(secondary, { timeout: 15_000, retryCount: 0 }),
+                ],
+                { rank: false }
+              ),
+            ];
+          })
+        ),
         ssr: true,
       });
       setState({ status: "ready", config });

@@ -6,17 +6,21 @@ import {
   getAuctionContract,
   getProtocolAddresses,
 } from "../services/blockchain";
+import { normalizeChainKey } from "../utils/listings";
 import { requireBytes32 } from "../utils/validation";
 
 export async function getAuctionByListingId(req: Request, res: Response) {
-  const { env, db, cache, provider } = getContext();
+  const { db, cache, getProviderForChain, getSupportedChain } = getContext();
   const listingId = requireBytes32(String(req.params.listingId ?? ""), "listing id");
+  const chainKey = normalizeChainKey(req.query.chainKey ?? req.query.chain);
+  const chain = getSupportedChain(chainKey);
+  const provider = getProviderForChain(chain.key);
 
-  const cacheKey = `auction:${listingId}`;
+  const cacheKey = `auction:${chain.key}:${listingId}`;
   const cached = cache.get<any>(cacheKey);
   if (cached) return res.json(cached);
 
-  const existing = await findAuction(db, listingId);
+  const existing = await findAuction(db, listingId, chain.key);
   if (existing) {
     const body = { auction: existing };
     cache.set(cacheKey, body);
@@ -24,13 +28,13 @@ export async function getAuctionByListingId(req: Request, res: Response) {
   }
 
   // Fallback: best-effort load from chain on miss.
-  const listing = await fetchListingFromChain(provider, env.marketplaceRegistryAddress, listingId);
+  const listing = await fetchListingFromChain(provider, chain.marketplaceRegistryAddress, listingId);
   if (listing.saleType !== 1) return res.status(404).json({ error: { message: "Auction not found" } });
   if (!listing.moduleId || listing.moduleId === "0x" + "00".repeat(32)) {
     return res.status(404).json({ error: { message: "Auction not opened" } });
   }
 
-  const addrs = await getProtocolAddresses(provider, env.marketplaceRegistryAddress, 5 * 60_000);
+  const addrs = await getProtocolAddresses(provider, chain.marketplaceRegistryAddress, 5 * 60_000);
   const auction = getAuctionContract(provider, addrs.auctionModule);
 
   const outcome = await (auction as any).getOutcome(listing.moduleId);
@@ -38,6 +42,7 @@ export async function getAuctionByListingId(req: Request, res: Response) {
   const winningBid = BigInt(outcome.winningBid);
 
   const row: AuctionRow = {
+    chainKey: chain.key,
     listingId,
     highestBid: winningBid.toString(),
     highestBidder: winner,

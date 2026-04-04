@@ -17,6 +17,7 @@ import {
   listUserConversations,
   touchConversation,
 } from "../services/db";
+import { normalizeChainKey } from "../utils/listings";
 import { parseLimitOffset, requireAddress, requireBytes32 } from "../utils/validation";
 
 function normalizeMessageBody(value: string): string {
@@ -36,7 +37,7 @@ function requireConversationId(value: string): number {
 }
 
 async function assertConversationAccess(conversationId: number, address: string) {
-  const { db } = getContext();
+  const { db, env } = getContext();
   const conversation = await getConversation(db, conversationId);
   if (!conversation) throw new HttpError(404, "Conversation not found", "CONVERSATION_NOT_FOUND");
   const participants = await listConversationParticipants(db, conversationId);
@@ -51,6 +52,7 @@ export async function startConversation(req: Request, res: Response) {
   const parsed = z.object({
     counterparty: z.string().min(1),
     listingId: z.string().optional(),
+    listingChainKey: z.string().optional(),
     body: z.string().min(1).max(2000).optional(),
   }).safeParse(req.body);
   if (!parsed.success) throw new HttpError(400, "Invalid conversation payload", "INVALID_CONVERSATION");
@@ -66,16 +68,18 @@ export async function startConversation(req: Request, res: Response) {
   }
 
   const listingId = parsed.data.listingId?.trim() ? requireBytes32(parsed.data.listingId.trim(), "listing id") : null;
+  const listingChainKey = listingId ? (normalizeChainKey(parsed.data.listingChainKey) ?? env.chainKey) : null;
   const body = parsed.data.body?.trim() ? normalizeMessageBody(parsed.data.body) : null;
   const now = Date.now();
 
   await ensureUser(db, address, now);
   await ensureUser(db, counterparty, now);
 
-  let conversation = await findConversationByParticipants(db, address, counterparty, listingId);
+  let conversation = await findConversationByParticipants(db, address, counterparty, listingId, listingChainKey);
   if (!conversation) {
     conversation = await createConversation(db, {
       listingId,
+      listingChainKey,
       createdBy: address,
       createdAt: now,
       updatedAt: now,

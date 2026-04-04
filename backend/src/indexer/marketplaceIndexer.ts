@@ -1,4 +1,5 @@
 import { ZeroAddress } from "ethers";
+import type { SupportedChainConfig } from "../config/env";
 import { getContext } from "../services/context";
 import {
   findListing,
@@ -30,8 +31,8 @@ function isTransientRpcError(err: any): boolean {
 
 function rpcErrorHint(err: any): string | undefined {
   const code = (err?.code ?? err?.errno ?? "").toString();
-  if (code === "ENOTFOUND") return "RPC hostname could not be resolved (check SEPOLIA_RPC_URL, DNS, and internet connectivity).";
-  if (code === "ECONNREFUSED") return "RPC host refused the connection (check SEPOLIA_RPC_URL and that the endpoint is reachable).";
+  if (code === "ENOTFOUND") return "RPC hostname could not be resolved (check the configured chain RPC URL, DNS, and internet connectivity).";
+  if (code === "ECONNREFUSED") return "RPC host refused the connection (check the configured chain RPC URL and that the endpoint is reachable).";
   if (code === "TIMEOUT") return "RPC request timed out (endpoint may be down/slow; consider using a different RPC URL).";
   if (code === "ECONNRESET") return "RPC connection was reset (often transient).";
   return undefined;
@@ -46,8 +47,10 @@ function backoffMs(baseMs: number, failures: number): number {
   return Math.max(baseMs, Math.round(exp + jitter));
 }
 
-export function startMarketplaceIndexer() {
-  const { env, db, provider, logger } = getContext();
+export function startMarketplaceIndexer(chainConfig?: SupportedChainConfig) {
+  const { env, db, logger, getProviderForChain, getSupportedChain } = getContext();
+  const chain = getSupportedChain(chainConfig?.key);
+  const provider = getProviderForChain(chain.key);
 
   if (!env.indexerEnabled) {
     logger.info({ enabled: env.indexerEnabled }, "marketplace indexer disabled");
@@ -55,7 +58,7 @@ export function startMarketplaceIndexer() {
   }
 
   const iface = getRegistryInterface();
-  const checkpointKey = `registry:${env.marketplaceRegistryAddress}:lastProcessedBlock`;
+  const checkpointKey = `chain:${chain.chainId}:registry:${chain.marketplaceRegistryAddress}:lastProcessedBlock`;
 
   const events = [
     "ListingCreated",
@@ -80,10 +83,12 @@ export function startMarketplaceIndexer() {
   let failureCount = 0;
 
   async function ensureListingExists(listingId: string, createdAt: number, blockNumber: number) {
-    const existing = await findListing(db, listingId);
+    const existing = await findListing(db, listingId, chain.key);
     if (existing) return;
-    const listing = await fetchListingFromChain(provider, env.marketplaceRegistryAddress, listingId);
+    const listing = await fetchListingFromChain(provider, chain.marketplaceRegistryAddress, listingId);
     await upsertListing(db, {
+      chainKey: chain.key,
+      chainId: chain.chainId,
       id: listingId,
       seller: listing.seller,
       metadataURI: listing.metadataURI,
@@ -113,7 +118,7 @@ export function startMarketplaceIndexer() {
       const target = Math.max(0, latest - CONFIRMATIONS);
 
       const checkpoint = await getCheckpoint(db, checkpointKey);
-      const lastProcessed = checkpoint ?? ((env.startBlock ?? 0) - 1);
+      const lastProcessed = checkpoint ?? ((chain.startBlock ?? 0) - 1);
 
       let fromBlock = lastProcessed + 1;
       if (fromBlock > target) return;
@@ -122,7 +127,7 @@ export function startMarketplaceIndexer() {
         const toBlock = Math.min(target, fromBlock + env.indexerChunkSize - 1);
 
         const logs = await provider.getLogs({
-          address: env.marketplaceRegistryAddress,
+          address: chain.marketplaceRegistryAddress,
           fromBlock,
           toBlock,
           topics: [topic0],
@@ -161,6 +166,8 @@ export function startMarketplaceIndexer() {
               const metadataURI = String(parsed.args.metadataURI);
 
               await upsertListing(db, {
+                chainKey: chain.key,
+                chainId: chain.chainId,
                 id,
                 seller,
                 metadataURI,
@@ -175,7 +182,7 @@ export function startMarketplaceIndexer() {
             }
             case "ListingCancelled": {
               const id = String(parsed.args.id).toLowerCase();
-              await setListingActive(db, id, 0);
+              await setListingActive(db, id, chain.key, 0);
               break;
             }
             case "AuctionOpened": {
@@ -188,13 +195,14 @@ export function startMarketplaceIndexer() {
               // Best-effort endTime from chain listing struct.
               let endTime = 0;
               try {
-                const listing = await fetchListingFromChain(provider, env.marketplaceRegistryAddress, listingId);
+                const listing = await fetchListingFromChain(provider, chain.marketplaceRegistryAddress, listingId);
                 endTime = listing.endTime ?? 0;
               } catch {
                 // ignore
               }
 
               await upsertAuction(db, {
+                chainKey: chain.key,
                 listingId,
                 highestBid: "0",
                 highestBidder: ZeroAddress,
@@ -211,7 +219,7 @@ export function startMarketplaceIndexer() {
               } catch {
                 // ignore
               }
-              await updateAuctionBid(db, listingId, bidder, amount);
+              await updateAuctionBid(db, listingId, chain.key, bidder, amount);
               break;
             }
             case "AuctionClosed": {
@@ -228,19 +236,20 @@ export function startMarketplaceIndexer() {
               // Preserve endTime if we have it; otherwise fetch.
               let endTime = 0;
               try {
-                const listing = await fetchListingFromChain(provider, env.marketplaceRegistryAddress, listingId);
+                const listing = await fetchListingFromChain(provider, chain.marketplaceRegistryAddress, listingId);
                 endTime = listing.endTime ?? 0;
               } catch {
                 // ignore
               }
 
               await upsertAuction(db, {
+                chainKey: chain.key,
                 listingId,
                 highestBid: amount.toString(),
                 highestBidder: winner,
                 endTime,
               });
-              await setListingActive(db, listingId, 0);
+              await setListingActive(db, listingId, chain.key, 0);
               break;
             }
             case "RaffleOpened": {
@@ -252,13 +261,14 @@ export function startMarketplaceIndexer() {
               }
               let endTime = 0;
               try {
-                const listing = await fetchListingFromChain(provider, env.marketplaceRegistryAddress, listingId);
+                const listing = await fetchListingFromChain(provider, chain.marketplaceRegistryAddress, listingId);
                 endTime = listing.endTime ?? 0;
               } catch {
                 // ignore
               }
 
               await upsertRaffle(db, {
+                chainKey: chain.key,
                 listingId,
                 ticketsSold: 0,
                 endTime,
@@ -274,7 +284,7 @@ export function startMarketplaceIndexer() {
                 // ignore
               }
               if (Number.isFinite(tickets) && tickets > 0) {
-                await incrementRaffleTickets(db, listingId, tickets);
+                await incrementRaffleTickets(db, listingId, chain.key, tickets);
               }
               break;
             }
@@ -285,7 +295,7 @@ export function startMarketplaceIndexer() {
               } catch {
                 // ignore
               }
-              await setListingActive(db, listingId, 0);
+              await setListingActive(db, listingId, chain.key, 0);
               break;
             }
             default:
@@ -320,11 +330,14 @@ export function startMarketplaceIndexer() {
 
   logger.info(
     {
-      address: env.marketplaceRegistryAddress,
+      chainKey: chain.key,
+      chainName: chain.name,
+      chainId: chain.chainId,
+      address: chain.marketplaceRegistryAddress,
       pollMs: env.indexerPollMs,
       chunkSize: env.indexerChunkSize,
-      startBlock: env.startBlock,
-      rpcFallbackConfigured: Boolean(env.sepoliaRpcUrlFallback),
+      startBlock: chain.startBlock,
+      rpcFallbackConfigured: Boolean(chain.rpcFallbackUrl),
     },
     "marketplace indexer started"
   );

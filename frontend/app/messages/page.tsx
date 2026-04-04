@@ -12,10 +12,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Textarea } from "@/components/ui/textarea";
 import { fetchJson } from "@/lib/api";
 import { shortenHex } from "@/lib/format";
+import { buildListingHref } from "@/lib/listings";
 
 type ConversationSummary = {
   id: number;
   listingId?: string | null;
+  listingChainKey?: string | null;
   createdBy: string;
   createdAt: number;
   updatedAt: number;
@@ -318,7 +320,7 @@ export default function MessagesPage() {
             <CardTitle>{selectedConversation?.counterparty ? shortenHex(selectedConversation.counterparty) : "Select a conversation"}</CardTitle>
             <CardDescription>
               {selectedConversation?.listingId ? (
-                <Link className="underline" href={`/listing/${selectedConversation.listingId}`}>
+                <Link className="underline" href={buildListingHref(selectedConversation.listingId, selectedConversation.listingChainKey)}>
                   Open listing
                 </Link>
               ) : (

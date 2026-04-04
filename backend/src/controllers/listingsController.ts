@@ -9,6 +9,7 @@ import {
   type ListingRow,
 } from "../services/db";
 import { fetchListingFromChain, getRegistryInterface, getRegistryContract } from "../services/blockchain";
+import { normalizeChainKey } from "../utils/listings";
 import { parseBigint, parseBool, parseLimitOffset, requireAddress, requireBytes32 } from "../utils/validation";
 
 function saleTypeFromQuery(value: unknown): number | undefined {
@@ -29,17 +30,19 @@ function sortFromQuery(value: unknown): "newest" | "price_asc" | "price_desc" | 
   return undefined;
 }
 
-async function backfillListingIfMissing(id: string): Promise<ListingRow | null> {
-  const { env, db, provider } = getContext();
+async function backfillListingIfMissing(id: string, chainKey?: string): Promise<ListingRow | null> {
+  const { db, getProviderForChain, getSupportedChain } = getContext();
+  const chain = getSupportedChain(chainKey);
+  const provider = getProviderForChain(chain.key);
 
-  const existing = await findListing(db, id);
+  const existing = await findListing(db, id, chain.key);
   if (existing) return existing;
 
   const iface = getRegistryInterface();
-  const registry = getRegistryContract(provider, env.marketplaceRegistryAddress);
+  const registry = getRegistryContract(provider, chain.marketplaceRegistryAddress);
 
   // Fetch listing struct first (fast path)
-  const listing = await fetchListingFromChain(provider, env.marketplaceRegistryAddress, id);
+  const listing = await fetchListingFromChain(provider, chain.marketplaceRegistryAddress, id);
   if (!listing.seller) return null;
 
   // Best-effort: locate ListingCreated log for accurate blockNumber/timestamp
@@ -49,8 +52,8 @@ async function backfillListingIfMissing(id: string): Promise<ListingRow | null> 
     const event = iface.getEvent("ListingCreated");
     if (!event) throw new Error("Missing ListingCreated event in ABI");
     const logs = await provider.getLogs({
-      address: env.marketplaceRegistryAddress,
-      fromBlock: env.startBlock ?? 0,
+      address: chain.marketplaceRegistryAddress,
+      fromBlock: chain.startBlock ?? 0,
       toBlock: "latest",
       topics: [event.topicHash, id],
     });
@@ -74,6 +77,8 @@ async function backfillListingIfMissing(id: string): Promise<ListingRow | null> 
   }
 
   const row: ListingRow = {
+    chainKey: chain.key,
+    chainId: chain.chainId,
     id,
     seller: listing.seller,
     metadataURI: listing.metadataURI,
@@ -91,6 +96,7 @@ async function backfillListingIfMissing(id: string): Promise<ListingRow | null> 
 
 export async function getListings(req: Request, res: Response) {
   const { env, db, cache } = getContext();
+  const chainKey = normalizeChainKey(req.query.chainKey ?? req.query.chain);
 
   const cacheKey = `listings:${JSON.stringify(req.query)}`;
   const cached = cache.get<any>(cacheKey);
@@ -112,6 +118,7 @@ export async function getListings(req: Request, res: Response) {
   const sort = sortFromQuery(req.query.sort);
 
   const rows = await queryListings(db, {
+    ...(chainKey ? { chainKey } : {}),
     saleType,
     active,
     minPrice,
@@ -136,16 +143,17 @@ export async function getListings(req: Request, res: Response) {
 export async function getListingById(req: Request, res: Response) {
   const { db, cache } = getContext();
   const id = requireBytes32(String(req.params.id ?? ""), "listing id");
+  const chainKey = normalizeChainKey(req.query.chainKey ?? req.query.chain);
 
-  const cacheKey = `listing:${id}`;
+  const cacheKey = `listing:${chainKey ?? 'any'}:${id}`;
   const cached = cache.get<any>(cacheKey);
   if (cached) return res.json(cached);
 
-  const listing = ((await findListing(db, id)) ?? (await backfillListingIfMissing(id)));
+  const listing = ((await findListing(db, id, chainKey)) ?? (await backfillListingIfMissing(id, chainKey)));
   if (!listing) return res.status(404).json({ error: { message: "Listing not found" } });
 
-  const auction = await findAuction(db, id);
-  const raffle = await findRaffle(db, id);
+  const auction = await findAuction(db, id, listing.chainKey);
+  const raffle = await findRaffle(db, id, listing.chainKey);
 
   const body = { listing, auction, raffle };
   cache.set(cacheKey, body);
@@ -155,6 +163,7 @@ export async function getListingById(req: Request, res: Response) {
 export async function getListingsBySeller(req: Request, res: Response) {
   const { env, db, cache } = getContext();
   const seller = requireAddress(String(req.params.address ?? ""), "seller address");
+  const chainKey = normalizeChainKey(req.query.chainKey ?? req.query.chain);
 
   const cacheKey = `seller:${seller}:${JSON.stringify(req.query)}`;
   const cached = cache.get<any>(cacheKey);
@@ -175,6 +184,7 @@ export async function getListingsBySeller(req: Request, res: Response) {
   const sort = sortFromQuery(req.query.sort);
 
   const rows = await queryListings(db, {
+    ...(chainKey ? { chainKey } : {}),
     seller,
     saleType,
     active,

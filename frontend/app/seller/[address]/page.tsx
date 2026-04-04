@@ -21,9 +21,11 @@ import { parseListing } from "@/lib/contracts/parse";
 import { isNativeToken, saleTypeLabel, statusLabel, type ListingStatus, type SaleType } from "@/lib/contracts/types";
 import { formatPrice, shortenHex } from "@/lib/format";
 import { ipfsToHttp } from "@/lib/ipfs";
+import { buildListingHref } from "@/lib/listings";
 import { fetchMetadataById, metadataIdFromUri, type MarketplaceMetadata } from "@/lib/metadata";
 
 type ListingSummary = {
+  chainKey: string;
   id: Hex;
   seller: Address;
   buyer: Address;
@@ -105,46 +107,25 @@ export default function SellerListingsPage({ params }: { params: Promise<{ addre
 
         // Prefer backend indexer API (fast). If it returns no items, fall back to on-chain.
         try {
-          const resp = await fetchJson<{ items: Array<{ id: string }> }>(
+          const resp = await fetchJson<{ items: Array<{ id: string; chainKey: string; seller: string; saleType: number; token: string; price: string; metadataURI: string; active: 0 | 1 }> }>(
             `/seller/${seller}/listings?limit=50&offset=0`,
             { timeoutMs: 5_000 }
           );
 
-          const ids = resp.items.map((r) => r.id as Hex);
-          const uniqueIds = Array.from(new Set(ids)).slice(0, 50);
+          if (resp.items.length > 0) {
+            const rows: ListingSummary[] = resp.items.slice(0, 50).map((row) => ({
+              chainKey: row.chainKey,
+              id: row.id as Hex,
+              seller: row.seller as Address,
+              buyer: "0x0000000000000000000000000000000000000000" as Address,
+              saleType: row.saleType as SaleType,
+              token: row.token as Address,
+              price: BigInt(row.price),
+              metadataURI: row.metadataURI,
+              status: (row.active ? 1 : 2) as ListingStatus,
+            }));
 
-          if (uniqueIds.length > 0) {
-            if (!publicClient) throw new Error("No public client");
-
-            const results = await publicClient.multicall({
-              allowFailure: true,
-              contracts: uniqueIds.map((id) => ({
-                address: env.marketplaceRegistryAddress,
-                abi: marketplaceRegistryAbi,
-                functionName: "listings",
-                args: [id],
-              })),
-            });
-
-            const rows: ListingSummary[] = [];
-            for (let i = 0; i < uniqueIds.length; i++) {
-              const id = uniqueIds[i];
-              const r = results[i];
-              if (!r || r.status !== "success") continue;
-              const parsed = parseListing(r.result);
-              rows.push({
-                id,
-                seller: parsed.seller,
-                buyer: parsed.buyer,
-                saleType: parsed.saleType,
-                token: parsed.token,
-                price: parsed.price,
-                metadataURI: parsed.metadataURI,
-                status: parsed.status,
-              });
-            }
-
-            const filtered = rows.filter((r) => r.seller.toLowerCase() === seller.toLowerCase());
+            const filtered = rows.filter((row) => row.seller.toLowerCase() === seller.toLowerCase());
             if (!cancelled) setListings(filtered);
             return;
           }
@@ -171,7 +152,7 @@ export default function SellerListingsPage({ params }: { params: Promise<{ addre
         } catch (e) {
           if (isRateLimitError(e)) {
             throw new Error(
-              "RPC rate limited (429). Configure a higher-limit Sepolia RPC (NEXT_PUBLIC_SEPOLIA_RPC_URL / NEXT_PUBLIC_SEPOLIA_RPC_FALLBACK_URL) and restart the dev server."
+              "RPC rate limited (429). Configure a higher-limit RPC in NEXT_PUBLIC_CHAIN_CONFIG_JSON, or update the legacy NEXT_PUBLIC_SEPOLIA_RPC_URL / NEXT_PUBLIC_SEPOLIA_RPC_FALLBACK_URL values, and restart the dev server."
             );
           }
           throw e;
@@ -201,6 +182,7 @@ export default function SellerListingsPage({ params }: { params: Promise<{ addre
           if (!r || r.status !== "success") continue;
           const parsed = parseListing(r.result);
           rows.push({
+            chainKey: env.defaultChain.key,
             id,
             seller: parsed.seller,
             buyer: parsed.buyer,
@@ -419,7 +401,7 @@ export default function SellerListingsPage({ params }: { params: Promise<{ addre
               const mdId = metadataIdFromUri(l.metadataURI);
               const md = mdId ? metadataById[mdId] : undefined;
               return (
-                <Link key={l.id} href={`/listing/${l.id}`} className="block">
+                <Link key={l.id} href={buildListingHref(l.id, l.chainKey)} className="block">
                   <Card className="h-full transition-colors hover:bg-accent/30 active:bg-accent/40">
                     <CardHeader>
                       {md?.image ? (

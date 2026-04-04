@@ -1,5 +1,5 @@
 import type { Pool } from "pg";
-import { getEnv, type Env } from "../config/env";
+import { getEnv, type Env, type SupportedChainConfig } from "../config/env";
 import { createLogger } from "../config/logger";
 import { openDb } from "./db";
 import { TtlCache } from "./cache";
@@ -11,6 +11,9 @@ export type AppContext = {
   db: Pool;
   cache: TtlCache;
   provider: ReturnType<typeof getProvider>;
+  providersByChainKey: Map<string, ReturnType<typeof getProvider>>;
+  getSupportedChain: (chainKey?: string | null) => SupportedChainConfig;
+  getProviderForChain: (chainKey?: string | null) => ReturnType<typeof getProvider>;
 };
 
 let ctx: AppContext | null = null;
@@ -22,8 +25,21 @@ export function getContext(): AppContext {
   const logger = createLogger();
   const db = openDb(env.dbPath);
   const cache = new TtlCache(env.cacheTtlMs);
-  const provider = getProvider([env.sepoliaRpcUrl, env.sepoliaRpcUrlFallback]);
+  const providersByChainKey = new Map(
+    env.supportedChains.map((chain) => [chain.key, getProvider([chain.rpcUrl, chain.rpcFallbackUrl])])
+  );
+  const provider = providersByChainKey.get(env.chainKey) ?? getProvider([env.sepoliaRpcUrl, env.sepoliaRpcUrlFallback]);
 
-  ctx = { env, logger, db, cache, provider };
+  const getSupportedChain = (chainKey?: string | null) => {
+    const match = chainKey ? env.supportedChains.find((chain) => chain.key === chainKey) : undefined;
+    return match ?? env.supportedChains[0];
+  };
+
+  const getProviderForChain = (chainKey?: string | null) => {
+    const chain = getSupportedChain(chainKey);
+    return providersByChainKey.get(chain.key) ?? provider;
+  };
+
+  ctx = { env, logger, db, cache, provider, providersByChainKey, getSupportedChain, getProviderForChain };
   return ctx;
 }

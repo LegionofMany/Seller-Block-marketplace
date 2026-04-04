@@ -6,12 +6,11 @@ import {
   decodeEventLog,
   isAddress,
   keccak256,
-  parseEther,
   type Address,
   type Hex,
   zeroAddress,
 } from "viem";
-import { usePublicClient, useWriteContract } from "wagmi";
+import { useChainId, usePublicClient, useWriteContract } from "wagmi";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -21,7 +20,9 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 
 import { fetchJson } from "@/lib/api";
-import { getEnv } from "@/lib/env";
+import { describeToken, getDefaultSettlementToken, getTokenOptions, parseTokenAmount } from "@/lib/tokens";
+import { getChainConfigById, getEnv, type ClientEnv } from "@/lib/env";
+import { buildListingHref } from "@/lib/listings";
 import { marketplaceRegistryAbi } from "@/lib/contracts/abi/MarketplaceRegistry";
 import { CATEGORY_TREE, subcategoriesFor } from "@/lib/categories";
 
@@ -50,6 +51,7 @@ function parseBytes32(value: string): Hex {
 export default function CreateListingPage() {
   const router = useRouter();
   const publicClient = usePublicClient();
+  const walletChainId = useChainId();
   const { writeContractAsync } = useWriteContract();
 
   const [saleType, setSaleType] = React.useState<SaleType>(0);
@@ -85,6 +87,34 @@ export default function CreateListingPage() {
   const [reveal, setReveal] = React.useState<Hex>(ZERO_BYTES32);
   const [previewUrls, setPreviewUrls] = React.useState<string[]>([]);
 
+  let env: ClientEnv;
+  try {
+    env = getEnv();
+  } catch (e: any) {
+    return (
+      <Card>
+        <CardContent className="p-6 text-sm text-destructive">{e?.message ?? "Missing env vars"}</CardContent>
+      </Card>
+    );
+  }
+
+  const activeChain = getChainConfigById(env, walletChainId);
+  const tokenOptions = React.useMemo(() => getTokenOptions(env, activeChain.chainId), [env, activeChain.chainId]);
+  const preferredToken = React.useMemo(() => getDefaultSettlementToken(env, activeChain.chainId), [env, activeChain.chainId]);
+
+  React.useEffect(() => {
+    if (tokenAddress.trim()) return;
+    if (preferredToken.address === zeroAddress) return;
+    setTokenAddress(preferredToken.address);
+  }, [preferredToken.address, tokenAddress]);
+
+  const selectedToken = React.useMemo(() => {
+    const raw = tokenAddress.trim();
+    if (!raw) return describeToken(env, activeChain.chainId, zeroAddress);
+    if (!isAddress(raw)) return null;
+    return describeToken(env, activeChain.chainId, raw as Address);
+  }, [activeChain.chainId, env, tokenAddress]);
+
   React.useEffect(() => {
     // Generate a random default reveal once (so user can save it)
     if (reveal !== ("0x" + "00".repeat(32))) return;
@@ -104,14 +134,6 @@ export default function CreateListingPage() {
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-
-    let env;
-    try {
-      env = getEnv();
-    } catch (err: any) {
-      toast.error(err?.message ?? "Missing env vars");
-      return;
-    }
 
     if (!title.trim() || !description.trim()) {
       toast.error("Title and description are required");
@@ -168,18 +190,19 @@ export default function CreateListingPage() {
       return;
     }
 
-    const token: Address = tokenAddress.trim().length
-      ? (() => {
-          if (!isAddress(tokenAddress.trim())) throw new Error("Invalid token address");
-          return tokenAddress.trim() as Address;
-        })()
-      : zeroAddress;
+    if (tokenAddress.trim().length && !selectedToken) {
+      toast.error("Invalid token address");
+      return;
+    }
+
+    const token: Address = tokenAddress.trim().length ? (tokenAddress.trim() as Address) : zeroAddress;
 
     const isNative = token.toLowerCase() === zeroAddress;
+    const settlementToken = selectedToken ?? describeToken(env, activeChain.chainId, zeroAddress);
 
     const price = (() => {
       if (saleType === 0) {
-        return isNative ? parseEther(fixedPrice || "0") : BigInt(fixedPrice || "0");
+        return parseTokenAmount(fixedPrice || "0", settlementToken);
       }
       return BigInt(0);
     })();
@@ -190,7 +213,7 @@ export default function CreateListingPage() {
       if (!publicClient) throw new Error("No public client");
       const toastId = toast.loading("Creating listing…");
       const hash = await writeContractAsync({
-        address: env.marketplaceRegistryAddress,
+        address: activeChain.marketplaceRegistryAddress,
         abi: marketplaceRegistryAbi,
         functionName: "createListing",
         args: [metadataURI, price, token, saleType],
@@ -217,12 +240,12 @@ export default function CreateListingPage() {
       if (saleType === 1) {
         const startTime = toUnixSeconds(auctionStart);
         const endTime = toUnixSeconds(auctionEnd);
-        const reserve = isNative ? parseEther(reservePrice || "0") : BigInt(reservePrice || "0");
-        const increment = isNative ? parseEther(minBidIncrement || "0") : BigInt(minBidIncrement || "0");
+        const reserve = parseTokenAmount(reservePrice || "0", settlementToken);
+        const increment = parseTokenAmount(minBidIncrement || "0", settlementToken);
 
         const toast2 = toast.loading("Opening auction…");
         const hash2 = await writeContractAsync({
-          address: env.marketplaceRegistryAddress,
+          address: activeChain.marketplaceRegistryAddress,
           abi: marketplaceRegistryAbi,
           functionName: "openAuction",
           args: [
@@ -243,15 +266,15 @@ export default function CreateListingPage() {
       if (saleType === 2) {
         const startTime = toUnixSeconds(raffleStart);
         const endTime = toUnixSeconds(raffleEnd);
-        const ticket = isNative ? parseEther(ticketPrice || "0") : BigInt(ticketPrice || "0");
-        const target = isNative ? parseEther(targetAmount || "0") : BigInt(targetAmount || "0");
+        const ticket = parseTokenAmount(ticketPrice || "0", settlementToken);
+        const target = parseTokenAmount(targetAmount || "0", settlementToken);
         const minP = Number.parseInt(minParticipants, 10);
         const revealBytes32 = parseBytes32(reveal);
         const commit = keccak256(revealBytes32);
 
         const toast2 = toast.loading("Opening raffle…");
         const hash2 = await writeContractAsync({
-          address: env.marketplaceRegistryAddress,
+          address: activeChain.marketplaceRegistryAddress,
           abi: marketplaceRegistryAbi,
           functionName: "openRaffle",
           args: [listingId, startTime, endTime, ticket, target, minP, commit],
@@ -261,7 +284,7 @@ export default function CreateListingPage() {
         toast.success("Raffle opened", { id: toast2 });
       }
 
-      router.push(`/listing/${listingId}`);
+      router.push(buildListingHref(listingId, activeChain.key));
     } catch (err: any) {
       toast.error(err?.shortMessage ?? err?.message ?? "Transaction failed");
     }
@@ -271,7 +294,7 @@ export default function CreateListingPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-2">
         <h1 className="text-2xl font-semibold tracking-tight">Create listing</h1>
-        <p className="text-sm text-muted-foreground">Create a listing on Sepolia via MarketplaceRegistry.</p>
+        <p className="text-sm text-muted-foreground">Create a listing on {activeChain.name} via MarketplaceRegistry.</p>
       </div>
 
       <Card>
@@ -407,15 +430,41 @@ export default function CreateListingPage() {
                 <Input value={generatedMetadataURI} readOnly placeholder="Will be generated on submit" />
               </div>
               <div className="space-y-2 sm:col-span-2">
-                <Label>Token (optional)</Label>
-                <Input value={tokenAddress} onChange={(e) => setTokenAddress(e.target.value)} placeholder="Leave empty for ETH, or paste ERC20 address" />
+                <Label>Settlement token</Label>
+                <div className="flex flex-wrap gap-2">
+                  {tokenOptions.map((tokenOption) => {
+                    const value = tokenOption.address === zeroAddress ? "" : tokenOption.address;
+                    const active = tokenAddress.trim().toLowerCase() === value.toLowerCase();
+                    return (
+                      <Button
+                        key={`${tokenOption.symbol}-${tokenOption.address}`}
+                        type="button"
+                        size="sm"
+                        variant={active ? "default" : "outline"}
+                        onClick={() => setTokenAddress(value)}
+                      >
+                        {tokenOption.symbol}{tokenOption.isStablecoin ? " (stablecoin)" : ""}
+                      </Button>
+                    );
+                  })}
+                </div>
+                <Input
+                  value={tokenAddress}
+                  onChange={(e) => setTokenAddress(e.target.value)}
+                  placeholder={`Leave empty for ${activeChain.nativeCurrencySymbol}, or paste a custom ERC-20 address`}
+                />
+                <div className="text-xs text-muted-foreground">
+                  {selectedToken
+                    ? `Using ${selectedToken.name} (${selectedToken.symbol}) with ${selectedToken.decimals} decimals.`
+                    : "Custom token address must be a valid ERC-20 contract address."}
+                </div>
               </div>
             </div>
 
             {saleType === 0 ? (
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
-                  <Label>Price {tokenAddress.trim() ? "(raw units)" : "(ETH)"}</Label>
+                  <Label>Price ({selectedToken?.symbol ?? activeChain.nativeCurrencySymbol})</Label>
                   <Input value={fixedPrice} onChange={(e) => setFixedPrice(e.target.value)} />
                 </div>
               </div>
@@ -434,11 +483,11 @@ export default function CreateListingPage() {
                     <Input type="datetime-local" value={auctionEnd} onChange={(e) => setAuctionEnd(e.target.value)} />
                   </div>
                   <div className="space-y-2">
-                    <Label>Reserve {tokenAddress.trim() ? "(raw units)" : "(ETH)"}</Label>
+                    <Label>Reserve ({selectedToken?.symbol ?? activeChain.nativeCurrencySymbol})</Label>
                     <Input value={reservePrice} onChange={(e) => setReservePrice(e.target.value)} />
                   </div>
                   <div className="space-y-2">
-                    <Label>Min bid increment {tokenAddress.trim() ? "(raw units)" : "(ETH)"}</Label>
+                    <Label>Min bid increment ({selectedToken?.symbol ?? activeChain.nativeCurrencySymbol})</Label>
                     <Input value={minBidIncrement} onChange={(e) => setMinBidIncrement(e.target.value)} />
                   </div>
                   <div className="space-y-2">
@@ -466,11 +515,11 @@ export default function CreateListingPage() {
                     <Input type="datetime-local" value={raffleEnd} onChange={(e) => setRaffleEnd(e.target.value)} />
                   </div>
                   <div className="space-y-2">
-                    <Label>Ticket price {tokenAddress.trim() ? "(raw units)" : "(ETH)"}</Label>
+                    <Label>Ticket price ({selectedToken?.symbol ?? activeChain.nativeCurrencySymbol})</Label>
                     <Input value={ticketPrice} onChange={(e) => setTicketPrice(e.target.value)} />
                   </div>
                   <div className="space-y-2">
-                    <Label>Target amount {tokenAddress.trim() ? "(raw units)" : "(ETH)"}</Label>
+                    <Label>Target amount ({selectedToken?.symbol ?? activeChain.nativeCurrencySymbol})</Label>
                     <Input value={targetAmount} onChange={(e) => setTargetAmount(e.target.value)} />
                   </div>
                   <div className="space-y-2">

@@ -14,7 +14,8 @@ Deliver a Kijiji-like classifieds product on top of the existing web3 marketplac
 - Phase 3 is complete: conversations, polling-based message delivery, block/report safety flows, and end-user message pagination via "load older messages" are implemented.
 - Phase 4 is complete: `saved_searches` and `notifications` tables, saved-search CRUD APIs, listings-page save flow, dashboard edit/delete management, in-app notifications, optional Postmark email delivery, and a background saved-search scan worker are implemented.
 - Phase 5 is complete: Stripe-backed checkout sessions, `payments` and `promotions` tables, dashboard purchase/history UI, active promotion ranking in listings queries, and promoted listing badges/highlighting are implemented.
-- Phase 6 is not yet implemented in this repo.
+- Phase 6 repo implementation is complete for the current codebase scope: listings and related records are now chain-scoped in Postgres, backend reads/writes/indexer checkpoints are chain-aware, the backend can start one indexer per configured chain, frontend listing routes carry explicit chain context, and the create/detail/message/notification flows now preserve chain identity end to end.
+- Phase 6 rollout is not fully complete yet: only the Sepolia deployment is live, the low-gas Base Sepolia deployment is still pending, production envs still need the final multi-chain JSON cutover once a second live deployment exists, and second-chain production verification remains rollout-only.
 
 **Steps**
 1. Phase 0 — Product alignment & guardrails (blocking)
@@ -75,12 +76,22 @@ Deliver a Kijiji-like classifieds product on top of the existing web3 marketplac
 
 7. Phase 6 — Chain/gas optimization (optional but aligned to update.md)
    1) Multi-chain configuration
-      - Frontend supports multiple chain configs + deployment addresses.
-      - Backend indexer becomes chain-aware (partition indexer state by chainId).
+      - Implemented: frontend supports multiple chain configs + deployment addresses through `NEXT_PUBLIC_CHAIN_CONFIG_JSON`.
+      - Implemented: backend indexer/auth/env parsing are chain-aware through `CHAIN_CONFIG_JSON` and chain-scoped checkpoints.
+      - Implemented: listing identity, API reads/writes, messages, promotions, notifications, and dashboard/listing links now preserve chain identity end to end.
+      - Rollout-only: set production backend/frontend envs to the final multi-chain JSON after a second chain has real deployed contract addresses.
    2) Deploy to a low-gas EVM chain (TBD)
-      - Add new deployments JSON and env config.
+      - Implemented: added Base Sepolia deployment template JSON files and documented the rollout path.
+      - Rollout-only: perform a real Base Sepolia deployment and replace template addresses with live values.
    3) Stablecoin-first UX
-      - Token list per chain; default to USDC where available.
+      - Implemented: per-chain token metadata and default settlement token selection are wired into env parsing, wallet setup, and the create listing flow.
+      - Implemented: chain-aware token/native labels now flow through the major listing, bidding, payout, and dashboard surfaces that were updated during Phase 6.
+      - Rollout-only: add real per-chain stablecoin addresses in production envs once additional chains are deployed.
+
+**Production Verification Snapshot (2026-04-04)**
+- Verified locally: backend migration `007_chain_scoped_listings.sql` is applied, backend health returns `{"status":"ok"}`, and the config-driven Sepolia indexer starts successfully.
+- Verified against the deployed backend: health and read-path checks were executed as part of the production pass.
+- Rollout blocker for true multi-chain production verification: Base Sepolia deployment is not live yet, and the current deployer account has no Base Sepolia gas balance, so a second real chain could not be cut over today.
 
 **Relevant files**
 - Listing creation and browsing

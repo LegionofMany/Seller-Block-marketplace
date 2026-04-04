@@ -11,6 +11,8 @@ import { parseListing } from "@/lib/contracts/parse";
 import { type ListingStatus, type SaleType } from "@/lib/contracts/types";
 
 export type ListingSummary = {
+  chainKey: string;
+  chainId: number;
   id: Hex;
   seller: Address;
   saleType: SaleType;
@@ -24,6 +26,7 @@ export type ListingSummary = {
 };
 
 export type ListingsParams = {
+  chainKey?: string;
   q?: string;
   category?: string;
   subcategory?: string;
@@ -39,6 +42,8 @@ export type ListingsParams = {
 };
 
 type BackendListingRow = {
+  chainKey: string;
+  chainId: number;
   id: string;
   seller: string;
   metadataURI: string;
@@ -88,6 +93,7 @@ function buildQuery(params: ListingsParams | undefined): string {
   sp.set("offset", String(p.offset ?? 0));
 
   if (p.q) sp.set("q", p.q);
+  if (p.chainKey) sp.set("chain", p.chainKey);
   if (p.category) sp.set("category", p.category);
   if (p.subcategory) sp.set("subcategory", p.subcategory);
   if (p.city) sp.set("city", p.city);
@@ -145,6 +151,8 @@ export function useListings(params?: ListingsParams) {
 
             const items = resp.items.map((row) =>
               ({
+                chainKey: row.chainKey,
+                chainId: row.chainId,
                 id: row.id as Hex,
                 seller: row.seller as Address,
                 saleType: row.saleType as SaleType,
@@ -192,7 +200,7 @@ export function useListings(params?: ListingsParams) {
           } catch (e) {
             if (isRateLimitError(e)) {
               throw new Error(
-                "RPC rate limited (429). Set NEXT_PUBLIC_SEPOLIA_RPC_URL (or NEXT_PUBLIC_SEPOLIA_RPC_FALLBACK_URL) to a higher-limit provider like Alchemy, then restart `npm run dev`."
+                "RPC rate limited (429). Set NEXT_PUBLIC_CHAIN_CONFIG_JSON with a higher-limit RPC, or update the legacy NEXT_PUBLIC_SEPOLIA_RPC_URL / NEXT_PUBLIC_SEPOLIA_RPC_FALLBACK_URL values, then restart npm run dev."
               );
             }
             throw e;
@@ -218,6 +226,8 @@ export function useListings(params?: ListingsParams) {
             if (!result || result.status !== "success") continue;
             const parsed = parseListing(result.result);
             listings.push({
+              chainKey: env.defaultChain.key,
+              chainId: env.defaultChain.chainId,
               id,
               seller: parsed.seller,
               saleType: parsed.saleType,

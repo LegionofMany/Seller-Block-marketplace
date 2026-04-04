@@ -16,6 +16,8 @@ services:
         value: production
       - key: DATABASE_URL
         sync: false
+      - key: CHAIN_CONFIG_JSON
+        sync: false
       - key: SEPOLIA_RPC_URL
         sync: false
       - key: SEPOLIA_RPC_URL_FALLBACK

@@ -29,7 +29,13 @@ This frontend reads contracts/RPC config from `NEXT_PUBLIC_*` variables.
 copy .env.local.example .env.local
 ```
 
-2) Edit `.env.local` and set at least:
+2) Edit `.env.local` and set either the preferred multi-chain config or the legacy single-chain fallback.
+
+Preferred Phase 6 config:
+
+- `NEXT_PUBLIC_CHAIN_CONFIG_JSON`
+
+Legacy single-chain fallback:
 
 - `NEXT_PUBLIC_SEPOLIA_RPC_URL` (an HTTPS RPC URL)
 - `NEXT_PUBLIC_SEPOLIA_RPC_FALLBACK_URL` (optional; another HTTPS RPC URL used if the first is rate-limited)
@@ -43,6 +49,17 @@ Optional but useful:
 - `NEXT_PUBLIC_BACKEND_URL` (optional API for indexed listings/search/metadata; default `http://localhost:4000`)
 - `NEXT_PUBLIC_SEPOLIA_START_BLOCK` (improves listings/dashboard load time)
 - `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` (enables WalletConnect)
+
+`NEXT_PUBLIC_CHAIN_CONFIG_JSON` supports either an array of chains or an object with `defaultChainKey` and `chains`. Each chain can define:
+
+- `key`, `name`, `chainId`
+- `rpcUrl`, optional `rpcFallbackUrl`
+- `marketplaceRegistryAddress`
+- optional `escrowVaultAddress`, `auctionModuleAddress`, `raffleModuleAddress`
+- optional `fromBlock`
+- `nativeCurrencySymbol`, `nativeCurrencyName`
+- optional `blockExplorerUrl`
+- optional `stablecoins` with `symbol`, `name`, `address`, `decimals`, and optional `isStablecoin`
 
 Then start the dev server:
 
