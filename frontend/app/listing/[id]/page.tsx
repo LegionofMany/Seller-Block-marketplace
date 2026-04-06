@@ -3,7 +3,7 @@
 import * as React from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { type Address, type Hex, isAddress, parseEther, zeroAddress } from "viem";
 import { useAccount, useReadContract, useWaitForTransactionReceipt, useWalletClient, useWriteContract } from "wagmi";
 import { toast } from "sonner";
@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
+import { Textarea } from "@/components/ui/textarea";
 
 import { getChainConfigByKey, getEnv } from "@/lib/env";
 import { marketplaceRegistryAbi } from "@/lib/contracts/abi/MarketplaceRegistry";
@@ -36,8 +37,18 @@ function asBytes32(value: string): Hex | null {
   return value as Hex;
 }
 
+type ListingComment = {
+  id: number;
+  listingId: string;
+  listingChainKey: string;
+  authorAddress: string;
+  body: string;
+  createdAt: number;
+  updatedAt: number;
+  authorDisplayName?: string | null;
+};
+
 export default function ListingDetailPage() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   let env: ReturnType<typeof getEnv>;
   try {
@@ -94,6 +105,11 @@ export default function ListingDetailPage() {
 
   const [metadata, setMetadata] = React.useState<MarketplaceMetadata | null>(null);
   const [isReuploadingMetadata, setIsReuploadingMetadata] = React.useState(false);
+  const [comments, setComments] = React.useState<ListingComment[]>([]);
+  const [commentsError, setCommentsError] = React.useState<string | null>(null);
+  const [isLoadingComments, setIsLoadingComments] = React.useState(false);
+  const [isSubmittingComment, setIsSubmittingComment] = React.useState(false);
+  const [commentDraft, setCommentDraft] = React.useState("");
 
   const galleryImages = React.useMemo(() => {
     const items = Array.isArray(metadata?.images) && metadata.images.length
@@ -108,6 +124,27 @@ export default function ListingDetailPage() {
     if (!listing?.metadataURI) return null;
     return metadataIdFromUri(listing.metadataURI);
   }, [listing?.metadataURI]);
+
+  React.useEffect(() => {
+    async function run() {
+      if (!listingId) return;
+      try {
+        setIsLoadingComments(true);
+        setCommentsError(null);
+        const res = await fetchJson<{ items: ListingComment[] }>(
+          `/listings/${listingId}/comments?chain=${encodeURIComponent(activeChain.key)}&limit=50&offset=0`,
+          { timeoutMs: 10_000 }
+        );
+        setComments(res.items ?? []);
+      } catch (e: any) {
+        setCommentsError(e?.message ?? "Failed to load comments");
+      } finally {
+        setIsLoadingComments(false);
+      }
+    }
+
+    void run();
+  }, [listingId, activeChain.key]);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -233,30 +270,31 @@ export default function ListingDetailPage() {
     }
   }
 
-  async function messageSeller() {
-    if (!listing) return;
+  async function submitComment() {
+    const body = commentDraft.trim();
+    if (!listingId || !body) return;
     if (!auth.isAuthenticated) {
-      toast.error("Sign in to message the seller");
+      toast.error("Sign in with your wallet to comment");
       return;
     }
-    const body = window.prompt("Write your first message to the seller")?.trim();
-    if (!body) return;
 
     try {
-      const res = await fetchJson<{ conversation: { id: number } }>("/messages/conversations", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          counterparty: listing.seller,
-          listingId,
-          listingChainKey: activeChain.key,
-          body,
-        }),
-        timeoutMs: 10_000,
-      });
-      router.push(`/messages?conversation=${res.conversation.id}`);
+      setIsSubmittingComment(true);
+      const res = await fetchJson<{ item: ListingComment }>(
+        `/listings/${listingId}/comments?chain=${encodeURIComponent(activeChain.key)}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ body }),
+          timeoutMs: 10_000,
+        }
+      );
+      setCommentDraft("");
+      setComments((current) => [...current, res.item]);
     } catch (e: any) {
-      toast.error(e?.message ?? "Failed to start conversation");
+      toast.error(e?.message ?? "Failed to post comment");
+    } finally {
+      setIsSubmittingComment(false);
     }
   }
 
@@ -632,15 +670,74 @@ export default function ListingDetailPage() {
               <Separator />
 
               <div className="space-y-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-semibold">Public comments</div>
+                    <div className="text-xs text-muted-foreground">Questions and replies stay attached to the listing instead of moving into private inboxes.</div>
+                  </div>
+                  <div className="text-xs text-muted-foreground">{comments.length} comment{comments.length === 1 ? "" : "s"}</div>
+                </div>
+
+                <div className="rounded-md border p-4 space-y-3">
+                  <Textarea
+                    value={commentDraft}
+                    onChange={(e) => setCommentDraft(e.target.value)}
+                    placeholder={auth.isAuthenticated ? "Ask a public question about this listing" : "Connect and sign in with your wallet to join the discussion"}
+                    rows={4}
+                    maxLength={1000}
+                    disabled={isSubmittingComment}
+                  />
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="text-xs text-muted-foreground">
+                      {auth.isAuthenticated
+                        ? "Comments are public and tied to your wallet profile."
+                        : address
+                          ? "Use wallet sign-in before posting."
+                          : "Use the RainbowKit wallet connect button in the header, then sign in to comment."}
+                    </div>
+                    <div className="flex gap-2">
+                      {!auth.isAuthenticated && address ? (
+                        <Button type="button" variant="outline" onClick={() => void auth.signIn()} disabled={auth.isLoading}>
+                          Sign in with wallet
+                        </Button>
+                      ) : null}
+                      <Button type="button" onClick={() => void submitComment()} disabled={!commentDraft.trim() || isSubmittingComment || !auth.isAuthenticated}>
+                        Post comment
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  {isLoadingComments ? (
+                    <div className="text-sm text-muted-foreground">Loading comments...</div>
+                  ) : commentsError ? (
+                    <div className="text-sm text-destructive">{commentsError}</div>
+                  ) : comments.length === 0 ? (
+                    <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
+                      No public comments yet.
+                    </div>
+                  ) : (
+                    comments.map((item) => (
+                      <div key={item.id} className="rounded-md border p-4 space-y-2">
+                        <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                          <div className="font-medium">{item.authorDisplayName?.trim() || shortenHex(item.authorAddress)}</div>
+                          <div className="text-xs text-muted-foreground">{new Date(item.createdAt).toLocaleString()}</div>
+                        </div>
+                        <div className="text-sm whitespace-pre-wrap break-words">{item.body}</div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              <div className="space-y-4">
                 <div className="text-sm font-semibold">Actions</div>
 
                 {listing.status === 1 && !isSeller ? (
                   <div className="rounded-md border p-4 space-y-2">
                     <div className="text-sm font-medium">Safety</div>
                     <div className="flex flex-col gap-2 sm:flex-row">
-                      <Button type="button" variant="default" size="lg" className="w-full sm:w-auto" onClick={messageSeller}>
-                        Message seller
-                      </Button>
                       <Button type="button" variant="outline" size="lg" className="w-full sm:w-auto" onClick={blockSeller}>
                         Block seller
                       </Button>

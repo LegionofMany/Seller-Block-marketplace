@@ -16,10 +16,9 @@ import { uploadsRouter } from "./routes/uploads";
 import { safetyRouter } from "./routes/safety";
 import { authRouter } from "./routes/auth";
 import { usersRouter } from "./routes/users";
-import { messagesRouter } from "./routes/messages";
+import { commentsRouter } from "./routes/comments";
 import { savedSearchesRouter } from "./routes/savedSearches";
 import { notificationsRouter } from "./routes/notifications";
-import { promotionsRouter } from "./routes/promotions";
 import { startMarketplaceIndexer } from "./indexer/marketplaceIndexer";
 import { startNotificationsWorker } from "./services/notifications";
 
@@ -74,10 +73,9 @@ async function main() {
   app.use(safetyRouter());
   app.use(authRouter());
   app.use(usersRouter());
-  app.use(messagesRouter());
+  app.use(commentsRouter());
   app.use(savedSearchesRouter());
   app.use(notificationsRouter());
-  app.use(promotionsRouter());
 
   app.use(notFound);
   app.use(errorHandler);

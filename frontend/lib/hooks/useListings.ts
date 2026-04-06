@@ -20,9 +20,6 @@ export type ListingSummary = {
   price: bigint;
   metadataURI: string;
   status: ListingStatus;
-  promotionType?: "bump" | "top" | "featured" | null;
-  promotionEndsAt?: number | null;
-  promotionPriority?: number;
 };
 
 export type ListingsParams = {
@@ -53,9 +50,6 @@ type BackendListingRow = {
   active: 0 | 1;
   createdAt: number;
   blockNumber: number;
-  promotionType?: "bump" | "top" | "featured" | null;
-  promotionEndsAt?: number | null;
-  promotionPriority?: number;
 };
 
 type BackendListingsResponse = {
@@ -160,9 +154,6 @@ export function useListings(params?: ListingsParams) {
                 price: BigInt(row.price),
                 metadataURI: row.metadataURI,
                 status: (row.active ? 1 : 2) as ListingStatus,
-                promotionType: row.promotionType ?? null,
-                promotionEndsAt: row.promotionEndsAt ?? null,
-                promotionPriority: row.promotionPriority ?? 0,
               }) satisfies ListingSummary
             );
 
@@ -235,9 +226,6 @@ export function useListings(params?: ListingsParams) {
               price: parsed.price,
               metadataURI: parsed.metadataURI,
               status: parsed.status,
-              promotionType: null,
-              promotionEndsAt: null,
-              promotionPriority: 0,
             });
           }
 

@@ -49,13 +49,6 @@ export type Env = {
   notificationsScanMs: number;
   notificationEmailFrom?: string;
   postmarkServerToken?: string;
-  stripeSecretKey?: string;
-  promotionBumpPriceCents: number;
-  promotionTopPriceCents: number;
-  promotionFeaturedPriceCents: number;
-  promotionBumpDurationHours: number;
-  promotionTopDurationHours: number;
-  promotionFeaturedDurationHours: number;
 
   pinataJwt?: string;
   pinataGatewayBaseUrl?: string;
@@ -314,14 +307,6 @@ export function getEnv(): Env {
   const notificationsScanMs = numberFromEnv("NOTIFICATIONS_SCAN_MS", 60_000);
   const notificationEmailFrom = optional("NOTIFICATION_EMAIL_FROM");
   const postmarkServerToken = optional("POSTMARK_SERVER_TOKEN");
-  const stripeSecretKey = optional("STRIPE_SECRET_KEY");
-
-  const promotionBumpPriceCents = numberFromEnv("PROMOTION_BUMP_PRICE_CENTS", 500);
-  const promotionTopPriceCents = numberFromEnv("PROMOTION_TOP_PRICE_CENTS", 1500);
-  const promotionFeaturedPriceCents = numberFromEnv("PROMOTION_FEATURED_PRICE_CENTS", 3000);
-  const promotionBumpDurationHours = numberFromEnv("PROMOTION_BUMP_DURATION_HOURS", 24);
-  const promotionTopDurationHours = numberFromEnv("PROMOTION_TOP_DURATION_HOURS", 72);
-  const promotionFeaturedDurationHours = numberFromEnv("PROMOTION_FEATURED_DURATION_HOURS", 168);
 
   const pinataJwt = optional("PINATA_JWT");
   const pinataGatewayBaseUrl = optional("PINATA_GATEWAY_BASE_URL");
@@ -356,13 +341,6 @@ export function getEnv(): Env {
     notificationsScanMs,
     ...(notificationEmailFrom ? { notificationEmailFrom } : {}),
     ...(postmarkServerToken ? { postmarkServerToken } : {}),
-    ...(stripeSecretKey ? { stripeSecretKey } : {}),
-    promotionBumpPriceCents,
-    promotionTopPriceCents,
-    promotionFeaturedPriceCents,
-    promotionBumpDurationHours,
-    promotionTopDurationHours,
-    promotionFeaturedDurationHours,
 
     ...(pinataJwt ? { pinataJwt } : {}),
     ...(pinataGatewayBaseUrl ? { pinataGatewayBaseUrl } : {}),

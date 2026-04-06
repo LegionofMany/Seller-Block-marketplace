@@ -73,9 +73,6 @@ export function SiteHeader() {
             <Button asChild variant="ghost" size="sm">
               <Link href="/dashboard">Dashboard</Link>
             </Button>
-            <Button asChild variant="ghost" size="sm">
-              <Link href="/messages">Messages</Link>
-            </Button>
             {auth.isAuthenticated ? (
               <Button asChild variant="ghost" size="sm">
                 <Link href="/dashboard#notifications">Alerts{unreadCount > 0 ? ` (${unreadCount})` : ""}</Link>
@@ -183,9 +180,6 @@ export function SiteHeader() {
             </Button>
             <Button asChild variant="ghost" className="h-11 w-full justify-start" onClick={() => setOpen(false)}>
               <Link href="/dashboard">Dashboard</Link>
-            </Button>
-            <Button asChild variant="ghost" className="h-11 w-full justify-start" onClick={() => setOpen(false)}>
-              <Link href="/messages">Messages</Link>
             </Button>
             {auth.isAuthenticated ? (
               <Button asChild variant="ghost" className="h-11 w-full justify-start" onClick={() => setOpen(false)}>

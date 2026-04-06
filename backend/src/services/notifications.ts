@@ -1,5 +1,5 @@
 import { getContext } from "./context";
-import { createNotification, expirePromotions, listAllSavedSearches, queryListings, updateSavedSearchLastCheckedAt, type SavedSearchFilters } from "./db";
+import { createNotification, listAllSavedSearches, queryListings, updateSavedSearchLastCheckedAt, type SavedSearchFilters } from "./db";
 
 function parseOptionalBigInt(value: string | undefined): bigint | undefined {
   if (!value) return undefined;
@@ -54,8 +54,6 @@ async function processSavedSearches() {
   const searches = await listAllSavedSearches(db);
   const now = Date.now();
 
-  await expirePromotions(db, now);
-
   for (const search of searches) {
     const rows = await queryListings(db, {
       saleType: saleTypeFromSavedSearch(search.filters.type),
@@ -85,7 +83,6 @@ async function processSavedSearches() {
           savedSearchId: search.id,
           listingId: row.id,
           chainKey: row.chainKey,
-          promotionType: row.promotionType ?? null,
         },
         createdAt: now,
       });

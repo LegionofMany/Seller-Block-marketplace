@@ -12,18 +12,10 @@ import { formatPrice, shortAddress } from "@/lib/format";
 import { useMarketplaceMetadata } from "@/lib/metadata";
 import { zeroAddress } from "viem";
 
-function promotionLabel(type: "bump" | "top" | "featured" | null | undefined) {
-  if (type === "featured") return "Featured";
-  if (type === "top") return "Top placement";
-  if (type === "bump") return "Bumped";
-  return null;
-}
-
 export function ListingCard({ row }: { row: ListingSummary }) {
   const status = statusLabel(row.status);
   const isNative = row.token === zeroAddress;
   const { metadata } = useMarketplaceMetadata(row.metadataURI);
-  const promotedLabel = promotionLabel(row.promotionType ?? null);
 
   const title = metadata?.title?.trim() || saleTypeLabel(row.saleType);
   const description = metadata?.description?.trim() || row.metadataURI;
@@ -32,7 +24,7 @@ export function ListingCard({ row }: { row: ListingSummary }) {
 
   return (
     <Link href={buildListingHref(row.id, row.chainKey)} className="block">
-      <Card className={promotedLabel ? "h-full border-amber-300/70 bg-amber-50/40 transition-colors hover:bg-amber-100/50 active:bg-amber-100/70" : "h-full transition-colors hover:bg-accent/30 active:bg-accent/40"}>
+      <Card className="h-full transition-colors hover:bg-accent/30 active:bg-accent/40">
         <CardHeader>
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
@@ -42,7 +34,6 @@ export function ListingCard({ row }: { row: ListingSummary }) {
             </div>
             <div className="flex flex-col items-end gap-2">
               <Badge variant="outline">{saleTypeLabel(row.saleType)}</Badge>
-              {promotedLabel ? <Badge className="border-transparent bg-amber-500 text-white">{promotedLabel}</Badge> : null}
             </div>
           </div>
         </CardHeader>

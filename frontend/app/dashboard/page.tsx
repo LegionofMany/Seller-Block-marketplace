@@ -2,7 +2,6 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
 import { type Address, type Hex, isAddress, parseAbiItem, zeroAddress } from "viem";
 import { useAccount, usePublicClient, useReadContract, useWriteContract } from "wagmi";
 import { toast } from "sonner";
@@ -67,41 +66,10 @@ type NotificationItem = {
   createdAt: number;
 };
 
-type PromotionOption = {
-  type: "bump" | "top" | "featured";
-  label: string;
-  description: string;
-  amountCents: number;
-  durationHours: number;
-};
-
-type PromotionItem = {
-  id: number;
-  listingId: string;
-  listingChainKey: string;
-  type: "bump" | "top" | "featured";
-  status: string;
-  endsAt: number;
-};
-
-type PaymentItem = {
-  id: number;
-  listingId?: string | null;
-  listingChainKey?: string | null;
-  promotionType?: string | null;
-  status: string;
-  amount: number;
-  createdAt: number;
-};
-
 function formatFilters(filters: SavedSearchFilters) {
   return Object.entries(filters)
     .map(([key, value]) => `${key}: ${value}`)
     .join(" • ");
-}
-
-function formatMoneyFromCents(value: number) {
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(value / 100);
 }
 
 function formatDateTime(value: number) {
@@ -145,7 +113,6 @@ function cleanSavedSearchDraft(draft: SavedSearchDraft) {
 
 export default function DashboardPage() {
   const { address } = useAccount();
-  const searchParams = useSearchParams();
   const publicClient = usePublicClient();
   const { writeContractAsync } = useWriteContract();
   const auth = useAuth();
@@ -180,12 +147,6 @@ export default function DashboardPage() {
   const [savedSearches, setSavedSearches] = React.useState<SavedSearch[]>([]);
   const [notifications, setNotifications] = React.useState<NotificationItem[]>([]);
   const [notificationUnreadCount, setNotificationUnreadCount] = React.useState(0);
-  const [promotionOptions, setPromotionOptions] = React.useState<PromotionOption[]>([]);
-  const [promotions, setPromotions] = React.useState<PromotionItem[]>([]);
-  const [payments, setPayments] = React.useState<PaymentItem[]>([]);
-  const [promotionListingId, setPromotionListingId] = React.useState("");
-  const [promotionType, setPromotionType] = React.useState<PromotionOption["type"]>("bump");
-  const [isCreatingPromotion, setIsCreatingPromotion] = React.useState(false);
   const [editingSavedSearchId, setEditingSavedSearchId] = React.useState<number | null>(null);
   const [savedSearchDraft, setSavedSearchDraft] = React.useState<SavedSearchDraft | null>(null);
   const [isSavingSavedSearch, setIsSavingSavedSearch] = React.useState(false);
@@ -198,11 +159,6 @@ export default function DashboardPage() {
   }, [auth.user]);
 
   React.useEffect(() => {
-    if (!myListings || myListings.length === 0 || promotionListingId) return;
-    setPromotionListingId(myListings[0].id);
-  }, [myListings, promotionListingId]);
-
-  React.useEffect(() => {
     let cancelled = false;
 
     async function run() {
@@ -210,27 +166,21 @@ export default function DashboardPage() {
         setSavedSearches([]);
         setNotifications([]);
         setNotificationUnreadCount(0);
-        setPayments([]);
-        setPromotions([]);
         return;
       }
 
       try {
-        const [savedSearchRes, notificationRes, promotionRes] = await Promise.all([
+        const [savedSearchRes, notificationRes] = await Promise.all([
           fetchJson<{ items: SavedSearch[] }>("/saved-searches", { timeoutMs: 5_000 }),
           fetchJson<{ items: NotificationItem[]; unreadCount: number }>("/notifications?limit=12", { timeoutMs: 5_000 }),
-          fetchJson<{ payments: PaymentItem[]; promotions: PromotionItem[]; options: PromotionOption[] }>("/promotions/me", { timeoutMs: 5_000 }),
         ]);
         if (cancelled) return;
         setSavedSearches(savedSearchRes.items ?? []);
         setNotifications(notificationRes.items ?? []);
         setNotificationUnreadCount(notificationRes.unreadCount ?? 0);
-        setPayments(promotionRes.payments ?? []);
-        setPromotions(promotionRes.promotions ?? []);
-        setPromotionOptions(promotionRes.options ?? []);
       } catch (e: any) {
         if (!cancelled) {
-          toast.error(e?.message ?? "Failed to load dashboard alerts and promotions");
+          toast.error(e?.message ?? "Failed to load dashboard alerts");
         }
       }
     }
@@ -240,36 +190,6 @@ export default function DashboardPage() {
       cancelled = true;
     };
   }, [auth.isAuthenticated, dashboardRefreshKey]);
-
-  React.useEffect(() => {
-    let cancelled = false;
-
-    async function run() {
-      const sessionId = searchParams.get("promotion_session");
-      if (!sessionId || !auth.isAuthenticated) return;
-
-      try {
-        const res = await fetchJson<{ activated: boolean }>("/promotions/confirm-session", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ sessionId }),
-          timeoutMs: 10_000,
-        });
-        if (!cancelled) {
-          toast.success(res.activated ? "Promotion activated" : "Payment is still pending");
-          setDashboardRefreshKey((value) => value + 1);
-          window.history.replaceState({}, "", "/dashboard");
-        }
-      } catch (e: any) {
-        if (!cancelled) toast.error(e?.message ?? "Failed to confirm promotion payment");
-      }
-    }
-
-    void run();
-    return () => {
-      cancelled = true;
-    };
-  }, [auth.isAuthenticated, searchParams]);
 
   const activeSavedSearchSubcategories = React.useMemo(() => {
     if (!savedSearchDraft?.filters.category) return [];
@@ -766,7 +686,7 @@ export default function DashboardPage() {
       <Card id="notifications">
         <CardHeader>
           <CardTitle>Notifications</CardTitle>
-          <CardDescription>In-app alerts for new saved-search matches and promotion activity.</CardDescription>
+          <CardDescription>In-app alerts for saved-search matches and marketplace activity.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
@@ -836,113 +756,13 @@ export default function DashboardPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Promote listings</CardTitle>
-          <CardDescription>Purchase bump, top, or featured placement for your active listings.</CardDescription>
+          <CardTitle>Payments</CardTitle>
+          <CardDescription>Stripe and off-chain promotion checkout are no longer part of the active product.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {!auth.isAuthenticated ? (
-            <div className="text-sm text-muted-foreground">Sign in to purchase listing promotions.</div>
-          ) : (
-            <>
-              <div className="grid gap-4 lg:grid-cols-[1fr_1fr_auto]">
-                <div className="space-y-2">
-                  <Label>Listing</Label>
-                  <select
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                    value={promotionListingId}
-                    onChange={(e) => setPromotionListingId(e.target.value)}
-                  >
-                    <option value="">Select a listing</option>
-                    {(myListings ?? []).map((row) => (
-                      <option key={row.id} value={row.id}>{row.id}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Placement</Label>
-                  <select
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                    value={promotionType}
-                    onChange={(e) => setPromotionType(e.target.value as PromotionOption["type"])}
-                  >
-                    {promotionOptions.map((option) => (
-                      <option key={option.type} value={option.type}>
-                        {option.label} - {formatMoneyFromCents(option.amountCents)} / {option.durationHours}h
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="flex items-end">
-                  <Button
-                    type="button"
-                    size="lg"
-                    disabled={!promotionListingId || isCreatingPromotion}
-                    onClick={async () => {
-                      try {
-                        setIsCreatingPromotion(true);
-                        const res = await fetchJson<{ url?: string | null }>("/promotions/checkout-session", {
-                          method: "POST",
-                          headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({ listingId: promotionListingId, chainKey: env.defaultChain.key, promotionType }),
-                          timeoutMs: 10_000,
-                        });
-                        if (!res.url) throw new Error("Stripe did not return a checkout URL");
-                        window.location.assign(res.url);
-                      } catch (e: any) {
-                        toast.error(e?.message ?? "Failed to start promotion checkout");
-                      } finally {
-                        setIsCreatingPromotion(false);
-                      }
-                    }}
-                  >
-                    Buy placement
-                  </Button>
-                </div>
-              </div>
-
-              <div className="grid gap-3 lg:grid-cols-3">
-                {promotionOptions.map((option) => (
-                  <div key={option.type} className="rounded-md border p-3">
-                    <div className="font-medium">{option.label}</div>
-                    <div className="mt-1 text-sm text-muted-foreground">{option.description}</div>
-                    <div className="mt-2 text-sm">{formatMoneyFromCents(option.amountCents)} for {option.durationHours} hours</div>
-                  </div>
-                ))}
-              </div>
-
-              <div className="grid gap-4 lg:grid-cols-2">
-                <div className="space-y-2">
-                  <div className="text-sm font-semibold">Active and past promotions</div>
-                  {promotions.length === 0 ? (
-                    <div className="text-sm text-muted-foreground">No promotions yet.</div>
-                  ) : (
-                    promotions.map((item) => (
-                      <div key={item.id} className="rounded-md border p-3 text-sm">
-                        <div className="font-medium">{item.type} on <Link className="underline" href={buildListingHref(item.listingId, item.listingChainKey)}>{item.listingId}</Link></div>
-                        <div className="text-muted-foreground">Status: {item.status}</div>
-                        <div className="text-muted-foreground">Ends: {formatDateTime(item.endsAt)}</div>
-                      </div>
-                    ))
-                  )}
-                </div>
-
-                <div className="space-y-2">
-                  <div className="text-sm font-semibold">Payment history</div>
-                  {payments.length === 0 ? (
-                    <div className="text-sm text-muted-foreground">No promotion payments yet.</div>
-                  ) : (
-                    payments.map((item) => (
-                      <div key={item.id} className="rounded-md border p-3 text-sm">
-                        <div className="font-medium">{item.promotionType ?? "promotion"} payment</div>
-                        <div className="text-muted-foreground">{formatMoneyFromCents(item.amount)} • {item.status}</div>
-                        <div className="text-muted-foreground">{item.listingId ? <Link className="underline" href={buildListingHref(item.listingId, item.listingChainKey)}>{item.listingId}</Link> : "No listing"}</div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-            </>
-          )}
+          <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
+            Wallet connection and on-chain settlement remain in scope. Private inboxes and Stripe-backed placement purchases do not.
+          </div>
         </CardContent>
       </Card>
 

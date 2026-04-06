@@ -30,9 +30,14 @@ export function getContext(): AppContext {
   );
   const provider = providersByChainKey.get(env.chainKey) ?? getProvider([env.sepoliaRpcUrl, env.sepoliaRpcUrlFallback]);
 
-  const getSupportedChain = (chainKey?: string | null) => {
+  const fallbackChain = env.supportedChains[0];
+  if (!fallbackChain) {
+    throw new Error("No supported chains configured");
+  }
+
+  const getSupportedChain = (chainKey?: string | null): SupportedChainConfig => {
     const match = chainKey ? env.supportedChains.find((chain) => chain.key === chainKey) : undefined;
-    return match ?? env.supportedChains[0];
+    return match ?? fallbackChain;
   };
 
   const getProviderForChain = (chainKey?: string | null) => {

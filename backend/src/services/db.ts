@@ -14,9 +14,6 @@ export type ListingRow = {
   active: 0 | 1;
   createdAt: number;
   blockNumber: number;
-  promotionType?: "bump" | "top" | "featured" | null;
-  promotionEndsAt?: number | null;
-  promotionPriority?: number;
 };
 
 export type AuctionRow = {
@@ -80,25 +77,15 @@ export type AuthNonceRow = {
   consumedAt?: number | null;
 };
 
-export type ConversationRow = {
+export type ListingCommentRow = {
   id: number;
-  listingId?: string | null;
-  listingChainKey?: string | null;
-  createdBy: string;
-  createdAt: number;
-  updatedAt: number;
-  counterparty?: string | null;
-  lastMessageBody?: string | null;
-  lastMessageAt?: number | null;
-  messageCount?: number;
-};
-
-export type MessageRow = {
-  id: number;
-  conversationId: number;
-  sender: string;
+  listingId: string;
+  listingChainKey: string;
+  authorAddress: string;
   body: string;
   createdAt: number;
+  updatedAt: number;
+  authorDisplayName?: string | null;
 };
 
 export type SavedSearchFilters = {
@@ -135,36 +122,6 @@ export type NotificationRow = {
   payload: Record<string, unknown>;
   readAt?: number | null;
   createdAt: number;
-};
-
-export type PaymentRow = {
-  id: number;
-  userAddress: string;
-  listingId?: string | null;
-  listingChainKey?: string | null;
-  provider: string;
-  providerSessionId?: string | null;
-  status: string;
-  amount: number;
-  currency: string;
-  promotionType?: string | null;
-  metadata: Record<string, unknown>;
-  createdAt: number;
-  updatedAt: number;
-};
-
-export type PromotionRow = {
-  id: number;
-  listingId: string;
-  listingChainKey: string;
-  paymentId?: number | null;
-  type: "bump" | "top" | "featured";
-  status: string;
-  priority: number;
-  startsAt: number;
-  endsAt: number;
-  createdAt: number;
-  updatedAt: number;
 };
 
 let pool: Pool | null = null;
@@ -274,15 +231,6 @@ function toListingRow(r: any): ListingRow {
     active: Number(r.active) ? 1 : 0,
     createdAt: Number(r.createdAt ?? r.createdat ?? r.created_at),
     blockNumber: Number(r.blockNumber ?? r.blocknumber ?? r.block_number),
-    ...(r.promotionType != null || r.promotiontype != null
-      ? { promotionType: (r.promotionType ?? r.promotiontype) as "bump" | "top" | "featured" | null }
-      : {}),
-    ...(r.promotionEndsAt != null || r.promotionendsat != null
-      ? { promotionEndsAt: Number(r.promotionEndsAt ?? r.promotionendsat) }
-      : {}),
-    ...(r.promotionPriority != null || r.promotionpriority != null
-      ? { promotionPriority: Number(r.promotionPriority ?? r.promotionpriority) }
-      : {}),
   };
 }
 
@@ -323,40 +271,6 @@ function toNotificationRow(r: any): NotificationRow {
     payload: parseJsonObject(r.payloadJson ?? r.payloadjson),
     readAt: r.readAt != null || r.readat != null ? Number(r.readAt ?? r.readat) : null,
     createdAt: Number(r.createdAt ?? r.createdat ?? 0),
-  };
-}
-
-function toPaymentRow(r: any): PaymentRow {
-  return {
-    id: Number(r.id),
-    userAddress: String(r.userAddress ?? r.useraddress),
-    listingId: r.listingId ?? r.listingid ?? null,
-    listingChainKey: r.listingChainKey ?? r.listingchainkey ?? null,
-    provider: String(r.provider),
-    providerSessionId: r.providerSessionId ?? r.providersessionid ?? null,
-    status: String(r.status),
-    amount: Number(r.amount),
-    currency: String(r.currency),
-    promotionType: r.promotionType ?? r.promotiontype ?? null,
-    metadata: parseJsonObject(r.metadataJson ?? r.metadatajson),
-    createdAt: Number(r.createdAt ?? r.createdat ?? 0),
-    updatedAt: Number(r.updatedAt ?? r.updatedat ?? 0),
-  };
-}
-
-function toPromotionRow(r: any): PromotionRow {
-  return {
-    id: Number(r.id),
-    listingId: String(r.listingId ?? r.listingid),
-    listingChainKey: String(r.listingChainKey ?? r.listingchainkey),
-    paymentId: r.paymentId != null || r.paymentid != null ? Number(r.paymentId ?? r.paymentid) : null,
-    type: String(r.type) as PromotionRow["type"],
-    status: String(r.status),
-    priority: Number(r.priority),
-    startsAt: Number(r.startsAt ?? r.startsat ?? 0),
-    endsAt: Number(r.endsAt ?? r.endsat ?? 0),
-    createdAt: Number(r.createdAt ?? r.createdat ?? 0),
-    updatedAt: Number(r.updatedAt ?? r.updatedat ?? 0),
   };
 }
 
@@ -679,10 +593,9 @@ export async function queryListings(_db: Pool | any, q: ListingsQuery) {
   const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
 
   const orderBy = (() => {
-    const promotionSort = `COALESCE(ap.priority, 0) DESC, COALESCE(ap.endsat, 0) DESC`;
-    if (q.sort === "price_asc") return `ORDER BY ${promotionSort}, CAST(listings.price AS NUMERIC) ASC, listings.blocknumber DESC`;
-    if (q.sort === "price_desc") return `ORDER BY ${promotionSort}, CAST(listings.price AS NUMERIC) DESC, listings.blocknumber DESC`;
-    return `ORDER BY ${promotionSort}, listings.blocknumber DESC`;
+    if (q.sort === "price_asc") return `ORDER BY CAST(listings.price AS NUMERIC) ASC, listings.blocknumber DESC`;
+    if (q.sort === "price_desc") return `ORDER BY CAST(listings.price AS NUMERIC) DESC, listings.blocknumber DESC`;
+    return `ORDER BY listings.blocknumber DESC`;
   })();
 
   params.push(q.limit, q.offset);
@@ -700,19 +613,9 @@ export async function queryListings(_db: Pool | any, q: ListingsQuery) {
             listings.saletype AS "saleType",
             listings.active,
             listings.createdat AS "createdAt",
-            listings.blocknumber AS "blockNumber",
-            ap.type AS "promotionType",
-            ap.endsat AS "promotionEndsAt",
-            COALESCE(ap.priority, 0) AS "promotionPriority"
+            listings.blocknumber AS "blockNumber"
      FROM listings
      ${joinMetadata ? 'LEFT JOIN metadata m ON m.uri = listings.metadataURI' : ''}
-     LEFT JOIN LATERAL (
-       SELECT type, priority, endsat
-       FROM promotions
-       WHERE listingchainkey = listings.chainkey AND listingid = listings.id AND status = 'active' AND startsat <= EXTRACT(EPOCH FROM NOW())::BIGINT * 1000 AND endsat > EXTRACT(EPOCH FROM NOW())::BIGINT * 1000
-       ORDER BY priority DESC, endsat DESC, id DESC
-       LIMIT 1
-     ) ap ON true
      ${whereSql}
      ${orderBy}
      LIMIT ${limitParam} OFFSET ${offsetParam}`,
@@ -807,30 +710,16 @@ function toAuthNonceRow(r: any): AuthNonceRow {
   };
 }
 
-function toConversationRow(r: any): ConversationRow {
+function toListingCommentRow(r: any): ListingCommentRow {
   return {
     id: Number(r.id),
-    listingId: r.listingId ?? r.listingid ?? null,
-    listingChainKey: r.listingChainKey ?? r.listingchainkey ?? null,
-    createdBy: String(r.createdBy ?? r.createdby),
-    createdAt: Number(r.createdAt ?? r.createdat ?? 0),
-    updatedAt: Number(r.updatedAt ?? r.updatedat ?? 0),
-    counterparty: r.counterparty ?? null,
-    lastMessageBody: r.lastMessageBody ?? r.lastmessagebody ?? null,
-    lastMessageAt: r.lastMessageAt != null ? Number(r.lastMessageAt ?? r.lastmessageat) : null,
-    ...(r.messageCount != null || r.messagecount != null
-      ? { messageCount: Number(r.messageCount ?? r.messagecount) }
-      : {}),
-  };
-}
-
-function toMessageRow(r: any): MessageRow {
-  return {
-    id: Number(r.id),
-    conversationId: Number(r.conversationId ?? r.conversationid),
-    sender: String(r.sender),
+    listingId: String(r.listingId ?? r.listingid),
+    listingChainKey: String(r.listingChainKey ?? r.listingchainkey),
+    authorAddress: String(r.authorAddress ?? r.authoraddress),
     body: String(r.body),
     createdAt: Number(r.createdAt ?? r.createdat ?? 0),
+    updatedAt: Number(r.updatedAt ?? r.updatedat ?? 0),
+    authorDisplayName: r.authorDisplayName ?? r.authordisplayname ?? null,
   };
 }
 
@@ -975,128 +864,63 @@ export async function hasUserBlockBetween(_db: Pool | any, a: string, b: string)
   return Boolean(res.rows[0]);
 }
 
-export async function findConversationByParticipants(_db: Pool | any, a: string, b: string, listingId?: string | null, listingChainKey?: string | null): Promise<ConversationRow | null> {
-  const p = ensurePool(_db);
-  const res = await p.query(
-    `SELECT c.id, c.listingid AS "listingId", c.listingchainkey AS "listingChainKey", c.createdby AS "createdBy", c.createdat AS "createdAt", c.updatedat AS "updatedAt"
-     FROM conversations c
-     INNER JOIN conversation_participants p1 ON p1.conversationid = c.id AND p1.participant = $1
-     INNER JOIN conversation_participants p2 ON p2.conversationid = c.id AND p2.participant = $2
-     WHERE (($3::text IS NULL AND c.listingid IS NULL) OR (c.listingid = $3 AND (($4::text IS NULL AND c.listingchainkey IS NULL) OR c.listingchainkey = $4 OR c.listingchainkey IS NULL)))
-     ORDER BY c.updatedat DESC
-     LIMIT 1`,
-    [a, b, listingId ?? null, listingChainKey ?? null]
-  );
-  return res.rows[0] ? toConversationRow(res.rows[0]) : null;
-}
-
-export async function createConversation(_db: Pool | any, input: { listingId?: string | null; listingChainKey?: string | null; createdBy: string; createdAt: number; updatedAt: number }): Promise<ConversationRow> {
-  const p = ensurePool(_db);
-  const res = await p.query(
-    `INSERT INTO conversations(listingId, listingchainkey, createdBy, createdAt, updatedAt)
-     VALUES($1,$2,$3,$4,$5)
-     RETURNING id, listingid AS "listingId", listingchainkey AS "listingChainKey", createdby AS "createdBy", createdat AS "createdAt", updatedat AS "updatedAt"`,
-    [input.listingId ?? null, input.listingChainKey ?? null, input.createdBy, input.createdAt, input.updatedAt]
-  );
-  return toConversationRow(res.rows[0]);
-}
-
-export async function addConversationParticipant(_db: Pool | any, conversationId: number, participant: string, createdAt: number) {
-  const p = ensurePool(_db);
-  await p.query(
-    `INSERT INTO conversation_participants(conversationId, participant, createdAt)
-     VALUES($1,$2,$3)
-     ON CONFLICT (conversationId, participant) DO NOTHING`,
-    [conversationId, participant, createdAt]
-  );
-}
-
-export async function getConversation(_db: Pool | any, conversationId: number): Promise<ConversationRow | null> {
-  const p = ensurePool(_db);
-  const res = await p.query(
-    'SELECT id, listingid AS "listingId", listingchainkey AS "listingChainKey", createdby AS "createdBy", createdat AS "createdAt", updatedat AS "updatedAt" FROM conversations WHERE id = $1',
-    [conversationId]
-  );
-  return res.rows[0] ? toConversationRow(res.rows[0]) : null;
-}
-
-export async function listConversationParticipants(_db: Pool | any, conversationId: number): Promise<string[]> {
-  const p = ensurePool(_db);
-  const res = await p.query('SELECT participant FROM conversation_participants WHERE conversationid = $1 ORDER BY participant ASC', [conversationId]);
-  return res.rows.map((r: any) => String(r.participant));
-}
-
-export async function touchConversation(_db: Pool | any, conversationId: number, updatedAt: number) {
-  const p = ensurePool(_db);
-  await p.query('UPDATE conversations SET updatedat = $2 WHERE id = $1', [conversationId, updatedAt]);
-}
-
-export async function listUserConversations(_db: Pool | any, participant: string): Promise<ConversationRow[]> {
+export async function listListingComments(
+  _db: Pool | any,
+  listingId: string,
+  listingChainKey: string,
+  opts: { limit: number; offset: number }
+): Promise<ListingCommentRow[]> {
   const p = ensurePool(_db);
   const res = await p.query(
     `SELECT c.id,
             c.listingid AS "listingId",
-          c.listingchainkey AS "listingChainKey",
-            c.createdby AS "createdBy",
+            c.listingchainkey AS "listingChainKey",
+            c.authoraddress AS "authorAddress",
+            c.body,
             c.createdat AS "createdAt",
             c.updatedat AS "updatedAt",
-            cp.participant AS counterparty,
-            lm.body AS "lastMessageBody",
-            lm.createdat AS "lastMessageAt",
-            COALESCE(mc.count, 0) AS "messageCount"
-     FROM conversations c
-     INNER JOIN conversation_participants selfp ON selfp.conversationid = c.id AND selfp.participant = $1
-     LEFT JOIN LATERAL (
-       SELECT participant FROM conversation_participants WHERE conversationid = c.id AND participant <> $1 ORDER BY participant LIMIT 1
-     ) cp ON true
-     LEFT JOIN LATERAL (
-       SELECT body, createdat FROM messages WHERE conversationid = c.id ORDER BY createdat DESC, id DESC LIMIT 1
-     ) lm ON true
-     LEFT JOIN LATERAL (
-       SELECT COUNT(1) AS count FROM messages WHERE conversationid = c.id
-     ) mc ON true
-     ORDER BY COALESCE(lm.createdat, c.updatedat) DESC, c.id DESC`,
-    [participant]
+            u.displayname AS "authorDisplayName"
+     FROM listing_comments c
+     LEFT JOIN users u ON u.address = c.authoraddress
+     WHERE c.listingid = $1 AND c.listingchainkey = $2
+     ORDER BY c.createdat ASC, c.id ASC
+     LIMIT $3 OFFSET $4`,
+    [listingId, listingChainKey, Math.min(Math.max(opts.limit, 1), 100), Math.max(opts.offset, 0)]
   );
-  return res.rows.map(toConversationRow);
+  return res.rows.map(toListingCommentRow);
 }
 
-export async function listConversationMessages(_db: Pool | any, conversationId: number, opts: { limit: number; beforeId?: number | undefined; since?: number | undefined }): Promise<MessageRow[]> {
-  const p = ensurePool(_db);
-  const where: string[] = ['conversationid = $1'];
-  const params: any[] = [conversationId];
-
-  if (typeof opts.beforeId === 'number' && Number.isFinite(opts.beforeId)) {
-    where.push(`id < $${params.length + 1}`);
-    params.push(opts.beforeId);
+export async function createListingComment(
+  _db: Pool | any,
+  input: {
+    listingId: string;
+    listingChainKey: string;
+    authorAddress: string;
+    body: string;
+    createdAt: number;
+    updatedAt: number;
   }
-  if (typeof opts.since === 'number' && Number.isFinite(opts.since)) {
-    where.push(`createdat > $${params.length + 1}`);
-    params.push(opts.since);
-  }
-
-  params.push(Math.min(Math.max(opts.limit, 1), 100));
-  const limitParam = `$${params.length}`;
-  const res = await p.query(
-    `SELECT id, conversationid AS "conversationId", sender, body, createdat AS "createdAt"
-     FROM messages
-     WHERE ${where.join(' AND ')}
-     ORDER BY createdat DESC, id DESC
-     LIMIT ${limitParam}`,
-    params
-  );
-  return res.rows.map(toMessageRow).reverse();
-}
-
-export async function createMessage(_db: Pool | any, input: { conversationId: number; sender: string; body: string; createdAt: number }): Promise<MessageRow> {
+): Promise<ListingCommentRow> {
   const p = ensurePool(_db);
   const res = await p.query(
-    `INSERT INTO messages(conversationId, sender, body, createdAt)
-     VALUES($1,$2,$3,$4)
-     RETURNING id, conversationid AS "conversationId", sender, body, createdat AS "createdAt"`,
-    [input.conversationId, input.sender, input.body, input.createdAt]
+    `WITH inserted AS (
+       INSERT INTO listing_comments(listingid, listingchainkey, authoraddress, body, createdat, updatedat)
+       VALUES($1,$2,$3,$4,$5,$6)
+       RETURNING id, listingid, listingchainkey, authoraddress, body, createdat, updatedat
+     )
+     SELECT i.id,
+            i.listingid AS "listingId",
+            i.listingchainkey AS "listingChainKey",
+            i.authoraddress AS "authorAddress",
+            i.body,
+            i.createdat AS "createdAt",
+            i.updatedat AS "updatedAt",
+            u.displayname AS "authorDisplayName"
+     FROM inserted i
+     LEFT JOIN users u ON u.address = i.authoraddress`,
+    [input.listingId, input.listingChainKey, input.authorAddress, input.body, input.createdAt, input.updatedAt]
   );
-  return toMessageRow(res.rows[0]);
+  return toListingCommentRow(res.rows[0]);
 }
 
 export async function listSavedSearchesByUser(_db: Pool | any, userAddress: string): Promise<SavedSearchRow[]> {
@@ -1211,99 +1035,4 @@ export async function markNotificationRead(_db: Pool | any, id: number, userAddr
 export async function markAllNotificationsRead(_db: Pool | any, userAddress: string, readAt: number) {
   const p = ensurePool(_db);
   await p.query('UPDATE notifications SET readat = $2 WHERE useraddress = $1 AND readat IS NULL', [userAddress, readAt]);
-}
-
-export async function createPayment(_db: Pool | any, input: { userAddress: string; listingId?: string | null; listingChainKey?: string | null; provider: string; providerSessionId?: string | null; status: string; amount: number; currency: string; promotionType?: string | null; metadata: Record<string, unknown>; createdAt: number; updatedAt: number }): Promise<PaymentRow> {
-  const p = ensurePool(_db);
-  const res = await p.query(
-    `INSERT INTO payments(useraddress, listingid, listingchainkey, provider, providersessionid, status, amount, currency, promotiontype, metadatajson, createdat, updatedat)
-     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
-     RETURNING id, useraddress AS "userAddress", listingid AS "listingId", listingchainkey AS "listingChainKey", provider, providersessionid AS "providerSessionId", status, amount, currency, promotiontype AS "promotionType", metadatajson AS "metadataJson", createdat AS "createdAt", updatedat AS "updatedAt"`,
-    [input.userAddress, input.listingId ?? null, input.listingChainKey ?? null, input.provider, input.providerSessionId ?? null, input.status, input.amount, input.currency, input.promotionType ?? null, JSON.stringify(input.metadata), input.createdAt, input.updatedAt]
-  );
-  return toPaymentRow(res.rows[0]);
-}
-
-export async function findPaymentByProviderSessionId(_db: Pool | any, providerSessionId: string): Promise<PaymentRow | null> {
-  const p = ensurePool(_db);
-  const res = await p.query(
-    'SELECT id, useraddress AS "userAddress", listingid AS "listingId", listingchainkey AS "listingChainKey", provider, providersessionid AS "providerSessionId", status, amount, currency, promotiontype AS "promotionType", metadatajson AS "metadataJson", createdat AS "createdAt", updatedat AS "updatedAt" FROM payments WHERE providersessionid = $1 LIMIT 1',
-    [providerSessionId]
-  );
-  return res.rows[0] ? toPaymentRow(res.rows[0]) : null;
-}
-
-export async function updatePaymentStatus(_db: Pool | any, input: { id: number; status: string; metadata: Record<string, unknown>; updatedAt: number }): Promise<PaymentRow | null> {
-  const p = ensurePool(_db);
-  const res = await p.query(
-    `UPDATE payments
-     SET status = $2,
-         metadatajson = $3,
-         updatedat = $4
-     WHERE id = $1
-     RETURNING id, useraddress AS "userAddress", listingid AS "listingId", listingchainkey AS "listingChainKey", provider, providersessionid AS "providerSessionId", status, amount, currency, promotiontype AS "promotionType", metadatajson AS "metadataJson", createdat AS "createdAt", updatedat AS "updatedAt"`,
-    [input.id, input.status, JSON.stringify(input.metadata), input.updatedAt]
-  );
-  return res.rows[0] ? toPaymentRow(res.rows[0]) : null;
-}
-
-export async function listPaymentsByUser(_db: Pool | any, userAddress: string): Promise<PaymentRow[]> {
-  const p = ensurePool(_db);
-  const res = await p.query(
-    'SELECT id, useraddress AS "userAddress", listingid AS "listingId", listingchainkey AS "listingChainKey", provider, providersessionid AS "providerSessionId", status, amount, currency, promotiontype AS "promotionType", metadatajson AS "metadataJson", createdat AS "createdAt", updatedat AS "updatedAt" FROM payments WHERE useraddress = $1 ORDER BY createdat DESC, id DESC',
-    [userAddress]
-  );
-  return res.rows.map(toPaymentRow);
-}
-
-export async function findActivePromotionByListing(_db: Pool | any, listingId: string, listingChainKey: string, now: number): Promise<PromotionRow | null> {
-  const p = ensurePool(_db);
-  const res = await p.query(
-    `SELECT id, listingid AS "listingId", listingchainkey AS "listingChainKey", paymentid AS "paymentId", type, status, priority, startsat AS "startsAt", endsat AS "endsAt", createdat AS "createdAt", updatedat AS "updatedAt"
-     FROM promotions
-     WHERE listingchainkey = $1 AND listingid = $2 AND status = 'active' AND startsat <= $3 AND endsat > $3
-     ORDER BY priority DESC, endsat DESC, id DESC
-     LIMIT 1`,
-    [listingChainKey, listingId, now]
-  );
-  return res.rows[0] ? toPromotionRow(res.rows[0]) : null;
-}
-
-export async function createPromotion(_db: Pool | any, input: { listingId: string; listingChainKey: string; paymentId?: number | null; type: PromotionRow['type']; status: string; priority: number; startsAt: number; endsAt: number; createdAt: number; updatedAt: number }): Promise<PromotionRow> {
-  const p = ensurePool(_db);
-  const res = await p.query(
-    `INSERT INTO promotions(listingid, listingchainkey, paymentid, type, status, priority, startsat, endsat, createdat, updatedat)
-     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
-     RETURNING id, listingid AS "listingId", listingchainkey AS "listingChainKey", paymentid AS "paymentId", type, status, priority, startsat AS "startsAt", endsat AS "endsAt", createdat AS "createdAt", updatedat AS "updatedAt"`,
-    [input.listingId, input.listingChainKey, input.paymentId ?? null, input.type, input.status, input.priority, input.startsAt, input.endsAt, input.createdAt, input.updatedAt]
-  );
-  return toPromotionRow(res.rows[0]);
-}
-
-export async function expirePromotions(_db: Pool | any, now: number) {
-  const p = ensurePool(_db);
-  await p.query("UPDATE promotions SET status = 'expired', updatedat = $2 WHERE status = 'active' AND endsat <= $1", [now, now]);
-}
-
-export async function listPromotionsByUser(_db: Pool | any, userAddress: string): Promise<PromotionRow[]> {
-  const p = ensurePool(_db);
-  const res = await p.query(
-    `SELECT pr.id,
-            pr.listingid AS "listingId",
-          pr.listingchainkey AS "listingChainKey",
-            pr.paymentid AS "paymentId",
-            pr.type,
-            pr.status,
-            pr.priority,
-            pr.startsat AS "startsAt",
-            pr.endsat AS "endsAt",
-            pr.createdat AS "createdAt",
-            pr.updatedat AS "updatedAt"
-     FROM promotions pr
-               INNER JOIN listings l ON l.chainkey = pr.listingchainkey AND l.id = pr.listingid
-     WHERE l.seller = $1
-     ORDER BY pr.createdat DESC, pr.id DESC`,
-    [userAddress]
-  );
-  return res.rows.map(toPromotionRow);
 }

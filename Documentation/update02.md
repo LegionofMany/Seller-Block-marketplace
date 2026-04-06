@@ -1,137 +1,92 @@
-## Plan: Kijiji-Style Classifieds (Clone Scope)
+## Plan: Wallet-First Classifieds Marketplace
 
-Deliver a Kijiji-like classifieds product on top of the existing web3 marketplace core by adding: location-first browsing, Kijiji-like categories, rich listing creation with multi-photo uploads (IPFS/Pinata), user accounts/profiles, saved searches + alerts, paid placements (bump/top/featured), and in-app messaging. Keep existing smart contracts as the transaction rail (escrow/auction/raffle), but make the day-to-day classifieds experience primarily off-chain (Postgres + backend APIs) with on-chain settlement.
+Deliver a classifieds product that feels closer to Kijiji or Facebook Marketplace for discovery and discussion, while keeping wallet connection and on-chain settlement for the transaction layer. The current client direction is: public comments on listings, wallet-first sign-in with RainbowKit, email only as an easy sign-in and notification aid, and no Stripe or other fiat checkout rails.
 
 **Phase 0 Decisions Confirmed**
-- v1 scope is confirmed as: location-first browsing, accounts/profiles, saved searches/alerts, paid placements, messaging, categories, search/filters/sort, and image uploads.
+- v1 scope is confirmed as: location-first browsing, accounts/profiles, public listing comments, saved searches/alerts, categories, search/filters/sort, and image uploads.
 - v1 notification channels are confirmed as in-app notifications plus email; push stays out of scope for v1.
-- v1 safety baseline is confirmed as: global API rate limiting, stricter report/block endpoint throttling, report + block flows, metadata text validation, image-only uploads (max 12 files / 6MB each), and auto-hide for listings that cross the configured report threshold. Messaging should reuse the same rate-limit/report/block/content constraints when Phase 3 ships.
+- v1 safety baseline is confirmed as: global API rate limiting, stricter report/block endpoint throttling, report + block flows, metadata text validation, image-only uploads (max 12 files / 6MB each), auto-hide for listings that cross the configured report threshold, and the same moderation constraints for public comments.
 
 **Implementation Status (Current Repo)**
 - Phase 0 is complete.
 - Phase 1 is complete: listings UX parity is implemented, including multi-image uploads, metadata pinning, categories, location-first browse filters, search, sorting, and pagination.
-- Phase 2 is complete: wallet sign-in, short-lived JWT auth, protected write endpoints, profile editing, seller profile rendering, and a minimal follow/follower system are implemented.
-- Phase 3 is complete: conversations, polling-based message delivery, block/report safety flows, and end-user message pagination via "load older messages" are implemented.
-- Phase 4 is complete: `saved_searches` and `notifications` tables, saved-search CRUD APIs, listings-page save flow, dashboard edit/delete management, in-app notifications, optional Postmark email delivery, and a background saved-search scan worker are implemented.
-- Phase 5 is complete: Stripe-backed checkout sessions, `payments` and `promotions` tables, dashboard purchase/history UI, active promotion ranking in listings queries, and promoted listing badges/highlighting are implemented.
-- Phase 6 repo implementation is complete for the current codebase scope: listings and related records are now chain-scoped in Postgres, backend reads/writes/indexer checkpoints are chain-aware, the backend can start one indexer per configured chain, frontend listing routes carry explicit chain context, and the create/detail/message/notification flows now preserve chain identity end to end.
-- Phase 6 rollout is not fully complete yet: only the Sepolia deployment is live, the low-gas Base Sepolia deployment is still pending, production envs still need the final multi-chain JSON cutover once a second live deployment exists, and second-chain production verification remains rollout-only.
+- Phase 2 is complete: wallet sign-in, short-lived JWT auth, protected write endpoints, profile editing, seller profile rendering, and a minimal follow/follower system are implemented. RainbowKit remains the intended wallet-connect entry point.
+- Phase 3 is now aligned to public listing comments. Private messaging exists historically in the repo, but it is no longer part of the active product surface.
+- Phase 4 is complete: saved searches and notifications are implemented, including CRUD APIs, listings-page save flow, dashboard management, in-app notifications, optional Postmark email delivery, and a background saved-search scan worker.
+- Phase 5 is no longer active product scope: Stripe-backed checkout and paid placements are being removed from the client-facing flow.
+- Phase 6 repo implementation is complete for the current codebase scope: listings and related records are chain-scoped in Postgres, backend reads/writes/indexer checkpoints are chain-aware, the backend can start one indexer per configured chain, and frontend listing routes carry explicit chain context.
+- Phase 6 rollout is not fully complete yet: only the Sepolia deployment is live, the Base Sepolia deployment is still pending, production envs still need the final multi-chain JSON cutover once a second live deployment exists, and second-chain production verification remains rollout-only.
 
 **Steps**
-1. Phase 0 — Product alignment & guardrails (blocking)
-   1) Confirm the exact Kijiji clone target scope for v1 (required features already selected: location, accounts, saved searches/alerts, paid placements, messaging, categories, search/filters/sort, image uploads).
-   2) Define the minimal moderation and safety baseline for messaging and listings (rate limits, abuse reporting, block user, basic content constraints).
-   3) Decide notification channels for alerts and messages: in-app only vs email + push (recommend: in-app + email for v1).
-
-2. Phase 1 — Listings UX parity (posting + browse like Kijiji)
-   1) Listing creation: multi-photo upload + metadata pinning
-      - Backend: implement file upload endpoint(s) and Pinata pinning (store CID(s)); pin metadata JSON to IPFS.
-      - Frontend: replace image URL input with file picker + preview; include category + location + contact fields.
-      - Compatibility: keep rendering existing listings with old single-image URL.
-   2) Kijiji-like categories
-      - Add a fixed initial category tree (category + subcategory) and store on listing/metadata.
-      - Update browsing UI to show category navigation.
-   3) Location-first browsing
-      - Add location fields to listings: city, region/state, postal code (simple text model per your choice).
-      - Add filters: location + category + price + sale type; add sorting: newest, price low→high, price high→low.
-   4) Search + pagination UX
-      - Search bar across title/description + optional location/category scoping.
-      - Pagination controls on home/category pages.
-
-3. Phase 2 — Accounts, auth, and profiles (Kijiji-like identity)
-   1) Auth model
-      - Implement Sign-In with Ethereum (SIWE-like) for session creation.
-      - Backend issues short-lived JWT (or session cookie) bound to wallet address; middleware protects write endpoints.
-   2) User profiles
-      - DB `users` table keyed by wallet address; profile fields: displayName, bio, avatarCid, createdAt.
-      - Seller profile page shows: listings, location (optional), follower count, join date, response rate (later), reputation (later).
-
-4. Phase 3 — Messaging (Kijiji Messages)
-   1) Conversation model
-      - DB tables: `conversations` (participants + listingId optional), `conversation_participants`, `messages`.
-      - APIs: start conversation, list conversations, fetch messages (paged), send message.
-   2) Realtime delivery
-      - Minimum viable: polling with `since` cursor; upgrade to WebSocket/SSE if needed.
-   3) Safety baseline
-      - Rate limiting per address/IP, message length limits, block user, report conversation/message.
-      - Store message text in DB; optionally store attachments later (out of v1 unless required).
-
+1. Phase 0 — Product alignment & guardrails
+   - Confirm wallet-first connect/sign-in, public comments, listings UX, saved searches, and email notifications as the active v1 product.
+   - Keep report/block/rate-limit controls applied to listings and comments.
+2. Phase 1 — Listings UX parity
+   - Multi-photo uploads and metadata pinning.
+   - Kijiji-like categories and location-first browsing.
+   - Search, sort, and pagination across listings.
+3. Phase 2 — Accounts, auth, and profiles
+   - SIWE-style session creation with wallet signature.
+   - Profile editing and seller pages keyed by wallet address.
+   - Email remains optional convenience, not the primary identity rail.
+4. Phase 3 — Public listing comments
+   - DB table: listing_comments keyed to (listingChainKey, listingId).
+   - APIs: list comments for a listing and create a comment as an authenticated wallet user.
+   - Listing detail pages should show a public discussion thread below the ad.
 5. Phase 4 — Saved searches & alerts
-   1) Saved searches
-      - DB `saved_searches` table storing query params (category, location, price range, keywords, sale type, sort).
-      - UI to save/edit/delete searches.
-   2) Alerts/notifications
-      - Minimum viable: email alerts (SendGrid/Postmark) + in-app notification list.
-      - Background job: periodic scan for new listings matching saved searches.
-      - DB `notifications` table (userAddress, type, payloadJson, readAt, createdAt).
-
-6. Phase 5 — Paid placements (Kijiji-style monetization)
-   1) Placement types
-      - Bump (moves listing to top), Top Ad (pinned placement), Featured (highlighted).
-   2) Storage & ranking
-      - DB tables: `payments` (provider, status, amount, currency/chainId, txHash), `promotions` (listingId, type, startsAt, endsAt, priority).
-      - Update listings queries to apply promotion ranking rules.
-   3) Payments integration
-      - Decide payment rail per market: off-chain (Stripe) vs on-chain stablecoin (USDC). Recommend: Stripe for Kijiji parity; keep on-chain option as Phase 6.
-
-7. Phase 6 — Chain/gas optimization (optional but aligned to update.md)
-   1) Multi-chain configuration
-      - Implemented: frontend supports multiple chain configs + deployment addresses through `NEXT_PUBLIC_CHAIN_CONFIG_JSON`.
-      - Implemented: backend indexer/auth/env parsing are chain-aware through `CHAIN_CONFIG_JSON` and chain-scoped checkpoints.
-      - Implemented: listing identity, API reads/writes, messages, promotions, notifications, and dashboard/listing links now preserve chain identity end to end.
-      - Rollout-only: set production backend/frontend envs to the final multi-chain JSON after a second chain has real deployed contract addresses.
-   2) Deploy to a low-gas EVM chain (TBD)
-      - Implemented: added Base Sepolia deployment template JSON files and documented the rollout path.
-      - Rollout-only: perform a real Base Sepolia deployment and replace template addresses with live values.
-   3) Stablecoin-first UX
-      - Implemented: per-chain token metadata and default settlement token selection are wired into env parsing, wallet setup, and the create listing flow.
-      - Implemented: chain-aware token/native labels now flow through the major listing, bidding, payout, and dashboard surfaces that were updated during Phase 6.
-      - Rollout-only: add real per-chain stablecoin addresses in production envs once additional chains are deployed.
+   - Saved-search CRUD.
+   - In-app notifications and optional email notifications.
+   - Background worker to scan for new matches.
+6. Phase 5 — Monetization and payment rails
+   - Stripe, fiat checkout, and listing placement purchases are out of scope.
+   - Settlement and value transfer should remain wallet-connected and chain-aware.
+7. Phase 6 — Chain/gas optimization
+   - Implemented: frontend supports multiple chain configs through NEXT_PUBLIC_CHAIN_CONFIG_JSON.
+   - Implemented: backend env parsing, auth, indexer checkpoints, and listing identity are chain-aware through CHAIN_CONFIG_JSON.
+   - Rollout-only: production multi-chain cutover after a second real deployment exists.
 
 **Production Verification Snapshot (2026-04-04)**
-- Verified locally: backend migration `007_chain_scoped_listings.sql` is applied, backend health returns `{"status":"ok"}`, and the config-driven Sepolia indexer starts successfully.
+- Verified locally: backend migrations apply, backend health returns {"status":"ok"}, and the config-driven Sepolia indexer starts successfully.
 - Verified against the deployed backend: health and read-path checks were executed as part of the production pass.
-- Rollout blocker for true multi-chain production verification: Base Sepolia deployment is not live yet, and the current deployer account has no Base Sepolia gas balance, so a second real chain could not be cut over today.
+- Rollout blocker for true multi-chain production verification: Base Sepolia deployment is not live yet, and the current deployer account has no Base Sepolia gas balance.
+- Current product-scope correction: public comments are replacing private messaging, and Stripe-backed product surfaces are being removed from the live app.
 
 **Relevant files**
 - Listing creation and browsing
-  - backend/src/routes/metadata.ts and backend/src/controllers/metadataController.ts — evolve to IPFS pinning + multi-image metadata
-  - backend/src/routes/listings.ts and backend/src/controllers/listingsController.ts — add category/location/search/sort params
-  - backend/migrations/001_init.sql — reference baseline; add new migration(s) for new tables
-  - frontend/app/create/page.tsx — add file upload, category/location/contact fields
-  - frontend/app/page.tsx and frontend/lib/hooks/useListings.ts — search/filter/sort/pagination UI and query wiring
-  - frontend/components/listing/ListingCard.tsx — category/location badges, featured styling
-  - frontend/app/seller/[address]/page.tsx — richer seller profile view
-- Auth/accounts
-  - backend/src/middlewares (new) — SIWE/JWT middleware
-  - frontend/components/providers/Web3Providers.tsx — reuse wagmi; add sign-in flow
-- Messaging (new areas)
-  - backend/src/routes/messages.ts (new) and controllers/services to manage conversations/messages
-  - frontend/app/messages/* (new) — conversation list + thread UI
-- Alerts
-  - backend/src/services/jobs/* (new) — scheduled job runner
-  - backend/src/routes/savedSearches.ts (new), notifications routes
-- Monetization
-   - backend/src/routes/promotions.ts (new)
+  - backend/src/routes/metadata.ts and backend/src/controllers/metadataController.ts
+  - backend/src/routes/listings.ts and backend/src/controllers/listingsController.ts
+  - frontend/app/create/page.tsx
+  - frontend/app/page.tsx and frontend/lib/hooks/useListings.ts
+  - frontend/components/listing/ListingCard.tsx
+- Wallet auth and profiles
+  - frontend/components/providers/Web3Providers.tsx
+  - frontend/components/providers/AuthProvider.tsx
+  - backend/src/routes/auth.ts
+  - backend/src/routes/users.ts
+- Public comments
+  - backend/migrations/008_public_listing_comments.sql
+  - backend/src/routes/comments.ts
+  - backend/src/controllers/commentsController.ts
+  - frontend/app/listing/[id]/page.tsx
 
 **Verification**
 1. Listings parity
-   - Create listing with multi-images + category + location; verify pinning and display on home/category/seller pages.
-   - Verify search/filter/sort/pagination match expected Kijiji behaviors.
+   - Create listing with multi-images + category + location and verify browse/search behavior.
 2. Accounts
-   - SIWE login: nonce issuance, signature verification, token/session; protected routes enforced.
-3. Messaging
-   - Start conversation from listing; send/receive messages; pagination works; rate limit triggers.
-4. Saved searches/alerts
-   - Save a search and receive notification/email when a matching listing is created.
-5. Promotions
-   - Purchase/activate bump/top/featured; verify ranking and expiration.
+   - Verify wallet connect, nonce issuance, signature verification, and protected routes.
+3. Public comments
+   - Open a listing, post a public comment as a signed-in wallet user, and verify comments render in order with validation and rate limiting.
+4. Saved searches and alerts
+   - Save a search and verify in-app or email notification delivery for matching listings.
+5. Payment scope
+   - Verify no Stripe purchase flow is exposed in the active dashboard or listing experience.
 
 **Decisions**
 - Pinata for IPFS pinning.
-- Location model: city/region/postal code (simple text fields).
-- Messaging is in scope (explicitly confirmed), so we must add moderation and rate limiting baseline.
+- Location model: city/region/postal code.
+- Public comments are in scope; private messaging is not.
+- Wallet-first sign-in/connect remains in scope; Stripe does not.
 
 **Further Considerations**
-1. Messaging + alerts require a chosen email provider and background job runtime (Render cron/worker). Pick one early.
-2. If the client wants exact Kijiji UX, confirm which sections must exist (Autos, Real Estate, Jobs, etc.) and whether category-specific fields are required (e.g., car make/model/year).
+1. Email remains useful for saved-search notifications and account convenience, but should not replace wallet identity.
+2. If the client wants tighter moderation later, add delete/hide/lock controls for listing comment threads.
