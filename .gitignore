@@ -2,3 +2,4 @@
 Documentation/*
 .vercel
 .env*.local
+backend/smoke_live_check.out
