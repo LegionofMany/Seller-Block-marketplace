@@ -20,6 +20,7 @@ import { Textarea } from "@/components/ui/textarea";
 
 import { getChainConfigByKey, getEnv } from "@/lib/env";
 import { marketplaceRegistryAbi } from "@/lib/contracts/abi/MarketplaceRegistry";
+import { marketplaceSettlementV2Abi } from "@/lib/contracts/abi/MarketplaceSettlementV2";
 import { erc20Abi } from "@/lib/contracts/abi/ERC20";
 import { raffleModuleAbi } from "@/lib/contracts/abi/RaffleModule";
 import { parseListing } from "@/lib/contracts/parse";
@@ -30,6 +31,17 @@ import { buildListingHref } from "@/lib/listings";
 import { fetchMetadataById, fetchMetadataByUri, metadataIdFromUri, type MarketplaceMetadata } from "@/lib/metadata";
 import { fetchJson } from "@/lib/api";
 import { addBlockedSeller } from "@/lib/blocks";
+import { describeToken } from "@/lib/tokens";
+import {
+  fetchLatestSellerOrder,
+  prepareBuyerAcceptance,
+  prepareEscrowAction,
+  prepareSellerOrder,
+  publishSellerOrder,
+  relayAcceptWithPermit,
+  relayEscrowAction,
+  type ListingOrderIntent,
+} from "@/lib/settlement";
 
 function asBytes32(value: string): Hex | null {
   if (!value?.startsWith("0x")) return null;
@@ -47,6 +59,31 @@ type ListingComment = {
   updatedAt: number;
   authorDisplayName?: string | null;
 };
+
+const ZERO_BYTES32 = ("0x" + "00".repeat(32)) as Hex;
+
+const erc20PermitNonceAbi = [
+  {
+    type: "function",
+    name: "nonces",
+    stateMutability: "view",
+    inputs: [{ name: "owner", type: "address" }],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+] as const;
+
+function settlementEscrowStatusLabel(status: number) {
+  switch (status) {
+    case 1:
+      return "Funded";
+    case 2:
+      return "Released";
+    case 3:
+      return "Refunded";
+    default:
+      return "Not funded";
+  }
+}
 
 export default function ListingDetailPage() {
   const searchParams = useSearchParams();
@@ -67,7 +104,7 @@ export default function ListingDetailPage() {
   const chainKey = searchParams.get("chain") ?? env.defaultChain.key;
   const activeChain = getChainConfigByKey(env, chainKey);
   const registryAddress = activeChain.marketplaceRegistryAddress;
-  const escrowVaultAddress = activeChain.escrowVaultAddress;
+  const settlementAddress = activeChain.marketplaceSettlementV2Address;
   const auctionModuleAddress = activeChain.auctionModuleAddress;
   const raffleModuleAddress = activeChain.raffleModuleAddress;
 
@@ -78,7 +115,7 @@ export default function ListingDetailPage() {
 
   const [bidAmount, setBidAmount] = React.useState("");
   const [ticketCount, setTicketCount] = React.useState("1");
-  const [reveal, setReveal] = React.useState<Hex>(("0x" + "00".repeat(32)) as Hex);
+  const [reveal, setReveal] = React.useState<Hex>(ZERO_BYTES32);
 
   const { data: raw, isLoading, isError, error } = useReadContract({
     address: registryAddress,
@@ -110,6 +147,16 @@ export default function ListingDetailPage() {
   const [isLoadingComments, setIsLoadingComments] = React.useState(false);
   const [isSubmittingComment, setIsSubmittingComment] = React.useState(false);
   const [commentDraft, setCommentDraft] = React.useState("");
+  const [sellerOrder, setSellerOrder] = React.useState<ListingOrderIntent | null>(null);
+  const [sellerOrderError, setSellerOrderError] = React.useState<string | null>(null);
+  const [isLoadingSellerOrder, setIsLoadingSellerOrder] = React.useState(false);
+  const [isPublishingSellerOrder, setIsPublishingSellerOrder] = React.useState(false);
+  const [isRelayingSettlementAction, setIsRelayingSettlementAction] = React.useState(false);
+
+  const settlementToken = React.useMemo(
+    () => (listing ? describeToken(env, activeChain.chainId, listing.token as Address) : null),
+    [activeChain.chainId, env, listing]
+  );
 
   const galleryImages = React.useMemo(() => {
     const items = Array.isArray(metadata?.images) && metadata.images.length
@@ -145,6 +192,92 @@ export default function ListingDetailPage() {
 
     void run();
   }, [listingId, activeChain.key]);
+
+  const refreshSellerOrder = React.useCallback(async () => {
+    if (!listingId || !listing || listing.saleType !== 0) {
+      setSellerOrder(null);
+      setSellerOrderError(null);
+      return;
+    }
+
+    try {
+      setIsLoadingSellerOrder(true);
+      setSellerOrderError(null);
+      const res = await fetchLatestSellerOrder(listingId, activeChain.key);
+      setSellerOrder(res.item);
+    } catch (e: any) {
+      setSellerOrder(null);
+      setSellerOrderError(e?.message ?? "Failed to load seller order");
+    } finally {
+      setIsLoadingSellerOrder(false);
+    }
+  }, [activeChain.key, listing, listingId]);
+
+  React.useEffect(() => {
+    void refreshSellerOrder();
+  }, [refreshSellerOrder]);
+
+  const { data: permitNonce } = useReadContract({
+    address: listing?.token,
+    chainId: activeChain.chainId,
+    abi: erc20PermitNonceAbi,
+    functionName: "nonces",
+    args: listing && !native && address ? [address as Address] : undefined,
+    query: {
+      enabled: Boolean(listing && !native && address),
+      retry: 1,
+    },
+  });
+
+  const { data: consumedSellerOrder } = useReadContract({
+    address: settlementAddress,
+    chainId: activeChain.chainId,
+    abi: marketplaceSettlementV2Abi,
+    functionName: "consumedOrders",
+    args: sellerOrder ? [sellerOrder.orderHash] : undefined,
+    query: {
+      enabled: Boolean(sellerOrder),
+      retry: 1,
+    },
+  });
+
+  const { data: buyerEscrowId } = useReadContract({
+    address: settlementAddress,
+    chainId: activeChain.chainId,
+    abi: marketplaceSettlementV2Abi,
+    functionName: "computeEscrowId",
+    args: sellerOrder && address ? [sellerOrder.orderHash, address as Address] : undefined,
+    query: {
+      enabled: Boolean(sellerOrder && address),
+      retry: 1,
+    },
+  });
+
+  const { data: settlementEscrowRaw } = useReadContract({
+    address: settlementAddress,
+    chainId: activeChain.chainId,
+    abi: marketplaceSettlementV2Abi,
+    functionName: "escrows",
+    args: buyerEscrowId ? [buyerEscrowId] : undefined,
+    query: {
+      enabled: Boolean(buyerEscrowId),
+      retry: 1,
+    },
+  });
+
+  const settlementEscrow = React.useMemo(() => {
+    if (!settlementEscrowRaw) return null;
+    const tuple = settlementEscrowRaw as any;
+    return {
+      orderHash: (tuple.orderHash ?? tuple[0]) as Hex,
+      listingId: (tuple.listingId ?? tuple[1]) as Hex,
+      seller: (tuple.seller ?? tuple[2]) as Address,
+      buyer: (tuple.buyer ?? tuple[3]) as Address,
+      token: (tuple.token ?? tuple[4]) as Address,
+      amount: (tuple.amount ?? tuple[5]) as bigint,
+      status: Number(tuple.status ?? tuple[6]),
+    };
+  }, [settlementEscrowRaw]);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -352,29 +485,141 @@ export default function ListingDetailPage() {
       address.toLowerCase() === arbiterAddress.toLowerCase()
   );
 
-  // ERC20 allowance (fixed-price only)
-  const needsErc20Approval = Boolean(
-    listing &&
-      !native &&
-      escrowVaultAddress !== zeroAddress &&
+  const canUseGaslessSettlement = Boolean(listing && listing.saleType === 0 && !native);
+  const hasActiveSellerOrder = Boolean(sellerOrder && sellerOrder.expiry * 1000 > Date.now());
+  const hasConsumedSellerOrder = Boolean(consumedSellerOrder);
+  const buyerHasFundedEscrow = Boolean(
+    settlementEscrow &&
+      settlementEscrow.status === 1 &&
       address &&
-      listing.status === 1 &&
-      listing.saleType === 0
+      settlementEscrow.buyer.toLowerCase() === address.toLowerCase()
   );
+  const settlementPendingForSeller = Boolean(settlementEscrow && settlementEscrow.status === 1 && isSeller);
 
-  const { data: allowance } = useReadContract({
-    address: (listing?.token ?? zeroAddress) as Address,
-    chainId: activeChain.chainId,
-    abi: erc20Abi,
-    functionName: "allowance",
-    args:
-      needsErc20Approval && address
-        ? [address as Address, escrowVaultAddress]
-        : undefined,
-    query: { enabled: Boolean(needsErc20Approval && address && listing?.token && isAddress(listing.token)) },
-  });
+  async function publishGaslessSellerOrder() {
+    if (!listingId || !walletClient || !address || !auth.isAuthenticated || !listing) {
+      toast.error("Connect, sign in, and open the listing as the seller first");
+      return;
+    }
 
-  const approvedEnough = typeof allowance === "bigint" && listing ? allowance >= listing.price : false;
+    try {
+      setIsPublishingSellerOrder(true);
+      const prepared = await prepareSellerOrder(listingId, activeChain.key, {});
+      const signature = await walletClient.signTypedData({
+        account: address as Address,
+        domain: prepared.domain as any,
+        types: prepared.types as any,
+        primaryType: prepared.primaryType as any,
+        message: prepared.message as any,
+      });
+      const res = await publishSellerOrder(listingId, activeChain.key, prepared.message, signature);
+      setSellerOrder(res.item);
+      toast.success("Gasless checkout published");
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to publish gasless checkout");
+    } finally {
+      setIsPublishingSellerOrder(false);
+    }
+  }
+
+  async function acceptGaslessOrder() {
+    if (!listingId || !walletClient || !address || !auth.isAuthenticated || !sellerOrder || !settlementToken) {
+      toast.error("Connect and sign in before buying");
+      return;
+    }
+    if (settlementToken.isNative) {
+      toast.error("Gasless settlement currently supports permit-enabled ERC20 listings only");
+      return;
+    }
+    if (permitNonce == null) {
+      toast.error("This token does not expose permit nonces for gasless checkout");
+      return;
+    }
+
+    try {
+      setIsRelayingSettlementAction(true);
+      const prepared = await prepareBuyerAcceptance(listingId, activeChain.key, { orderHash: sellerOrder.orderHash });
+      const buyerSignature = await walletClient.signTypedData({
+        account: address as Address,
+        domain: prepared.domain as any,
+        types: prepared.types as any,
+        primaryType: prepared.primaryType as any,
+        message: prepared.message as any,
+      });
+
+      const permitDeadline = prepared.message.deadline;
+      const permitSignature = await walletClient.signTypedData({
+        account: address as Address,
+        domain: {
+          name: settlementToken.permitName ?? settlementToken.name,
+          version: settlementToken.permitVersion ?? "1",
+          chainId: activeChain.chainId,
+          verifyingContract: settlementToken.address,
+        } as any,
+        types: {
+          Permit: [
+            { name: "owner", type: "address" },
+            { name: "spender", type: "address" },
+            { name: "value", type: "uint256" },
+            { name: "nonce", type: "uint256" },
+            { name: "deadline", type: "uint256" },
+          ],
+        } as any,
+        primaryType: "Permit",
+        message: {
+          owner: address as Address,
+          spender: settlementAddress,
+          value: BigInt(sellerOrder.price),
+          nonce: permitNonce,
+          deadline: BigInt(permitDeadline),
+        } as any,
+      });
+
+      const relayed = await relayAcceptWithPermit(listingId, activeChain.key, {
+        orderHash: prepared.orderHash,
+        buyerDeadline: prepared.message.deadline,
+        buyerSignature,
+        permitSignature,
+        permitDeadline,
+      });
+      setPendingHash(relayed.txHash);
+      toast.success("Gasless purchase submitted");
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to submit gasless purchase");
+    } finally {
+      setIsRelayingSettlementAction(false);
+    }
+  }
+
+  async function relayBuyerEscrowAction(action: "confirm" | "refund") {
+    if (!listingId || !walletClient || !address || !auth.isAuthenticated || !sellerOrder) {
+      toast.error("Connect and sign in before continuing");
+      return;
+    }
+
+    try {
+      setIsRelayingSettlementAction(true);
+      const prepared = await prepareEscrowAction(listingId, activeChain.key, action, { orderHash: sellerOrder.orderHash });
+      const buyerSignature = await walletClient.signTypedData({
+        account: address as Address,
+        domain: prepared.domain as any,
+        types: prepared.types as any,
+        primaryType: prepared.primaryType as any,
+        message: prepared.message as any,
+      });
+      const relayed = await relayEscrowAction(listingId, activeChain.key, action, {
+        orderHash: prepared.orderHash,
+        deadline: prepared.message.deadline,
+        buyerSignature,
+      });
+      setPendingHash(relayed.txHash);
+      toast.success(action === "confirm" ? "Delivery confirmation submitted" : "Refund request submitted");
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to relay buyer action");
+    } finally {
+      setIsRelayingSettlementAction(false);
+    }
+  }
 
   const parsedBidAmount = React.useMemo(() => {
     if (!bidAmount) return null;
@@ -459,12 +704,13 @@ export default function ListingDetailPage() {
     if (receipt.isSuccess) {
       toastTx.success("Transaction confirmed");
       setPendingHash(undefined);
+      void refreshSellerOrder();
     }
     if (receipt.isError) {
       toastTx.fail(receipt.error?.message ?? "Transaction failed");
       setPendingHash(undefined);
     }
-  }, [receipt.isSuccess, receipt.isError]);
+  }, [receipt.isSuccess, receipt.isError, receipt.error, refreshSellerOrder, toastTx]);
 
   async function send(tx: Promise<`0x${string}`>) {
     try {
@@ -773,62 +1019,122 @@ export default function ListingDetailPage() {
                   </Button>
                 ) : null}
 
-                {listing.saleType === 0 && listing.status === 1 && !isSeller ? (
-                  <div className="space-y-3">
-                    {!native ? (
-                      <div className="rounded-md border p-4 text-sm">
-                        <div className="font-medium">ERC20 purchase</div>
-                        <div className="text-muted-foreground">
-                          Approve the EscrowVault, then buy.
-                        </div>
-                        <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-                          <Button
-                            variant="secondary"
-                            size="lg"
-                            className="w-full sm:w-auto"
-                            disabled={approvedEnough || receipt.isLoading}
-                            onClick={() => send(writeContractAsync({
-                              address: listing.token,
-                              chainId: activeChain.chainId,
-                              abi: erc20Abi,
-                              functionName: "approve",
-                              args: [escrowVaultAddress, listing.price],
-                            }))}
-                          >
-                            {approvedEnough ? "Approved" : "Approve"}
-                          </Button>
-                          <Button
-                            size="lg"
-                            className="w-full sm:w-auto"
-                            disabled={!approvedEnough || receipt.isLoading}
-                            onClick={() => send(writeContractAsync({
-                              address: registryAddress,
-                              chainId: activeChain.chainId,
-                              abi: marketplaceRegistryAbi,
-                              functionName: "buy",
-                              args: [listingId],
-                            }))}
-                          >
-                            Buy
-                          </Button>
-                        </div>
+                {listing.saleType === 0 && listing.status === 1 ? (
+                  <div className="rounded-md border p-4 text-sm space-y-3">
+                    <div className="font-medium">Gasless fixed-price checkout</div>
+                    {!canUseGaslessSettlement ? (
+                      <div className="text-muted-foreground">
+                        This listing is priced in the native token. The V2 relayer flow currently supports permit-enabled ERC20 checkout only.
                       </div>
                     ) : (
-                      <Button
-                        size="lg"
-                        className="w-full sm:w-auto"
-                        disabled={receipt.isLoading}
-                        onClick={() => send(writeContractAsync({
-                          address: registryAddress,
-                          chainId: activeChain.chainId,
-                          abi: marketplaceRegistryAbi,
-                          functionName: "buy",
-                          args: [listingId],
-                          value: listing.price,
-                        }))}
-                      >
-                        Buy ({formatPrice(listing.price, true, activeChain.nativeCurrencySymbol)})
-                      </Button>
+                      <>
+                        <div className="text-muted-foreground">
+                          Sellers publish a signed checkout intent once. Buyers then sign permit and acceptance typed data, and the relayer submits the transaction.
+                        </div>
+
+                        {isLoadingSellerOrder ? (
+                          <div className="text-muted-foreground">Loading seller checkout intent...</div>
+                        ) : sellerOrderError ? (
+                          <div className="text-destructive">{sellerOrderError}</div>
+                        ) : hasActiveSellerOrder && sellerOrder ? (
+                          <div className="rounded-md border bg-muted/30 p-3 space-y-2">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <div className="font-medium">Seller order is live</div>
+                              <Badge variant="outline">Expires {new Date(sellerOrder.expiry * 1000).toLocaleString()}</Badge>
+                            </div>
+                            <div className="text-xs text-muted-foreground break-all">Order hash: {sellerOrder.orderHash}</div>
+                            <div className="text-xs text-muted-foreground">
+                              Settlement status: {settlementEscrow ? settlementEscrowStatusLabel(settlementEscrow.status) : hasConsumedSellerOrder ? "Consumed" : "Awaiting buyer"}
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="rounded-md border border-dashed p-3 text-muted-foreground">
+                            No seller checkout intent is published yet.
+                          </div>
+                        )}
+
+                        {isSeller ? (
+                          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                            {!auth.isAuthenticated ? (
+                              <Button type="button" variant="outline" onClick={() => void auth.signIn()} disabled={auth.isLoading}>
+                                Sign in with wallet
+                              </Button>
+                            ) : null}
+                            <Button
+                              type="button"
+                              size="lg"
+                              className="w-full sm:w-auto"
+                              disabled={isPublishingSellerOrder || !auth.isAuthenticated || isRelayingSettlementAction}
+                              onClick={() => void publishGaslessSellerOrder()}
+                            >
+                              {isPublishingSellerOrder ? "Publishing..." : hasActiveSellerOrder ? "Refresh signed checkout" : "Publish signed checkout"}
+                            </Button>
+                          </div>
+                        ) : null}
+
+                        {!isSeller ? (
+                          <div className="flex flex-col gap-2">
+                            {!auth.isAuthenticated && address ? (
+                              <Button type="button" variant="outline" onClick={() => void auth.signIn()} disabled={auth.isLoading}>
+                                Sign in with wallet
+                              </Button>
+                            ) : null}
+
+                            {buyerHasFundedEscrow ? (
+                              <div className="flex flex-col gap-2 sm:flex-row">
+                                <Button
+                                  size="lg"
+                                  className="w-full sm:w-auto"
+                                  disabled={isRelayingSettlementAction || receipt.isLoading}
+                                  onClick={() => void relayBuyerEscrowAction("confirm")}
+                                >
+                                  Confirm Delivery
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="lg"
+                                  className="w-full sm:w-auto"
+                                  disabled={isRelayingSettlementAction || receipt.isLoading}
+                                  onClick={() => void relayBuyerEscrowAction("refund")}
+                                >
+                                  Request Refund
+                                </Button>
+                              </div>
+                            ) : (
+                              <Button
+                                type="button"
+                                size="lg"
+                                className="w-full sm:w-auto"
+                                disabled={
+                                  !auth.isAuthenticated ||
+                                  !hasActiveSellerOrder ||
+                                  isRelayingSettlementAction ||
+                                  receipt.isLoading ||
+                                  permitNonce == null
+                                }
+                                onClick={() => void acceptGaslessOrder()}
+                              >
+                                Buy Gaslessly
+                              </Button>
+                            )}
+
+                            {permitNonce == null ? (
+                              <div className="text-xs text-muted-foreground">
+                                This token must support ERC-2612 permit for the relayer checkout path.
+                              </div>
+                            ) : null}
+                          </div>
+                        ) : null}
+
+                        {settlementPendingForSeller ? (
+                          <div className="rounded-md border bg-muted/30 p-3 text-muted-foreground space-y-1">
+                            <div className="font-medium text-foreground">Buyer escrow funded</div>
+                            <div>The buyer has funded MarketplaceSettlementV2 and can now confirm delivery or request a refund from this page.</div>
+                            {settlementEscrow?.buyer ? <div className="text-xs">Buyer: {shortenHex(settlementEscrow.buyer)}</div> : null}
+                          </div>
+                        ) : null}
+                      </>
                     )}
                   </div>
                 ) : null}

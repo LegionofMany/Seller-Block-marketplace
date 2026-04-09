@@ -6,6 +6,8 @@ export type SupportedToken = {
   address: Address;
   decimals: number;
   isStablecoin?: boolean;
+  permitName?: string;
+  permitVersion?: string;
 };
 
 export type FrontendChainConfig = {
@@ -15,6 +17,7 @@ export type FrontendChainConfig = {
   rpcUrl: string;
   rpcFallbackUrl?: string;
   marketplaceRegistryAddress: Address;
+  marketplaceSettlementV2Address: Address;
   escrowVaultAddress: Address;
   auctionModuleAddress: Address;
   raffleModuleAddress: Address;
@@ -33,6 +36,7 @@ export type ClientEnv = {
   backendUrl?: string;
   ipfsGatewayBaseUrl?: string;
   marketplaceRegistryAddress: Address;
+  marketplaceSettlementV2Address: Address;
   escrowVaultAddress: Address;
   auctionModuleAddress: Address;
   raffleModuleAddress: Address;
@@ -66,6 +70,8 @@ function parseToken(raw: unknown, chainKey: string): SupportedToken {
   const name = typeof token.name === "string" ? token.name.trim() : symbol;
   const addressRaw = typeof token.address === "string" ? token.address.trim() : "";
   const decimals = Number(token.decimals ?? 18);
+  const permitName = typeof token.permitName === "string" ? token.permitName.trim() : undefined;
+  const permitVersion = typeof token.permitVersion === "string" ? token.permitVersion.trim() : undefined;
   if (!symbol) throw new Error(`Missing token symbol for chain ${chainKey}`);
   if (!addressRaw || !isAddress(addressRaw)) throw new Error(`Invalid token address for ${symbol} on chain ${chainKey}`);
   if (!Number.isInteger(decimals) || decimals < 0 || decimals > 36) {
@@ -77,6 +83,8 @@ function parseToken(raw: unknown, chainKey: string): SupportedToken {
     address: getAddress(addressRaw) as Address,
     decimals,
     ...(token.isStablecoin === true ? { isStablecoin: true } : {}),
+    ...(permitName ? { permitName } : {}),
+    ...(permitVersion ? { permitVersion } : {}),
   };
 }
 
@@ -101,6 +109,7 @@ function parseChainConfigJson(raw: string): { defaultChainKey?: string; chains: 
     const rpcUrl = typeof chain.rpcUrl === "string" ? chain.rpcUrl.trim() : "";
     const rpcFallbackUrl = typeof chain.rpcFallbackUrl === "string" ? chain.rpcFallbackUrl.trim() : undefined;
     const marketplaceRegistryAddress = typeof chain.marketplaceRegistryAddress === "string" ? chain.marketplaceRegistryAddress.trim() : "";
+    const marketplaceSettlementV2Address = typeof chain.marketplaceSettlementV2Address === "string" ? chain.marketplaceSettlementV2Address.trim() : "";
     const escrowVaultAddress = typeof chain.escrowVaultAddress === "string" ? chain.escrowVaultAddress.trim() : "";
     const auctionModuleAddress = typeof chain.auctionModuleAddress === "string" ? chain.auctionModuleAddress.trim() : "";
     const raffleModuleAddress = typeof chain.raffleModuleAddress === "string" ? chain.raffleModuleAddress.trim() : "";
@@ -115,6 +124,7 @@ function parseChainConfigJson(raw: string): { defaultChainKey?: string; chains: 
     if (!Number.isInteger(chainId) || chainId <= 0) throw new Error(`Invalid chainId for ${key}`);
     if (!rpcUrl) throw new Error(`Missing rpcUrl for ${key}`);
     if (!marketplaceRegistryAddress) throw new Error(`Missing marketplaceRegistryAddress for ${key}`);
+    if (!marketplaceSettlementV2Address) throw new Error(`Missing marketplaceSettlementV2Address for ${key}`);
 
     return {
       key,
@@ -123,6 +133,7 @@ function parseChainConfigJson(raw: string): { defaultChainKey?: string; chains: 
       rpcUrl,
       ...(rpcFallbackUrl ? { rpcFallbackUrl } : {}),
       marketplaceRegistryAddress: asAddress(marketplaceRegistryAddress, `marketplaceRegistryAddress for ${key}`),
+      marketplaceSettlementV2Address: asAddress(marketplaceSettlementV2Address, `marketplaceSettlementV2Address for ${key}`),
       escrowVaultAddress: optionalAddress(escrowVaultAddress, `escrowVaultAddress for ${key}`),
       auctionModuleAddress: optionalAddress(auctionModuleAddress, `auctionModuleAddress for ${key}`),
       raffleModuleAddress: optionalAddress(raffleModuleAddress, `raffleModuleAddress for ${key}`),
@@ -161,6 +172,10 @@ export function getEnv(): ClientEnv {
         if (!marketplaceRegistryAddressRaw) {
           throw new Error("Missing required env var: NEXT_PUBLIC_MARKETPLACE_REGISTRY_ADDRESS");
         }
+        const marketplaceSettlementV2AddressRaw = clean(process.env.NEXT_PUBLIC_MARKETPLACE_SETTLEMENT_V2_ADDRESS);
+        if (!marketplaceSettlementV2AddressRaw) {
+          throw new Error("Missing required env var: NEXT_PUBLIC_MARKETPLACE_SETTLEMENT_V2_ADDRESS");
+        }
 
         const fromBlock = (() => {
           const raw = clean(process.env.NEXT_PUBLIC_SEPOLIA_START_BLOCK);
@@ -180,6 +195,10 @@ export function getEnv(): ClientEnv {
               rpcUrl: sepoliaRpcUrl,
               ...(sepoliaRpcFallbackUrl ? { rpcFallbackUrl: sepoliaRpcFallbackUrl } : {}),
               marketplaceRegistryAddress: asAddress(marketplaceRegistryAddressRaw, "NEXT_PUBLIC_MARKETPLACE_REGISTRY_ADDRESS"),
+              marketplaceSettlementV2Address: asAddress(
+                marketplaceSettlementV2AddressRaw,
+                "NEXT_PUBLIC_MARKETPLACE_SETTLEMENT_V2_ADDRESS"
+              ),
               escrowVaultAddress: optionalAddress(clean(process.env.NEXT_PUBLIC_ESCROW_VAULT_ADDRESS), "NEXT_PUBLIC_ESCROW_VAULT_ADDRESS"),
               auctionModuleAddress: optionalAddress(clean(process.env.NEXT_PUBLIC_AUCTION_MODULE_ADDRESS), "NEXT_PUBLIC_AUCTION_MODULE_ADDRESS"),
               raffleModuleAddress: optionalAddress(clean(process.env.NEXT_PUBLIC_RAFFLE_MODULE_ADDRESS), "NEXT_PUBLIC_RAFFLE_MODULE_ADDRESS"),
@@ -205,6 +224,7 @@ export function getEnv(): ClientEnv {
     backendUrl,
     ipfsGatewayBaseUrl,
     marketplaceRegistryAddress: defaultChain.marketplaceRegistryAddress,
+    marketplaceSettlementV2Address: defaultChain.marketplaceSettlementV2Address,
     escrowVaultAddress: defaultChain.escrowVaultAddress,
     auctionModuleAddress: defaultChain.auctionModuleAddress,
     raffleModuleAddress: defaultChain.raffleModuleAddress,

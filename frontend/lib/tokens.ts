@@ -9,6 +9,8 @@ export type TokenDescriptor = {
   decimals: number;
   isNative: boolean;
   isStablecoin?: boolean;
+  permitName?: string;
+  permitVersion?: string;
 };
 
 export function getTokenOptions(env: ClientEnv, chainId?: number | null): TokenDescriptor[] {
@@ -28,6 +30,8 @@ export function getTokenOptions(env: ClientEnv, chainId?: number | null): TokenD
       decimals: token.decimals,
       isNative: false,
       ...(token.isStablecoin ? { isStablecoin: true } : {}),
+      ...(token.permitName ? { permitName: token.permitName } : {}),
+      ...(token.permitVersion ? { permitVersion: token.permitVersion } : {}),
     })),
   ];
 }
@@ -43,6 +47,8 @@ export function getDefaultSettlementToken(env: ClientEnv, chainId?: number | nul
       decimals: preferred.decimals,
       isNative: false,
       ...(preferred.isStablecoin ? { isStablecoin: true } : {}),
+      ...(preferred.permitName ? { permitName: preferred.permitName } : {}),
+      ...(preferred.permitVersion ? { permitVersion: preferred.permitVersion } : {}),
     };
   }
 
@@ -76,6 +82,8 @@ export function describeToken(env: ClientEnv, chainId: number | null | undefined
       decimals: known.decimals,
       isNative: false,
       ...(known.isStablecoin ? { isStablecoin: true } : {}),
+      ...(known.permitName ? { permitName: known.permitName } : {}),
+      ...(known.permitVersion ? { permitVersion: known.permitVersion } : {}),
     };
   }
 

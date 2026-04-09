@@ -88,6 +88,22 @@ export type ListingCommentRow = {
   authorDisplayName?: string | null;
 };
 
+export type ListingOrderIntentRow = {
+  orderHash: string;
+  chainKey: string;
+  listingId: string;
+  seller: string;
+  signature: string;
+  token: string;
+  price: string;
+  expiry: number;
+  nonce: string;
+  termsHash: string;
+  isLatest: boolean;
+  createdAt: number;
+  updatedAt: number;
+};
+
 export type SavedSearchFilters = {
   q?: string;
   category?: string;
@@ -723,6 +739,24 @@ function toListingCommentRow(r: any): ListingCommentRow {
   };
 }
 
+function toListingOrderIntentRow(r: any): ListingOrderIntentRow {
+  return {
+    orderHash: String(r.orderHash ?? r.orderhash),
+    chainKey: String(r.chainKey ?? r.chainkey),
+    listingId: String(r.listingId ?? r.listingid),
+    seller: String(r.seller),
+    signature: String(r.signature),
+    token: String(r.token),
+    price: String(r.price),
+    expiry: Number(r.expiry),
+    nonce: String(r.nonce),
+    termsHash: String(r.termsHash ?? r.termshash),
+    isLatest: Boolean(r.isLatest ?? r.islatest),
+    createdAt: Number(r.createdAt ?? r.createdat ?? 0),
+    updatedAt: Number(r.updatedAt ?? r.updatedat ?? 0),
+  };
+}
+
 export async function createAuthNonce(_db: Pool | any, address: string, nonce: string, expiresAt: number, createdAt: number) {
   const p = ensurePool(_db);
   await p.query(
@@ -921,6 +955,122 @@ export async function createListingComment(
     [input.listingId, input.listingChainKey, input.authorAddress, input.body, input.createdAt, input.updatedAt]
   );
   return toListingCommentRow(res.rows[0]);
+}
+
+export async function publishListingOrderIntent(_db: Pool | any, row: ListingOrderIntentRow): Promise<ListingOrderIntentRow> {
+  const p = ensurePool(_db);
+  const client = await p.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query(
+      "UPDATE listing_order_intents SET islatest = FALSE, updatedat = $3 WHERE chainkey = $1 AND listingid = $2 AND islatest = TRUE",
+      [row.chainKey, row.listingId, row.updatedAt]
+    );
+
+    const res = await client.query(
+      `INSERT INTO listing_order_intents(orderhash, chainkey, listingid, seller, signature, token, price, expiry, nonce, termshash, islatest, createdat, updatedat)
+       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,TRUE,$11,$12)
+       ON CONFLICT (orderhash) DO UPDATE SET
+         chainkey = EXCLUDED.chainkey,
+         listingid = EXCLUDED.listingid,
+         seller = EXCLUDED.seller,
+         signature = EXCLUDED.signature,
+         token = EXCLUDED.token,
+         price = EXCLUDED.price,
+         expiry = EXCLUDED.expiry,
+         nonce = EXCLUDED.nonce,
+         termshash = EXCLUDED.termshash,
+         islatest = TRUE,
+         updatedat = EXCLUDED.updatedat
+       RETURNING orderhash AS "orderHash",
+                 chainkey AS "chainKey",
+                 listingid AS "listingId",
+                 seller,
+                 signature,
+                 token,
+                 price,
+                 expiry,
+                 nonce,
+                 termshash AS "termsHash",
+                 islatest AS "isLatest",
+                 createdat AS "createdAt",
+                 updatedat AS "updatedAt"`,
+      [
+        row.orderHash,
+        row.chainKey,
+        row.listingId,
+        row.seller,
+        row.signature,
+        row.token,
+        row.price,
+        row.expiry,
+        row.nonce,
+        row.termsHash,
+        row.createdAt,
+        row.updatedAt,
+      ]
+    );
+
+    await client.query("COMMIT");
+    return toListingOrderIntentRow(res.rows[0]);
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+export async function findLatestListingOrderIntent(
+  _db: Pool | any,
+  listingId: string,
+  chainKey: string
+): Promise<ListingOrderIntentRow | null> {
+  const p = ensurePool(_db);
+  const res = await p.query(
+    `SELECT orderhash AS "orderHash",
+            chainkey AS "chainKey",
+            listingid AS "listingId",
+            seller,
+            signature,
+            token,
+            price,
+            expiry,
+            nonce,
+            termshash AS "termsHash",
+            islatest AS "isLatest",
+            createdat AS "createdAt",
+            updatedat AS "updatedAt"
+     FROM listing_order_intents
+     WHERE listingid = $1 AND chainkey = $2 AND islatest = TRUE
+     LIMIT 1`,
+    [listingId, chainKey]
+  );
+  return res.rows[0] ? toListingOrderIntentRow(res.rows[0]) : null;
+}
+
+export async function findListingOrderIntentByHash(_db: Pool | any, orderHash: string): Promise<ListingOrderIntentRow | null> {
+  const p = ensurePool(_db);
+  const res = await p.query(
+    `SELECT orderhash AS "orderHash",
+            chainkey AS "chainKey",
+            listingid AS "listingId",
+            seller,
+            signature,
+            token,
+            price,
+            expiry,
+            nonce,
+            termshash AS "termsHash",
+            islatest AS "isLatest",
+            createdat AS "createdAt",
+            updatedat AS "updatedAt"
+     FROM listing_order_intents
+     WHERE orderhash = $1
+     LIMIT 1`,
+    [orderHash]
+  );
+  return res.rows[0] ? toListingOrderIntentRow(res.rows[0]) : null;
 }
 
 export async function listSavedSearchesByUser(_db: Pool | any, userAddress: string): Promise<SavedSearchRow[]> {

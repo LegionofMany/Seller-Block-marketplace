@@ -6,6 +6,8 @@ export type SupportedChainToken = {
   address: string;
   decimals: number;
   isStablecoin?: boolean;
+  permitName?: string;
+  permitVersion?: string;
 };
 
 export type SupportedChainConfig = {
@@ -15,6 +17,7 @@ export type SupportedChainConfig = {
   rpcUrl: string;
   rpcFallbackUrl?: string;
   marketplaceRegistryAddress: string;
+  marketplaceSettlementV2Address?: string;
   startBlock?: number;
   nativeCurrencySymbol: string;
   stablecoins: SupportedChainToken[];
@@ -38,18 +41,15 @@ export type Env = {
   cacheTtlMs: number;
   rateLimitWindowMs: number;
   rateLimitMax: number;
-
   listingAutoHideReportsThreshold: number;
-
   authJwtSecret: string;
   authTokenTtlSeconds: number;
   authNonceTtlSeconds: number;
-
   frontendAppUrl?: string;
   notificationsScanMs: number;
   notificationEmailFrom?: string;
   postmarkServerToken?: string;
-
+  relayerPrivateKey?: string;
   pinataJwt?: string;
   pinataGatewayBaseUrl?: string;
 };
@@ -119,7 +119,7 @@ function validateDatabaseUrl(name: string, value: string) {
     );
   }
 
-  if (!['postgres:', 'postgresql:'].includes(parsed.protocol)) {
+  if (!["postgres:", "postgresql:"].includes(parsed.protocol)) {
     throw new Error(`Invalid ${name} protocol (expected postgres:// or postgresql://)`);
   }
 
@@ -127,7 +127,7 @@ function validateDatabaseUrl(name: string, value: string) {
     throw new Error(`Invalid ${name} (missing hostname)`);
   }
 
-  if (!parsed.pathname || parsed.pathname === '/') {
+  if (!parsed.pathname || parsed.pathname === "/") {
     throw new Error(`Invalid ${name} (missing database name)`);
   }
 }
@@ -175,17 +175,25 @@ function parseSupportedChains(raw: string | undefined): { defaultChainKey?: stri
     const chainId = Number(chain.chainId);
     const rpcUrl = typeof chain.rpcUrl === "string" ? chain.rpcUrl.trim() : "";
     const rpcFallbackUrl = typeof chain.rpcFallbackUrl === "string" ? chain.rpcFallbackUrl.trim() : undefined;
-    const marketplaceRegistryAddressRaw = typeof chain.marketplaceRegistryAddress === "string" ? chain.marketplaceRegistryAddress.trim() : "";
+    const marketplaceRegistryAddressRaw =
+      typeof chain.marketplaceRegistryAddress === "string" ? chain.marketplaceRegistryAddress.trim() : "";
+    const marketplaceSettlementV2AddressRaw =
+      typeof chain.marketplaceSettlementV2Address === "string" ? chain.marketplaceSettlementV2Address.trim() : undefined;
     const startBlock = chain.startBlock == null || chain.startBlock === "" ? undefined : Number(chain.startBlock);
-    const nativeCurrencySymbol = typeof chain.nativeCurrencySymbol === "string" && chain.nativeCurrencySymbol.trim() ? chain.nativeCurrencySymbol.trim() : "ETH";
+    const nativeCurrencySymbol =
+      typeof chain.nativeCurrencySymbol === "string" && chain.nativeCurrencySymbol.trim() ? chain.nativeCurrencySymbol.trim() : "ETH";
     const stablecoins = Array.isArray(chain.stablecoins)
       ? chain.stablecoins.map((token, tokenIndex) => {
-          if (!token || typeof token !== "object") throw new Error(`Invalid token config at index ${tokenIndex} for chain ${key || index}`);
+          if (!token || typeof token !== "object") {
+            throw new Error(`Invalid token config at index ${tokenIndex} for chain ${key || index}`);
+          }
           const value = token as Record<string, unknown>;
           const symbol = typeof value.symbol === "string" ? value.symbol.trim() : "";
           const tokenName = typeof value.name === "string" ? value.name.trim() : symbol;
           const address = typeof value.address === "string" ? value.address.trim() : "";
           const decimals = Number(value.decimals ?? 18);
+          const permitName = typeof value.permitName === "string" ? value.permitName.trim() : undefined;
+          const permitVersion = typeof value.permitVersion === "string" ? value.permitVersion.trim() : undefined;
           if (!symbol) throw new Error(`Missing token symbol for chain ${key || index}`);
           if (!isAddress(address)) throw new Error(`Invalid token address for ${symbol} on chain ${key || index}`);
           if (!Number.isInteger(decimals) || decimals < 0 || decimals > 36) {
@@ -197,6 +205,8 @@ function parseSupportedChains(raw: string | undefined): { defaultChainKey?: stri
             address: getAddress(address),
             decimals,
             ...(value.isStablecoin === true ? { isStablecoin: true } : {}),
+            ...(permitName ? { permitName } : {}),
+            ...(permitVersion ? { permitVersion } : {}),
           } satisfies SupportedChainToken;
         })
       : [];
@@ -207,6 +217,9 @@ function parseSupportedChains(raw: string | undefined): { defaultChainKey?: stri
     validateRpcUrl(`rpcUrl for ${key}`, rpcUrl);
     if (rpcFallbackUrl) validateRpcUrl(`rpcFallbackUrl for ${key}`, rpcFallbackUrl);
     if (!isAddress(marketplaceRegistryAddressRaw)) throw new Error(`Invalid marketplaceRegistryAddress for ${key}`);
+    if (marketplaceSettlementV2AddressRaw && !isAddress(marketplaceSettlementV2AddressRaw)) {
+      throw new Error(`Invalid marketplaceSettlementV2Address for ${key}`);
+    }
     if (startBlock != null && (!Number.isFinite(startBlock) || startBlock < 0)) throw new Error(`Invalid startBlock for ${key}`);
 
     return {
@@ -216,6 +229,9 @@ function parseSupportedChains(raw: string | undefined): { defaultChainKey?: stri
       rpcUrl,
       ...(rpcFallbackUrl ? { rpcFallbackUrl } : {}),
       marketplaceRegistryAddress: getAddress(marketplaceRegistryAddressRaw),
+      ...(marketplaceSettlementV2AddressRaw
+        ? { marketplaceSettlementV2Address: getAddress(marketplaceSettlementV2AddressRaw) }
+        : {}),
       ...(startBlock != null ? { startBlock } : {}),
       nativeCurrencySymbol,
       stablecoins,
@@ -249,6 +265,10 @@ export function getEnv(): Env {
 
     const marketplaceRegistryAddressRaw = required("MARKETPLACE_REGISTRY_ADDRESS");
     if (!isAddress(marketplaceRegistryAddressRaw)) throw new Error("Invalid MARKETPLACE_REGISTRY_ADDRESS");
+    const marketplaceSettlementV2AddressRaw = optional("MARKETPLACE_SETTLEMENT_V2_ADDRESS");
+    if (marketplaceSettlementV2AddressRaw && !isAddress(marketplaceSettlementV2AddressRaw)) {
+      throw new Error("Invalid MARKETPLACE_SETTLEMENT_V2_ADDRESS");
+    }
 
     return {
       key: optional("CHAIN_KEY") ?? "sepolia",
@@ -257,6 +277,9 @@ export function getEnv(): Env {
       rpcUrl: sepoliaRpcUrl,
       ...(sepoliaRpcUrlFallback ? { rpcFallbackUrl: sepoliaRpcUrlFallback } : {}),
       marketplaceRegistryAddress: getAddress(marketplaceRegistryAddressRaw),
+      ...(marketplaceSettlementV2AddressRaw
+        ? { marketplaceSettlementV2Address: getAddress(marketplaceSettlementV2AddressRaw) }
+        : {}),
       ...(optional("START_BLOCK") ? { startBlock: Number(optional("START_BLOCK")) } : {}),
       nativeCurrencySymbol: optional("CHAIN_NATIVE_CURRENCY_SYMBOL") ?? "ETH",
       stablecoins: [],
@@ -277,11 +300,8 @@ export function getEnv(): Env {
   }
   validateDatabaseUrl("DATABASE_URL", databaseUrl);
 
-  // Kept as dbPath for backward compatibility in the rest of the codebase.
   const dbPath = databaseUrl;
-
   const corsOrigins = parseOrigins(optional("CORS_ORIGINS") ?? optional("CORS_ORIGIN"));
-
   const indexerEnabled = boolFromEnv("INDEXER_ENABLED", true);
   const indexerPollMs = numberFromEnv("INDEXER_POLL_MS", 5_000);
   const indexerChunkSize = numberFromEnv("INDEXER_CHUNK_SIZE", 2_000);
@@ -292,11 +312,7 @@ export function getEnv(): Env {
   const cacheTtlMs = numberFromEnv("CACHE_TTL_MS", 30_000);
   const rateLimitWindowMs = numberFromEnv("RATE_LIMIT_WINDOW_MS", 60_000);
   const rateLimitMax = numberFromEnv("RATE_LIMIT_MAX", 120);
-
-  // Safety baseline: auto-hide listings once they have >= N reports.
-  // Set to 0 to disable auto-hide.
   const listingAutoHideReportsThreshold = numberFromEnv("LISTING_AUTOHIDE_REPORTS_THRESHOLD", 3);
-
   const authJwtSecret = optional("AUTH_JWT_SECRET") ?? "seller-block-local-dev-secret-change-me";
   const authTokenTtlSeconds = numberFromEnv("AUTH_TOKEN_TTL_SECONDS", 60 * 60 * 8);
   const authNonceTtlSeconds = numberFromEnv("AUTH_NONCE_TTL_SECONDS", 60 * 10);
@@ -307,7 +323,7 @@ export function getEnv(): Env {
   const notificationsScanMs = numberFromEnv("NOTIFICATIONS_SCAN_MS", 60_000);
   const notificationEmailFrom = optional("NOTIFICATION_EMAIL_FROM");
   const postmarkServerToken = optional("POSTMARK_SERVER_TOKEN");
-
+  const relayerPrivateKey = optional("RELAYER_PRIVATE_KEY");
   const pinataJwt = optional("PINATA_JWT");
   const pinataGatewayBaseUrl = optional("PINATA_GATEWAY_BASE_URL");
   if (pinataGatewayBaseUrl) validateRpcUrl("PINATA_GATEWAY_BASE_URL", pinataGatewayBaseUrl);
@@ -330,18 +346,15 @@ export function getEnv(): Env {
     cacheTtlMs,
     rateLimitWindowMs,
     rateLimitMax,
-
     listingAutoHideReportsThreshold,
-
     authJwtSecret,
     authTokenTtlSeconds,
     authNonceTtlSeconds,
-
     ...(frontendAppUrl ? { frontendAppUrl } : {}),
     notificationsScanMs,
     ...(notificationEmailFrom ? { notificationEmailFrom } : {}),
     ...(postmarkServerToken ? { postmarkServerToken } : {}),
-
+    ...(relayerPrivateKey ? { relayerPrivateKey } : {}),
     ...(pinataJwt ? { pinataJwt } : {}),
     ...(pinataGatewayBaseUrl ? { pinataGatewayBaseUrl } : {}),
   };

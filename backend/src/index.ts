@@ -19,6 +19,7 @@ import { usersRouter } from "./routes/users";
 import { commentsRouter } from "./routes/comments";
 import { savedSearchesRouter } from "./routes/savedSearches";
 import { notificationsRouter } from "./routes/notifications";
+import { settlementRouter } from "./routes/settlement";
 import { startMarketplaceIndexer } from "./indexer/marketplaceIndexer";
 import { startNotificationsWorker } from "./services/notifications";
 
@@ -76,6 +77,7 @@ async function main() {
   app.use(commentsRouter());
   app.use(savedSearchesRouter());
   app.use(notificationsRouter());
+  app.use(settlementRouter());
 
   app.use(notFound);
   app.use(errorHandler);
