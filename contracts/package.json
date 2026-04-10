@@ -12,7 +12,10 @@
     "build:client": "tsc -p tsconfig.client.json",
     "deploy:local": "hardhat run scripts/deploy.ts --network hardhatMainnet",
     "deploy:sepolia": "hardhat run scripts/deploy.ts --network sepolia",
-    "deploy:base": "hardhat run scripts/deploy.ts --network base"
+    "deploy:base": "hardhat run scripts/deploy.ts --network base",
+    "deploy:settlement-v2:local": "hardhat run scripts/deploy-settlement-v2.ts --network hardhatMainnet",
+    "deploy:settlement-v2:sepolia": "hardhat run scripts/deploy-settlement-v2.ts --network sepolia",
+    "deploy:settlement-v2:base": "hardhat run scripts/deploy-settlement-v2.ts --network base"
   },
   "keywords": [],
   "author": "",

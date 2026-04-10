@@ -218,6 +218,71 @@ Do not keep extending the current registry as-is. Build a V2 settlement contract
    - `invalidateNonce`
    - deadline enforcement
 
+## Production Rollout Checklist
+
+### Target Chain Checklist
+
+1. Choose the live chain for the first production rollout. The current runtime is still Sepolia-only, so mainnet or Base mainnet must be chosen explicitly before go-live.
+2. Deploy `MarketplaceSettlementV2` with the final `owner`, `feeRecipient`, `arbiter`, and `protocolFeeBps` values.
+3. Verify the deployed source on the target block explorer and save the final address into `contracts/deployments/settlement-v2.<network>.json`.
+4. Fund the relayer wallet on the same chain with enough native gas for sustained throughput and incident recovery.
+5. Choose the supported settlement token set. Production should be stablecoin-first, and every listed token should support permit signing.
+6. Record the final token metadata per chain: `address`, `decimals`, `permitName`, and `permitVersion`.
+7. Run a live dry run on the target chain before public release: publish signed checkout, relayed accept, relayed confirm, and relayed refund.
+
+### Render Checklist
+
+1. Apply backend migration `010_listing_order_intents.sql` to the production Postgres database before enabling V2 traffic.
+2. Replace the zero placeholder `marketplaceSettlementV2Address` in `CHAIN_CONFIG_JSON` with the real deployed address.
+3. Add the production stablecoin list to `CHAIN_CONFIG_JSON`, including `permitName` and `permitVersion` for each supported token.
+4. Set `MARKETPLACE_SETTLEMENT_V2_ADDRESS` to the same deployed address for the single-chain fallback path.
+5. Set `RELAYER_PRIVATE_KEY` to the dedicated relayer wallet private key.
+6. Confirm `FRONTEND_APP_URL`, `CORS_ORIGINS`, `AUTH_JWT_SECRET`, `DATABASE_URL`, and notification settings are production values.
+7. Redeploy the backend and verify `/health`, settlement typed-data endpoints, and relayed actions against the live database.
+
+### Vercel Checklist
+
+1. Replace the zero placeholder `marketplaceSettlementV2Address` in `NEXT_PUBLIC_CHAIN_CONFIG_JSON` with the real deployed address.
+2. Add the production stablecoin list to `NEXT_PUBLIC_CHAIN_CONFIG_JSON`, including `permitName` and `permitVersion`.
+3. Set `NEXT_PUBLIC_MARKETPLACE_SETTLEMENT_V2_ADDRESS` to the same deployed address for the legacy fallback path.
+4. Confirm `NEXT_PUBLIC_BACKEND_URL`, wallet-connect config, RPC URLs, and explorer URLs point to the production environment.
+5. Trigger a fresh build after env updates so the client receives the final chain config.
+6. Verify the listing detail page can load the seller order, read `consumedOrders`, compute escrow ids, and render relayed status correctly.
+
+### Pre-Launch Smoke Checklist
+
+1. Seller signs in and publishes a gasless fixed-price checkout intent.
+2. Buyer signs in and completes a relayed `acceptOrderWithPermit` purchase.
+3. Buyer completes a relayed confirm-delivery flow.
+4. Buyer completes a relayed refund flow on a fresh escrow.
+5. Backend persistence returns the latest signed order intent after relayer activity.
+6. Monitoring captures relayer failures, contract reverts, and expired typed-data payloads.
+
+## Relayer And Security Audit Before Deploy
+
+### Current Gaps
+
+1. Critical: runtime config still used a zero-address placeholder for `MarketplaceSettlementV2`, which would make the frontend and backend appear configured while all contract calls fail. This is now blocked at env-parse time and must be replaced with the real deployed address.
+2. High: the relayer is currently a single hot wallet model. Production needs a dedicated wallet, funded gas reserves, rotation procedures, and restricted access to the private key.
+3. High: the relayer has no explicit budget guardrails in code today. Before production, add operational caps per wallet, per IP, and per time window so a burst of signed requests cannot drain sponsored gas unexpectedly.
+4. High: supported settlement tokens are not configured yet. Without a strict allowlist of permit-enabled tokens, the gasless path is operationally undefined for production.
+5. Medium: relayed actions depend on short-lived signatures and backend uptime. Production needs retry policy, idempotent transaction tracking, and alerting for stuck or failed relays.
+6. Medium: arbiter power is still a single-address role. Production should move arbiter control to a multisig or a governed operational wallet before public value is routed through V2.
+7. Medium: there is no production deploy script for V2 in the current repo baseline. A dedicated deployment path and artifact format are required to avoid hand-edited addresses.
+
+### Required Mitigations Before Go-Live
+
+1. Deploy `MarketplaceSettlementV2`, verify it, and replace all zero placeholders with the live address.
+2. Use a dedicated relayer wallet with only the gas balance needed for operations, not treasury or admin funds.
+3. Keep the production token set narrow at launch. Start with one stablecoin per chain that is confirmed permit-compatible.
+4. Add relayer monitoring and alerting for failed broadcasts, revert-heavy request bursts, and abnormal gas consumption.
+5. Move `owner` and `arbiter` roles to multisig-controlled addresses if real value will move through the protocol.
+6. Complete a full live smoke pass after every env cutover and before public traffic is allowed.
+
+## Pre-Deploy Repository Cleanup
+
+The repository should not ship local SQLite databases or ad-hoc build output files. Before production rollout, remove them from version control and keep them ignored locally.
+
 4. Add permit-based payment functions
    For fixed-price:
    - `acceptOrderWithPermit`

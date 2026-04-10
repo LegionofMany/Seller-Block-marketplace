@@ -3,3 +3,14 @@ Documentation/*
 .vercel
 .env*.local
 backend/smoke_live_check.out
+.next/
+backend/dist/
+contracts/artifacts/
+contracts/cache/
+coverage/
+node_modules/
+*.log
+*.tsbuildinfo
+data/*.sqlite*
+backend/data/*.sqlite*
+frontend/build-output.txt

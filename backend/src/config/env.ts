@@ -1,4 +1,4 @@
-import { isAddress, getAddress } from "ethers";
+import { ZeroAddress, isAddress, getAddress } from "ethers";
 
 export type SupportedChainToken = {
   symbol: string;
@@ -63,6 +63,12 @@ function required(name: string): string {
 function optional(name: string): string | undefined {
   const value = process.env[name]?.trim();
   return value?.length ? value : undefined;
+}
+
+function assertNonZeroAddress(value: string, name: string) {
+  if (getAddress(value) === ZeroAddress) {
+    throw new Error(`Invalid ${name} (zero address is not allowed)`);
+  }
 }
 
 function numberFromEnv(name: string, fallback: number): number {
@@ -196,6 +202,7 @@ function parseSupportedChains(raw: string | undefined): { defaultChainKey?: stri
           const permitVersion = typeof value.permitVersion === "string" ? value.permitVersion.trim() : undefined;
           if (!symbol) throw new Error(`Missing token symbol for chain ${key || index}`);
           if (!isAddress(address)) throw new Error(`Invalid token address for ${symbol} on chain ${key || index}`);
+          assertNonZeroAddress(address, `token address for ${symbol} on chain ${key || index}`);
           if (!Number.isInteger(decimals) || decimals < 0 || decimals > 36) {
             throw new Error(`Invalid token decimals for ${symbol} on chain ${key || index}`);
           }
@@ -217,8 +224,12 @@ function parseSupportedChains(raw: string | undefined): { defaultChainKey?: stri
     validateRpcUrl(`rpcUrl for ${key}`, rpcUrl);
     if (rpcFallbackUrl) validateRpcUrl(`rpcFallbackUrl for ${key}`, rpcFallbackUrl);
     if (!isAddress(marketplaceRegistryAddressRaw)) throw new Error(`Invalid marketplaceRegistryAddress for ${key}`);
+    assertNonZeroAddress(marketplaceRegistryAddressRaw, `marketplaceRegistryAddress for ${key}`);
     if (marketplaceSettlementV2AddressRaw && !isAddress(marketplaceSettlementV2AddressRaw)) {
       throw new Error(`Invalid marketplaceSettlementV2Address for ${key}`);
+    }
+    if (marketplaceSettlementV2AddressRaw) {
+      assertNonZeroAddress(marketplaceSettlementV2AddressRaw, `marketplaceSettlementV2Address for ${key}`);
     }
     if (startBlock != null && (!Number.isFinite(startBlock) || startBlock < 0)) throw new Error(`Invalid startBlock for ${key}`);
 
@@ -265,9 +276,13 @@ export function getEnv(): Env {
 
     const marketplaceRegistryAddressRaw = required("MARKETPLACE_REGISTRY_ADDRESS");
     if (!isAddress(marketplaceRegistryAddressRaw)) throw new Error("Invalid MARKETPLACE_REGISTRY_ADDRESS");
+    assertNonZeroAddress(marketplaceRegistryAddressRaw, "MARKETPLACE_REGISTRY_ADDRESS");
     const marketplaceSettlementV2AddressRaw = optional("MARKETPLACE_SETTLEMENT_V2_ADDRESS");
     if (marketplaceSettlementV2AddressRaw && !isAddress(marketplaceSettlementV2AddressRaw)) {
       throw new Error("Invalid MARKETPLACE_SETTLEMENT_V2_ADDRESS");
+    }
+    if (marketplaceSettlementV2AddressRaw) {
+      assertNonZeroAddress(marketplaceSettlementV2AddressRaw, "MARKETPLACE_SETTLEMENT_V2_ADDRESS");
     }
 
     return {
@@ -324,6 +339,9 @@ export function getEnv(): Env {
   const notificationEmailFrom = optional("NOTIFICATION_EMAIL_FROM");
   const postmarkServerToken = optional("POSTMARK_SERVER_TOKEN");
   const relayerPrivateKey = optional("RELAYER_PRIVATE_KEY");
+  if (relayerPrivateKey && !/^0x[0-9a-fA-F]{64}$/.test(relayerPrivateKey)) {
+    throw new Error("Invalid RELAYER_PRIVATE_KEY");
+  }
   const pinataJwt = optional("PINATA_JWT");
   const pinataGatewayBaseUrl = optional("PINATA_GATEWAY_BASE_URL");
   if (pinataGatewayBaseUrl) validateRpcUrl("PINATA_GATEWAY_BASE_URL", pinataGatewayBaseUrl);

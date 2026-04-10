@@ -10,7 +10,9 @@ Source files are in `contracts/contracts/`:
 - `MarketplaceRegistry.sol`
 - `AuctionModule.sol`
 - `RaffleModule.sol`
+- `MarketplaceSettlementV2.sol`
 - `ERC20Mock.sol` (test helper)
+- `ERC20PermitMock.sol` (test helper)
 
 ## Tooling
 
@@ -118,6 +120,8 @@ Live deployments (require environment variables):
 ```bash
 npm run deploy:sepolia
 npm run deploy:base
+npm run deploy:settlement-v2:sepolia
+npm run deploy:settlement-v2:base
 ```
 
 ### Environment variables
@@ -136,6 +140,10 @@ VAULT_ADDRESS=
 # If unset, deployer is used as fee recipient.
 FEE_RECIPIENT=
 
+# Optional owner override for MarketplaceSettlementV2.
+# If unset, deployer is used as owner.
+SETTLEMENT_OWNER=
+
 # Optional arbiter (leave empty to disable arbiter actions).
 ARBITER=
 
@@ -147,6 +155,28 @@ PROTOCOL_FEE_BPS=
 After `npm run deploy:<network>`, the script writes deployed addresses to:
 
 - `contracts/deployments/<network>.json`
+- `contracts/deployments/settlement-v2.<network>.json`
+
+### MarketplaceSettlementV2 deployment artifact format
+
+`settlement-v2.<network>.json` contains:
+
+```json
+{
+	"kind": "MarketplaceSettlementV2",
+	"network": "sepolia",
+	"chainId": "11155111",
+	"deployedAt": "2026-04-10T00:00:00.000Z",
+	"deployer": "0x...",
+	"owner": "0x...",
+	"feeRecipient": "0x...",
+	"arbiter": "0x...",
+	"protocolFeeBps": 250,
+	"contracts": {
+		"MarketplaceSettlementV2": "0x..."
+	}
+}
+```
 
 Phase 6 note:
 

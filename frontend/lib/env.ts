@@ -55,6 +55,7 @@ function clean(value: string | undefined) {
 
 function asAddress(value: string, envName: string) {
   if (!isAddress(value)) throw new Error(`Invalid ${envName}`);
+  if (getAddress(value) === zeroAddress) throw new Error(`Invalid ${envName} (zero address is not allowed)`);
   return getAddress(value) as Address;
 }
 
@@ -74,6 +75,7 @@ function parseToken(raw: unknown, chainKey: string): SupportedToken {
   const permitVersion = typeof token.permitVersion === "string" ? token.permitVersion.trim() : undefined;
   if (!symbol) throw new Error(`Missing token symbol for chain ${chainKey}`);
   if (!addressRaw || !isAddress(addressRaw)) throw new Error(`Invalid token address for ${symbol} on chain ${chainKey}`);
+  if (getAddress(addressRaw) === zeroAddress) throw new Error(`Invalid token address for ${symbol} on chain ${chainKey}`);
   if (!Number.isInteger(decimals) || decimals < 0 || decimals > 36) {
     throw new Error(`Invalid token decimals for ${symbol} on chain ${chainKey}`);
   }
