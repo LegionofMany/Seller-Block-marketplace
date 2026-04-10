@@ -9,6 +9,7 @@
 
 # Deployment output (generated addresses)
 /deployments
+!/deployments/*.example.json
 
 # Hardhat Build Artifacts
 /artifacts
