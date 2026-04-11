@@ -78,9 +78,14 @@ const relayEscrowActionSchema = z.object({
   buyerSignature: z.string().min(1),
 });
 
-async function ensureFixedPriceListing(listingId: string, chainKey?: string | null) {
-  const { db } = getContext();
-  const chain = requireSettlementChain(chainKey);
+async function ensureFixedPriceListing(
+  listingId: string,
+  chainKey?: string | null,
+  options?: { requireSettlementConfig?: boolean }
+) {
+  const { db, getSupportedChain } = getContext();
+  const requireSettlementConfig = options?.requireSettlementConfig ?? true;
+  const chain = requireSettlementConfig ? requireSettlementChain(chainKey) : getSupportedChain(chainKey);
   const listing = await findListing(db, listingId, chain.key);
   if (!listing) {
     throw new HttpError(404, "Listing not found");
@@ -195,7 +200,17 @@ export async function getLatestSellerOrder(req: Request, res: Response) {
   const { db } = getContext();
   const listingId = requireBytes32(String(req.params.id ?? ""), "listing id");
   const chainKey = normalizeChainKey(req.query.chainKey ?? req.query.chain);
-  const listing = await ensureFixedPriceListing(listingId, chainKey);
+  const listing = await ensureFixedPriceListing(listingId, chainKey, { requireSettlementConfig: false });
+
+  try {
+    requireSettlementChain(listing.chainKey);
+  } catch (err) {
+    if (err instanceof HttpError && err.status === 503) {
+      return res.json({ item: null });
+    }
+    throw err;
+  }
+
   const item = await findLatestListingOrderIntent(db, listingId, listing.chainKey);
   if (!item || item.expiry < Math.floor(Date.now() / 1000)) {
     return res.json({ item: null });

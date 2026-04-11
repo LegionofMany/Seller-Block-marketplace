@@ -777,31 +777,44 @@ export default function ListingDetailPage() {
     );
   }
 
+  const pageTitle = metadata?.title ?? (listing ? saleTypeLabel(listing.saleType) : "Loading…");
+  const priceLabel = listing ? formatPrice(listing.price, native, activeChain.nativeCurrencySymbol) : "—";
+  const locationLabel = [metadata?.city, metadata?.region, metadata?.postalCode].filter(Boolean).join(", ");
+
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-2">
-        <h1 className="text-2xl font-semibold tracking-tight">Listing</h1>
-        <p className="text-sm text-muted-foreground break-all">{listingId}</p>
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center justify-between gap-3">
-            <span>{metadata?.title ?? (listing ? saleTypeLabel(listing.saleType) : "Loading…")}</span>
-            {listing ? <Badge variant="outline">{statusLabel(listing.status)}</Badge> : null}
-          </CardTitle>
-          {listing ? (
-            <CardDescription className="text-sm">
-              {metadata?.description ?? listing.metadataURI}
-            </CardDescription>
-          ) : (
-            <div className="text-sm text-muted-foreground break-all">
-              <Skeleton className="h-4 w-64" />
+      <section className="market-hero px-4 py-5 sm:px-8 sm:py-8">
+        <div className="grid gap-6 lg:grid-cols-[1.4fr_0.9fr] lg:items-end">
+          <div className="space-y-4">
+            <div className="market-section-title">Listing detail</div>
+            <div className="space-y-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="text-2xl font-semibold tracking-tight sm:text-4xl">{pageTitle}</h1>
+                {listing ? <Badge variant="outline">{statusLabel(listing.status)}</Badge> : null}
+              </div>
+              <p className="max-w-2xl text-[13px] leading-6 text-muted-foreground sm:text-base">{listing ? metadata?.description ?? listing.metadataURI : "Loading listing details..."}</p>
             </div>
-          )}
-        </CardHeader>
+            <div className="flex flex-wrap gap-2">
+              {metadata?.category ? <div className="market-chip">{metadata.subcategory ? `${metadata.category} / ${metadata.subcategory}` : metadata.category}</div> : null}
+              {locationLabel ? <div className="market-chip">{locationLabel}</div> : null}
+              <div className="market-chip">{priceLabel}</div>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 sm:gap-3 lg:grid-cols-1">
+            <div className="market-stat">
+              <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Seller</div>
+              <div className="mt-2 text-lg font-semibold">{listing ? shortenHex(listing.seller) : "—"}</div>
+            </div>
+            <div className="market-stat">
+              <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Checkout</div>
+              <div className="mt-2 text-lg font-semibold">{listing?.saleType === 0 ? "Fixed price" : saleTypeLabel(listing?.saleType ?? 0)}</div>
+            </div>
+          </div>
+        </div>
+      </section>
 
-        <CardContent className="space-y-4">
+      <Card className="market-panel">
+        <CardContent className="space-y-5 p-4 sm:space-y-6 sm:p-6">
           {loadingListing || !listing ? (
             <div className="space-y-3">
               <Skeleton className="h-4 w-48" />
@@ -830,101 +843,95 @@ export default function ListingDetailPage() {
                 </div>
               ) : null}
 
-              {galleryImages.length ? (
-                <div className="overflow-hidden rounded-md border bg-muted">
-                  <div className="relative w-full aspect-[4/3]">
-                    <Image
-                      src={galleryImages[0]}
-                      alt={metadata?.title ?? "Listing image"}
-                      fill
-                      className="object-cover"
-                      sizes="100vw"
-                      unoptimized
-                      priority={false}
-                    />
-                  </div>
-                </div>
-              ) : null}
-
-              {galleryImages.length > 1 ? (
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-                  {galleryImages.map((image, index) => (
-                    <div key={`${image}-${index}`} className="overflow-hidden rounded-md border bg-muted">
-                      <div className="relative aspect-square w-full">
+              <div className="grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_360px] xl:gap-6">
+                <div className="space-y-4 sm:space-y-6">
+                  {galleryImages.length ? (
+                    <div className="overflow-hidden rounded-2xl border bg-muted">
+                      <div className="relative w-full aspect-[4/3]">
                         <Image
-                          src={image}
-                          alt={`${metadata?.title ?? "Listing"} image ${index + 1}`}
+                          src={galleryImages[0]}
+                          alt={metadata?.title ?? "Listing image"}
                           fill
                           className="object-cover"
-                          sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+                          sizes="100vw"
                           unoptimized
                           priority={false}
                         />
                       </div>
                     </div>
-                  ))}
-                </div>
-              ) : null}
+                  ) : null}
 
-              {galleryImages.length ? (
-                <div className="truncate text-xs text-muted-foreground">
-                  Images: {galleryImages.length}
-                </div>
-              ) : null}
-
-              <div className="grid gap-3 sm:grid-cols-2">
-                {metadata?.category ? (
-                  <div className="text-sm">
-                    <div className="text-muted-foreground">Category</div>
-                    <div className="font-medium">{metadata.subcategory ? `${metadata.category} / ${metadata.subcategory}` : metadata.category}</div>
-                  </div>
-                ) : null}
-                {metadata?.city || metadata?.region ? (
-                  <div className="text-sm">
-                    <div className="text-muted-foreground">Location</div>
-                    <div className="font-medium">
-                      {[metadata.city, metadata.region, metadata.postalCode].filter(Boolean).join(", ")}
+                  {galleryImages.length > 1 ? (
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 lg:grid-cols-4">
+                      {galleryImages.map((image, index) => (
+                        <div key={`${image}-${index}`} className="overflow-hidden rounded-xl border bg-muted">
+                          <div className="relative aspect-square w-full">
+                            <Image
+                              src={image}
+                              alt={`${metadata?.title ?? "Listing"} image ${index + 1}`}
+                              fill
+                              className="object-cover"
+                              sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+                              unoptimized
+                              priority={false}
+                            />
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                  </div>
-                ) : null}
-                <div className="text-sm">
-                  <div className="text-muted-foreground">Price</div>
-                  <div className="font-medium">{formatPrice(listing.price, native, activeChain.nativeCurrencySymbol)}</div>
-                </div>
-                <div className="text-sm">
-                  <div className="text-muted-foreground">Token</div>
-                  <div className="font-medium break-all">{native ? activeChain.nativeCurrencySymbol : listing.token}</div>
-                </div>
-                <div className="text-sm">
-                  <div className="text-muted-foreground">Seller</div>
-                  <div className="font-medium">{shortenHex(listing.seller)}</div>
-                </div>
-                <div className="text-sm">
-                  <div className="text-muted-foreground">Buyer</div>
-                  <div className="font-medium">{listing.buyer === zeroAddress ? "—" : shortenHex(listing.buyer)}</div>
-                </div>
-                {metadata?.contactEmail || metadata?.contactPhone ? (
-                  <div className="text-sm sm:col-span-2">
-                    <div className="text-muted-foreground">Contact</div>
-                    <div className="font-medium">
-                      {[metadata.contactEmail, metadata.contactPhone].filter(Boolean).join(" • ")}
+                  ) : null}
+
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {metadata?.category ? (
+                      <div className="text-sm">
+                        <div className="text-muted-foreground">Category</div>
+                        <div className="font-medium">{metadata.subcategory ? `${metadata.category} / ${metadata.subcategory}` : metadata.category}</div>
+                      </div>
+                    ) : null}
+                    {locationLabel ? (
+                      <div className="text-sm">
+                        <div className="text-muted-foreground">Location</div>
+                        <div className="font-medium">{locationLabel}</div>
+                      </div>
+                    ) : null}
+                    <div className="text-sm">
+                      <div className="text-muted-foreground">Price</div>
+                      <div className="font-medium">{priceLabel}</div>
                     </div>
+                    <div className="text-sm">
+                      <div className="text-muted-foreground">Token</div>
+                      <div className="font-medium break-all">{native ? activeChain.nativeCurrencySymbol : listing.token}</div>
+                    </div>
+                    <div className="text-sm">
+                      <div className="text-muted-foreground">Seller</div>
+                      <div className="font-medium">
+                        <Link className="underline" href={`/seller/${listing.seller}`}>
+                          {shortenHex(listing.seller)}
+                        </Link>
+                      </div>
+                    </div>
+                    <div className="text-sm">
+                      <div className="text-muted-foreground">Buyer</div>
+                      <div className="font-medium">{listing.buyer === zeroAddress ? "—" : shortenHex(listing.buyer)}</div>
+                    </div>
+                    {metadata?.contactEmail || metadata?.contactPhone ? (
+                      <div className="text-sm sm:col-span-2">
+                        <div className="text-muted-foreground">Contact</div>
+                        <div className="font-medium">{[metadata.contactEmail, metadata.contactPhone].filter(Boolean).join(" • ")}</div>
+                      </div>
+                    ) : null}
                   </div>
-                ) : null}
-              </div>
 
-              <Separator />
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <div className="text-sm font-semibold">Public comments</div>
+                        <div className="text-xs text-muted-foreground">Questions and replies stay attached to the listing instead of moving into private inboxes.</div>
+                      </div>
+                      <div className="text-xs text-muted-foreground">{comments.length} comment{comments.length === 1 ? "" : "s"}</div>
+                    </div>
 
-              <div className="space-y-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <div className="text-sm font-semibold">Public comments</div>
-                    <div className="text-xs text-muted-foreground">Questions and replies stay attached to the listing instead of moving into private inboxes.</div>
-                  </div>
-                  <div className="text-xs text-muted-foreground">{comments.length} comment{comments.length === 1 ? "" : "s"}</div>
-                </div>
-
-                <div className="rounded-md border p-4 space-y-3">
+                    <div className="rounded-2xl border p-3 space-y-3 sm:p-4">
                   <Textarea
                     value={commentDraft}
                     onChange={(e) => setCommentDraft(e.target.value)}
@@ -952,9 +959,9 @@ export default function ListingDetailPage() {
                       </Button>
                     </div>
                   </div>
-                </div>
+                    </div>
 
-                <div className="space-y-3">
+                    <div className="space-y-3">
                   {isLoadingComments ? (
                     <div className="text-sm text-muted-foreground">Loading comments...</div>
                   ) : commentsError ? (
@@ -965,7 +972,7 @@ export default function ListingDetailPage() {
                     </div>
                   ) : (
                     comments.map((item) => (
-                      <div key={item.id} className="rounded-md border p-4 space-y-2">
+                      <div key={item.id} className="rounded-2xl border p-3 space-y-2 sm:p-4">
                         <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
                           <div className="font-medium">{item.authorDisplayName?.trim() || shortenHex(item.authorAddress)}</div>
                           <div className="text-xs text-muted-foreground">{new Date(item.createdAt).toLocaleString()}</div>
@@ -974,14 +981,19 @@ export default function ListingDetailPage() {
                       </div>
                     ))
                   )}
+                    </div>
+                  </div>
                 </div>
-              </div>
 
-              <div className="space-y-4">
-                <div className="text-sm font-semibold">Actions</div>
+                <aside className="space-y-3 sm:space-y-4">
+                  <div className="rounded-2xl border bg-accent/25 p-3 space-y-3 sm:p-4">
+                    <div>
+                      <div className="market-section-title">Buyer actions</div>
+                      <div className="mt-1 text-lg font-semibold">Checkout and safety</div>
+                    </div>
 
                 {listing.status === 1 && !isSeller ? (
-                  <div className="rounded-md border p-4 space-y-2">
+                  <div className="rounded-xl border bg-background/80 p-3 space-y-2 sm:p-4">
                     <div className="text-sm font-medium">Safety</div>
                     <div className="flex flex-col gap-2 sm:flex-row">
                       <Button type="button" variant="outline" size="lg" className="w-full sm:w-auto" onClick={blockSeller}>
@@ -993,7 +1005,7 @@ export default function ListingDetailPage() {
                     </div>
                   </div>
                 ) : (
-                  <div className="rounded-md border p-4 space-y-2">
+                  <div className="rounded-xl border bg-background/80 p-3 space-y-2 sm:p-4">
                     <div className="text-sm font-medium">Safety</div>
                     <Button type="button" variant="outline" size="lg" className="w-full sm:w-auto" onClick={reportListing}>
                       Report listing
@@ -1020,7 +1032,7 @@ export default function ListingDetailPage() {
                 ) : null}
 
                 {listing.saleType === 0 && listing.status === 1 ? (
-                  <div className="rounded-md border p-4 text-sm space-y-3">
+                  <div className="rounded-xl border bg-background/80 p-3 text-sm space-y-3 sm:p-4">
                     <div className="font-medium">Gasless fixed-price checkout</div>
                     {!canUseGaslessSettlement ? (
                       <div className="text-muted-foreground">
@@ -1139,6 +1151,18 @@ export default function ListingDetailPage() {
                   </div>
                 ) : null}
 
+                  </div>
+
+                  <details className="market-details rounded-2xl border p-3 sm:p-4">
+                    <summary className="flex items-center justify-between gap-3">
+                      <div>
+                        <div className="market-section-title">Advanced sale tools</div>
+                        <div className="mt-1 text-base font-semibold">Seller, auction, raffle, and settlement controls</div>
+                      </div>
+                      <div className="text-sm font-medium text-muted-foreground">Expand</div>
+                    </summary>
+                    <div className="mt-3 space-y-3 sm:mt-4 sm:space-y-4">
+
                 {listing.status === 4 && isBuyer ? (
                   <div className="flex flex-col gap-2 sm:flex-row">
                     <Button
@@ -1174,7 +1198,7 @@ export default function ListingDetailPage() {
                 ) : null}
 
                 {listing.status === 4 && isSeller ? (
-                  <div className="rounded-md border p-4 text-sm space-y-2">
+                  <div className="rounded-xl border p-4 text-sm space-y-2">
                     <div className="font-medium">Pending delivery</div>
                     <div className="text-muted-foreground">
                       The buyer has funded escrow. The listing completes only when the buyer clicks
@@ -1190,7 +1214,7 @@ export default function ListingDetailPage() {
                 ) : null}
 
                 {listing.status === 4 && isArbiter ? (
-                  <div className="rounded-md border p-4 text-sm space-y-3">
+                  <div className="rounded-xl border p-4 text-sm space-y-3">
                     <div className="font-medium">Arbiter actions</div>
                     <div className="text-muted-foreground">
                       Use these only to resolve a dispute when delivery cannot be confirmed.
@@ -1230,7 +1254,7 @@ export default function ListingDetailPage() {
                 ) : null}
 
                 {listing.status === 5 && isSeller ? (
-                  <div className="rounded-md border p-4 text-sm space-y-3">
+                  <div className="rounded-xl border p-4 text-sm space-y-3">
                     <div className="font-medium">Completed</div>
                     <div className="text-muted-foreground">
                       Funds are now credited in EscrowVault. Withdraw them to your wallet.
@@ -1257,7 +1281,7 @@ export default function ListingDetailPage() {
                 ) : null}
 
                 {listing.status === 6 && isBuyer ? (
-                  <div className="rounded-md border p-4 text-sm space-y-3">
+                  <div className="rounded-xl border p-4 text-sm space-y-3">
                     <div className="font-medium">Refunded</div>
                     <div className="text-muted-foreground">
                       Your funds were refunded into EscrowVault credits. Withdraw them to your wallet.
@@ -1284,7 +1308,7 @@ export default function ListingDetailPage() {
                 ) : null}
 
                 {listing.saleType === 1 && listing.status === 1 && listing.moduleId !== ("0x" + "00".repeat(32)) ? (
-                  <div className="rounded-md border p-4 space-y-3">
+                  <div className="rounded-xl border p-4 space-y-3">
                     <div className="text-sm font-medium">Place bid</div>
                     <div className="grid gap-2">
                       <Label>Bid amount {native ? `(${activeChain.nativeCurrencySymbol})` : "(token units)"}</Label>
@@ -1373,7 +1397,7 @@ export default function ListingDetailPage() {
                 ) : null}
 
                 {listing.saleType === 2 && listing.status === 1 && listing.moduleId !== ("0x" + "00".repeat(32)) ? (
-                  <div className="rounded-md border p-4 space-y-3">
+                  <div className="rounded-xl border p-4 space-y-3">
                     <div className="text-sm font-medium">Enter raffle</div>
                     <div className="grid gap-2">
                       <Label>Tickets</Label>
@@ -1469,7 +1493,7 @@ export default function ListingDetailPage() {
                   </div>
                 ) : null}
 
-                <div className="rounded-md border p-4">
+                <div className="rounded-xl border p-4">
                   <div className="text-sm font-medium">Withdraw payout credits</div>
                   <div className="font-medium">
                     <Link className="underline" href={`/seller/${listing.seller}`}>
@@ -1494,6 +1518,9 @@ export default function ListingDetailPage() {
                     </Button>
                   </div>
                 </div>
+                    </div>
+                  </details>
+                </aside>
               </div>
             </>
           )}

@@ -2,35 +2,35 @@
 
 /* shadcn-style design tokens (HSL channels) */
 :root {
-  --background: 0 0% 100%;
-  --foreground: 240 10% 3.9%;
+  --background: 44 54% 97%;
+  --foreground: 210 25% 14%;
 
   --card: 0 0% 100%;
-  --card-foreground: 240 10% 3.9%;
+  --card-foreground: 210 25% 14%;
 
   --popover: 0 0% 100%;
-  --popover-foreground: 240 10% 3.9%;
+  --popover-foreground: 210 25% 14%;
 
-  --primary: 240 5.9% 10%;
-  --primary-foreground: 0 0% 98%;
+  --primary: 22 88% 47%;
+  --primary-foreground: 42 100% 98%;
 
-  --secondary: 240 4.8% 95.9%;
-  --secondary-foreground: 240 5.9% 10%;
+  --secondary: 44 44% 93%;
+  --secondary-foreground: 210 25% 18%;
 
-  --muted: 240 4.8% 95.9%;
-  --muted-foreground: 240 3.8% 46.1%;
+  --muted: 40 38% 94%;
+  --muted-foreground: 210 14% 40%;
 
-  --accent: 240 4.8% 95.9%;
-  --accent-foreground: 240 5.9% 10%;
+  --accent: 35 75% 92%;
+  --accent-foreground: 210 25% 18%;
 
-  --destructive: 0 84.2% 60.2%;
+  --destructive: 0 78% 56%;
   --destructive-foreground: 0 0% 98%;
 
-  --border: 240 5.9% 90%;
-  --input: 240 5.9% 90%;
-  --ring: 240 10% 3.9%;
+  --border: 34 32% 84%;
+  --input: 34 32% 84%;
+  --ring: 22 88% 47%;
 
-  --radius: 0.75rem;
+  --radius: 1rem;
 }
 
 .dark {
@@ -97,7 +97,129 @@
   }
 
   body {
-    background: hsl(var(--background));
+    background:
+      radial-gradient(circle at top left, hsla(24, 100%, 62%, 0.16), transparent 28%),
+      radial-gradient(circle at top right, hsla(196, 90%, 48%, 0.1), transparent 24%),
+      linear-gradient(180deg, hsl(var(--background)), hsl(42 42% 95%));
     color: hsl(var(--foreground));
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    letter-spacing: -0.03em;
+  }
+}
+
+@layer components {
+  .market-shell {
+    position: relative;
+  }
+
+  .market-shell::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    background-image: linear-gradient(hsla(30, 40%, 50%, 0.06) 1px, transparent 1px), linear-gradient(90deg, hsla(30, 40%, 50%, 0.06) 1px, transparent 1px);
+    background-size: 28px 28px;
+    mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.4), transparent 85%);
+  }
+
+  .market-hero {
+    position: relative;
+    overflow: hidden;
+    border: 1px solid hsl(var(--border));
+    border-radius: calc(var(--radius) + 0.5rem);
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(255, 246, 230, 0.92));
+    box-shadow: 0 20px 50px rgba(84, 60, 24, 0.08);
+  }
+
+  .market-hero::after {
+    content: "";
+    position: absolute;
+    top: -4rem;
+    right: -4rem;
+    width: 12rem;
+    height: 12rem;
+    border-radius: 9999px;
+    background: radial-gradient(circle, hsla(22, 100%, 62%, 0.2), transparent 70%);
+  }
+
+  .market-panel {
+    border: 1px solid hsl(var(--border));
+    border-radius: calc(var(--radius) + 0.125rem);
+    background: rgba(255, 255, 255, 0.88);
+    box-shadow: 0 14px 40px rgba(60, 41, 6, 0.06);
+    backdrop-filter: blur(10px);
+  }
+
+  .market-section-title {
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: hsl(var(--muted-foreground));
+  }
+
+  .market-stat {
+    border: 1px solid hsl(var(--border));
+    border-radius: 1rem;
+    background: rgba(255, 255, 255, 0.72);
+    padding: 0.9rem 1rem;
+  }
+
+  .market-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    border-radius: 9999px;
+    border: 1px solid hsl(var(--border));
+    background: rgba(255, 255, 255, 0.75);
+    padding: 0.45rem 0.8rem;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: hsl(var(--foreground));
+  }
+
+  .market-note {
+    border-radius: 1rem;
+    border: 1px dashed hsl(var(--border));
+    background: rgba(255, 248, 238, 0.8);
+    padding: 0.9rem 1rem;
+    color: hsl(var(--muted-foreground));
+  }
+
+  .market-details summary {
+    cursor: pointer;
+    list-style: none;
+  }
+
+  .market-details summary::-webkit-details-marker {
+    display: none;
+  }
+
+  @media (max-width: 639px) {
+    .market-hero {
+      border-radius: 1.25rem;
+    }
+
+    .market-panel {
+      border-radius: 1rem;
+    }
+
+    .market-stat {
+      padding: 0.75rem 0.875rem;
+    }
+
+    .market-chip {
+      padding: 0.35rem 0.65rem;
+      font-size: 0.72rem;
+    }
+
+    .market-note {
+      padding: 0.8rem 0.9rem;
+    }
   }
 }

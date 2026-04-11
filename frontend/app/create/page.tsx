@@ -116,12 +116,11 @@ export default function CreateListingPage() {
   }, [activeChain.chainId, env, tokenAddress]);
 
   React.useEffect(() => {
-    // Generate a random default reveal once (so user can save it)
     if (reveal !== ("0x" + "00".repeat(32))) return;
     const bytes = new Uint8Array(32);
     crypto.getRandomValues(bytes);
     setReveal(("0x" + Array.from(bytes).map((b) => b.toString(16).padStart(2, "0")).join("")) as Hex);
-  }, []);
+  }, [reveal]);
 
   React.useEffect(() => {
     const urls = files.map((file) => URL.createObjectURL(file));
@@ -147,22 +146,23 @@ export default function CreateListingPage() {
 
     let metadataURI: string;
     try {
-      // 1) Upload images
       const form = new FormData();
-      for (const f of files.slice(0, 12)) form.append("files", f);
+      for (const file of files.slice(0, 12)) form.append("files", file);
+
       const uploadRes = await fetch(`${(env.backendUrl ?? "http://localhost:4000").replace(/\/$/, "")}/uploads/images`, {
         method: "POST",
         body: form,
       });
+
       if (!uploadRes.ok) {
         const text = await uploadRes.text().catch(() => "");
         throw new Error(text || `Upload failed (${uploadRes.status})`);
       }
+
       const uploadJson = (await uploadRes.json()) as { items: Array<{ ipfsUri: string; url: string }> };
-      const images = uploadJson.items.map((i) => i.ipfsUri).filter(Boolean);
+      const images = uploadJson.items.map((item) => item.ipfsUri).filter(Boolean);
       if (!images.length) throw new Error("Image upload returned no IPFS URIs");
 
-      // 2) Pin metadata JSON
       const res = await fetchJson<{ metadataURI: string; cid: string; id: string }>("/metadata/ipfs", {
         method: "POST",
         headers: {
@@ -183,6 +183,7 @@ export default function CreateListingPage() {
         }),
         timeoutMs: 10_000,
       });
+
       metadataURI = res.metadataURI;
       setGeneratedMetadataURI(res.metadataURI);
     } catch (err: any) {
@@ -196,21 +197,14 @@ export default function CreateListingPage() {
     }
 
     const token: Address = tokenAddress.trim().length ? (tokenAddress.trim() as Address) : zeroAddress;
-
-    const isNative = token.toLowerCase() === zeroAddress;
     const settlementToken = selectedToken ?? describeToken(env, activeChain.chainId, zeroAddress);
-
-    const price = (() => {
-      if (saleType === 0) {
-        return parseTokenAmount(fixedPrice || "0", settlementToken);
-      }
-      return BigInt(0);
-    })();
+    const price = saleType === 0 ? parseTokenAmount(fixedPrice || "0", settlementToken) : BigInt(0);
 
     let listingId: Hex | null = null;
 
     try {
       if (!publicClient) throw new Error("No public client");
+
       const toastId = toast.loading("Creating listing…");
       const hash = await writeContractAsync({
         address: activeChain.marketplaceRegistryAddress,
@@ -290,256 +284,268 @@ export default function CreateListingPage() {
     }
   }
 
+  const saleTypeDescription =
+    saleType === 0
+      ? "Best for everyday classifieds with a clear price and direct checkout."
+      : saleType === 1
+        ? "Advanced format for timed bidding. Use only when the listing really needs an auction."
+        : "Advanced format for community draws and limited drops.";
+
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-2">
-        <h1 className="text-2xl font-semibold tracking-tight">Create listing</h1>
-        <p className="text-sm text-muted-foreground">Create a listing on {activeChain.name} via MarketplaceRegistry.</p>
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Listing details</CardTitle>
-          <CardDescription>Choose a sale type and provide required fields.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={onSubmit} className="space-y-6">
+      <section className="market-hero px-4 py-5 sm:px-8 sm:py-8">
+        <div className="grid gap-6 lg:grid-cols-[1.5fr_0.9fr] lg:items-end">
+          <div className="space-y-4">
+            <div className="market-section-title">Post a listing</div>
             <div className="space-y-2">
-              <Label>Sale type</Label>
-              <div className="flex flex-wrap gap-2">
-                <Button type="button" size="lg" variant={saleType === 0 ? "default" : "outline"} onClick={() => setSaleType(0)} className="w-full sm:w-auto">
-                  Fixed price
-                </Button>
-                <Button type="button" size="lg" variant={saleType === 1 ? "default" : "outline"} onClick={() => setSaleType(1)} className="w-full sm:w-auto">
-                  Auction
-                </Button>
-                <Button type="button" size="lg" variant={saleType === 2 ? "default" : "outline"} onClick={() => setSaleType(2)} className="w-full sm:w-auto">
-                  Raffle
-                </Button>
-              </div>
+              <h1 className="text-2xl font-semibold tracking-tight sm:text-4xl">List it like a local marketplace, not a protocol dashboard.</h1>
+              <p className="max-w-2xl text-[13px] leading-6 text-muted-foreground sm:text-base">
+                Add photos, location, contact details, and a clear price first. Wallet settlement still powers the listing on {activeChain.name}, but the posting flow now prioritizes what shoppers actually need to see.
+              </p>
             </div>
+            <div className="flex flex-wrap gap-2">
+              <div className="market-chip">Photos up to 12</div>
+              <div className="market-chip">Location-aware metadata</div>
+              <div className="market-chip">Public listing page after publish</div>
+            </div>
+          </div>
 
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2 sm:col-span-2">
-                <Label>Title</Label>
-                <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. My item" />
-              </div>
-              <div className="space-y-2 sm:col-span-2">
-                <Label>Description</Label>
-                <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Describe your item" />
-              </div>
-              <div className="space-y-2 sm:col-span-2">
-                <Label>Images (required, up to 12)</Label>
-                <Input
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  onChange={(e) => setFiles(Array.from(e.target.files ?? []))}
-                />
-                {files.length ? (
-                  <>
-                    <div className="text-xs text-muted-foreground">Selected: {files.map((f) => f.name).join(", ")}</div>
-                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-                      {previewUrls.map((url, index) => (
-                        <div key={`${files[index]?.name ?? "file"}-${index}`} className="overflow-hidden rounded-md border bg-muted">
-                          <div className="relative aspect-square w-full">
-                            <img
-                              src={url}
-                              alt={files[index]?.name ?? `Selected image ${index + 1}`}
-                              className="h-full w-full object-cover"
-                            />
-                          </div>
-                          <div className="truncate border-t px-2 py-1 text-[11px] text-muted-foreground">
-                            {files[index]?.name ?? `Image ${index + 1}`}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </>
-                ) : null}
-              </div>
+          <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-1">
+            <div className="market-stat">
+              <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Default flow</div>
+              <div className="mt-2 text-lg font-semibold">Fixed price</div>
+              <div className="mt-1 text-sm text-muted-foreground">Simple classifieds checkout stays front and center.</div>
+            </div>
+            <div className="market-stat">
+              <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Settlement</div>
+              <div className="mt-2 text-lg font-semibold">{selectedToken?.symbol ?? activeChain.nativeCurrencySymbol}</div>
+              <div className="mt-1 text-sm text-muted-foreground">Choose a supported token before you publish.</div>
+            </div>
+          </div>
+        </div>
+      </section>
 
-              <div className="space-y-2 sm:col-span-2">
-                <Label>Category</Label>
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px] xl:gap-6">
+        <Card className="market-panel">
+          <CardHeader>
+            <div className="market-section-title">Listing setup</div>
+            <CardTitle>Build the listing buyers expect</CardTitle>
+            <CardDescription>{saleTypeDescription}</CardDescription>
+          </CardHeader>
+          <CardContent className="p-4 pt-0 sm:p-6 sm:pt-0">
+            <form onSubmit={onSubmit} className="space-y-6">
+              <div className="space-y-3 rounded-2xl border bg-accent/30 p-3 sm:p-4">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                  <div>
+                    <Label>Sale type</Label>
+                    <div className="mt-1 text-sm text-muted-foreground">Fixed price stays primary. Auction and raffle remain available as advanced publishing modes.</div>
+                  </div>
+                  <div className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Current: {saleType === 0 ? "Fixed price" : saleType === 1 ? "Auction" : "Raffle"}</div>
+                </div>
                 <div className="flex flex-wrap gap-2">
-                  {Object.keys(CATEGORY_TREE).map((c) => (
-                    <Button
-                      key={c}
-                      type="button"
-                      size="sm"
-                      variant={category === c ? "default" : "outline"}
-                      onClick={() => {
-                        setCategory(c);
-                        setSubcategory("");
-                      }}
-                    >
-                      {c}
-                    </Button>
-                  ))}
+                  <Button type="button" size="lg" variant={saleType === 0 ? "default" : "outline"} onClick={() => setSaleType(0)} className="w-full sm:w-auto">
+                    Fixed price
+                  </Button>
+                  <Button type="button" size="lg" variant={saleType === 1 ? "default" : "outline"} onClick={() => setSaleType(1)} className="w-full sm:w-auto">
+                    Auction
+                  </Button>
+                  <Button type="button" size="lg" variant={saleType === 2 ? "default" : "outline"} onClick={() => setSaleType(2)} className="w-full sm:w-auto">
+                    Raffle
+                  </Button>
                 </div>
               </div>
 
-              {category ? (
+              <div className="grid gap-3 sm:grid-cols-2 sm:gap-4">
                 <div className="space-y-2 sm:col-span-2">
-                  <Label>Subcategory</Label>
+                  <Label>Title</Label>
+                  <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. My item" />
+                </div>
+                <div className="space-y-2 sm:col-span-2">
+                  <Label>Description</Label>
+                  <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Describe your item" />
+                </div>
+                <div className="space-y-2 sm:col-span-2">
+                  <Label>Images (required, up to 12)</Label>
+                  <Input type="file" accept="image/*" multiple onChange={(e) => setFiles(Array.from(e.target.files ?? []))} />
+                  {files.length ? (
+                    <>
+                      <div className="text-xs text-muted-foreground">Selected: {files.map((file) => file.name).join(", ")}</div>
+                      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 lg:grid-cols-4">
+                        {previewUrls.map((url, index) => (
+                          <div key={`${files[index]?.name ?? "file"}-${index}`} className="overflow-hidden rounded-md border bg-muted">
+                            <div className="relative aspect-square w-full">
+                              <img src={url} alt={files[index]?.name ?? `Selected image ${index + 1}`} className="h-full w-full object-cover" />
+                            </div>
+                            <div className="truncate border-t px-2 py-1 text-[11px] text-muted-foreground">
+                              {files[index]?.name ?? `Image ${index + 1}`}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  ) : null}
+                </div>
+
+                <div className="space-y-2 sm:col-span-2">
+                  <Label>Category</Label>
                   <div className="flex flex-wrap gap-2">
-                    {subcategoriesFor(category).map((sc) => (
+                    {Object.keys(CATEGORY_TREE).map((entry) => (
                       <Button
-                        key={sc}
+                        key={entry}
                         type="button"
                         size="sm"
-                        variant={subcategory === sc ? "secondary" : "outline"}
-                        onClick={() => setSubcategory(sc)}
+                        variant={category === entry ? "default" : "outline"}
+                        onClick={() => {
+                          setCategory(entry);
+                          setSubcategory("");
+                        }}
                       >
-                        {sc}
+                        {entry}
                       </Button>
                     ))}
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant={!subcategory ? "secondary" : "outline"}
-                      onClick={() => setSubcategory("")}
-                    >
-                      All {category}
-                    </Button>
+                  </div>
+                </div>
+
+                {category ? (
+                  <div className="space-y-2 sm:col-span-2">
+                    <Label>Subcategory</Label>
+                    <div className="flex flex-wrap gap-2">
+                      {subcategoriesFor(category).map((entry) => (
+                        <Button
+                          key={entry}
+                          type="button"
+                          size="sm"
+                          variant={subcategory === entry ? "secondary" : "outline"}
+                          onClick={() => setSubcategory(entry)}
+                        >
+                          {entry}
+                        </Button>
+                      ))}
+                      <Button type="button" size="sm" variant={!subcategory ? "secondary" : "outline"} onClick={() => setSubcategory("")}>All {category}</Button>
+                    </div>
+                  </div>
+                ) : null}
+
+                <div className="space-y-2">
+                  <Label>City</Label>
+                  <Input value={city} onChange={(e) => setCity(e.target.value)} placeholder="e.g. Toronto" />
+                </div>
+                <div className="space-y-2">
+                  <Label>Region/State</Label>
+                  <Input value={region} onChange={(e) => setRegion(e.target.value)} placeholder="e.g. Ontario" />
+                </div>
+                <div className="space-y-2">
+                  <Label>Postal code</Label>
+                  <Input value={postalCode} onChange={(e) => setPostalCode(e.target.value)} placeholder="e.g. M5V" />
+                </div>
+                <div className="space-y-2">
+                  <Label>Contact email (optional)</Label>
+                  <Input value={contactEmail} onChange={(e) => setContactEmail(e.target.value)} placeholder="name@example.com" />
+                </div>
+                <div className="space-y-2">
+                  <Label>Contact phone (optional)</Label>
+                  <Input value={contactPhone} onChange={(e) => setContactPhone(e.target.value)} placeholder="+1 555…" />
+                </div>
+                <div className="space-y-2 sm:col-span-2">
+                  <Label>Generated metadataURI (from backend)</Label>
+                  <Input value={generatedMetadataURI} readOnly placeholder="Will be generated on submit" />
+                </div>
+                <div className="space-y-2 sm:col-span-2">
+                  <Label>Settlement token</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {tokenOptions.map((tokenOption) => {
+                      const value = tokenOption.address === zeroAddress ? "" : tokenOption.address;
+                      const active = tokenAddress.trim().toLowerCase() === value.toLowerCase();
+                      return (
+                        <Button
+                          key={`${tokenOption.symbol}-${tokenOption.address}`}
+                          type="button"
+                          size="sm"
+                          variant={active ? "default" : "outline"}
+                          onClick={() => setTokenAddress(value)}
+                        >
+                          {tokenOption.symbol}{tokenOption.isStablecoin ? " (stablecoin)" : ""}
+                        </Button>
+                      );
+                    })}
+                  </div>
+                  <Input
+                    value={tokenAddress}
+                    onChange={(e) => setTokenAddress(e.target.value)}
+                    placeholder={`Leave empty for ${activeChain.nativeCurrencySymbol}, or paste a custom ERC-20 address`}
+                  />
+                  <div className="text-xs text-muted-foreground">
+                    {selectedToken
+                      ? `Using ${selectedToken.name} (${selectedToken.symbol}) with ${selectedToken.decimals} decimals.`
+                      : "Custom token address must be a valid ERC-20 contract address."}
+                  </div>
+                </div>
+              </div>
+
+              {saleType === 0 ? (
+                <div className="grid gap-3 sm:grid-cols-2 sm:gap-4">
+                  <div className="space-y-2">
+                    <Label>Price ({selectedToken?.symbol ?? activeChain.nativeCurrencySymbol})</Label>
+                    <Input value={fixedPrice} onChange={(e) => setFixedPrice(e.target.value)} />
                   </div>
                 </div>
               ) : null}
-              <div className="space-y-2">
-                <Label>City</Label>
-                <Input value={city} onChange={(e) => setCity(e.target.value)} placeholder="e.g. Toronto" />
-              </div>
-              <div className="space-y-2">
-                <Label>Region/State</Label>
-                <Input value={region} onChange={(e) => setRegion(e.target.value)} placeholder="e.g. Ontario" />
-              </div>
-              <div className="space-y-2">
-                <Label>Postal code</Label>
-                <Input value={postalCode} onChange={(e) => setPostalCode(e.target.value)} placeholder="e.g. M5V" />
-              </div>
-              <div className="space-y-2">
-                <Label>Contact email (optional)</Label>
-                <Input value={contactEmail} onChange={(e) => setContactEmail(e.target.value)} placeholder="name@example.com" />
-              </div>
-              <div className="space-y-2">
-                <Label>Contact phone (optional)</Label>
-                <Input value={contactPhone} onChange={(e) => setContactPhone(e.target.value)} placeholder="+1 555…" />
-              </div>
-              <div className="space-y-2 sm:col-span-2">
-                <Label>Generated metadataURI (from backend)</Label>
-                <Input value={generatedMetadataURI} readOnly placeholder="Will be generated on submit" />
-              </div>
-              <div className="space-y-2 sm:col-span-2">
-                <Label>Settlement token</Label>
-                <div className="flex flex-wrap gap-2">
-                  {tokenOptions.map((tokenOption) => {
-                    const value = tokenOption.address === zeroAddress ? "" : tokenOption.address;
-                    const active = tokenAddress.trim().toLowerCase() === value.toLowerCase();
-                    return (
-                      <Button
-                        key={`${tokenOption.symbol}-${tokenOption.address}`}
-                        type="button"
-                        size="sm"
-                        variant={active ? "default" : "outline"}
-                        onClick={() => setTokenAddress(value)}
-                      >
-                        {tokenOption.symbol}{tokenOption.isStablecoin ? " (stablecoin)" : ""}
-                      </Button>
-                    );
-                  })}
-                </div>
-                <Input
-                  value={tokenAddress}
-                  onChange={(e) => setTokenAddress(e.target.value)}
-                  placeholder={`Leave empty for ${activeChain.nativeCurrencySymbol}, or paste a custom ERC-20 address`}
-                />
-                <div className="text-xs text-muted-foreground">
-                  {selectedToken
-                    ? `Using ${selectedToken.name} (${selectedToken.symbol}) with ${selectedToken.decimals} decimals.`
-                    : "Custom token address must be a valid ERC-20 contract address."}
-                </div>
-              </div>
-            </div>
 
-            {saleType === 0 ? (
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label>Price ({selectedToken?.symbol ?? activeChain.nativeCurrencySymbol})</Label>
-                  <Input value={fixedPrice} onChange={(e) => setFixedPrice(e.target.value)} />
-                </div>
-              </div>
-            ) : null}
-
-            {saleType === 1 ? (
-              <div className="space-y-4 rounded-md border p-4">
-                <div className="text-sm font-medium">Auction configuration</div>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label>Start</Label>
-                    <Input type="datetime-local" value={auctionStart} onChange={(e) => setAuctionStart(e.target.value)} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>End</Label>
-                    <Input type="datetime-local" value={auctionEnd} onChange={(e) => setAuctionEnd(e.target.value)} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Reserve ({selectedToken?.symbol ?? activeChain.nativeCurrencySymbol})</Label>
-                    <Input value={reservePrice} onChange={(e) => setReservePrice(e.target.value)} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Min bid increment ({selectedToken?.symbol ?? activeChain.nativeCurrencySymbol})</Label>
-                    <Input value={minBidIncrement} onChange={(e) => setMinBidIncrement(e.target.value)} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Extension window (seconds)</Label>
-                    <Input value={extensionWindow} onChange={(e) => setExtensionWindow(e.target.value)} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Extension seconds</Label>
-                    <Input value={extensionSeconds} onChange={(e) => setExtensionSeconds(e.target.value)} />
+              {saleType === 1 ? (
+                <div className="space-y-4 rounded-2xl border bg-background/80 p-4">
+                  <div className="text-sm font-medium">Auction configuration</div>
+                  <div className="grid gap-3 sm:grid-cols-2 sm:gap-4">
+                    <div className="space-y-2"><Label>Start</Label><Input type="datetime-local" value={auctionStart} onChange={(e) => setAuctionStart(e.target.value)} /></div>
+                    <div className="space-y-2"><Label>End</Label><Input type="datetime-local" value={auctionEnd} onChange={(e) => setAuctionEnd(e.target.value)} /></div>
+                    <div className="space-y-2"><Label>Reserve ({selectedToken?.symbol ?? activeChain.nativeCurrencySymbol})</Label><Input value={reservePrice} onChange={(e) => setReservePrice(e.target.value)} /></div>
+                    <div className="space-y-2"><Label>Min bid increment ({selectedToken?.symbol ?? activeChain.nativeCurrencySymbol})</Label><Input value={minBidIncrement} onChange={(e) => setMinBidIncrement(e.target.value)} /></div>
+                    <div className="space-y-2"><Label>Extension window (seconds)</Label><Input value={extensionWindow} onChange={(e) => setExtensionWindow(e.target.value)} /></div>
+                    <div className="space-y-2"><Label>Extension seconds</Label><Input value={extensionSeconds} onChange={(e) => setExtensionSeconds(e.target.value)} /></div>
                   </div>
                 </div>
-              </div>
-            ) : null}
+              ) : null}
 
-            {saleType === 2 ? (
-              <div className="space-y-4 rounded-md border p-4">
-                <div className="text-sm font-medium">Raffle configuration</div>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label>Start</Label>
-                    <Input type="datetime-local" value={raffleStart} onChange={(e) => setRaffleStart(e.target.value)} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>End</Label>
-                    <Input type="datetime-local" value={raffleEnd} onChange={(e) => setRaffleEnd(e.target.value)} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Ticket price ({selectedToken?.symbol ?? activeChain.nativeCurrencySymbol})</Label>
-                    <Input value={ticketPrice} onChange={(e) => setTicketPrice(e.target.value)} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Target amount ({selectedToken?.symbol ?? activeChain.nativeCurrencySymbol})</Label>
-                    <Input value={targetAmount} onChange={(e) => setTargetAmount(e.target.value)} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Min participants</Label>
-                    <Input value={minParticipants} onChange={(e) => setMinParticipants(e.target.value)} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Reveal (bytes32) — save this to close raffle later</Label>
-                    <Input value={reveal} onChange={(e) => setReveal(e.target.value as Hex)} />
+              {saleType === 2 ? (
+                <div className="space-y-4 rounded-2xl border bg-background/80 p-4">
+                  <div className="text-sm font-medium">Raffle configuration</div>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-2"><Label>Start</Label><Input type="datetime-local" value={raffleStart} onChange={(e) => setRaffleStart(e.target.value)} /></div>
+                    <div className="space-y-2"><Label>End</Label><Input type="datetime-local" value={raffleEnd} onChange={(e) => setRaffleEnd(e.target.value)} /></div>
+                    <div className="space-y-2"><Label>Ticket price ({selectedToken?.symbol ?? activeChain.nativeCurrencySymbol})</Label><Input value={ticketPrice} onChange={(e) => setTicketPrice(e.target.value)} /></div>
+                    <div className="space-y-2"><Label>Target amount ({selectedToken?.symbol ?? activeChain.nativeCurrencySymbol})</Label><Input value={targetAmount} onChange={(e) => setTargetAmount(e.target.value)} /></div>
+                    <div className="space-y-2"><Label>Min participants</Label><Input value={minParticipants} onChange={(e) => setMinParticipants(e.target.value)} /></div>
+                    <div className="space-y-2"><Label>Reveal (bytes32) - save this to close raffle later</Label><Input value={reveal} onChange={(e) => setReveal(e.target.value as Hex)} /></div>
                   </div>
                 </div>
-              </div>
-            ) : null}
+              ) : null}
 
-            <Button type="submit" size="lg" className="w-full sm:w-auto">
-              Create
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
+              <Button type="submit" size="lg" className="w-full sm:w-auto">
+                Publish listing
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+
+        <aside className="space-y-3 sm:space-y-4">
+          <Card className="market-panel">
+            <CardHeader>
+              <div className="market-section-title">What buyers see</div>
+              <CardTitle>Publishing checklist</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3 p-4 pt-0 text-sm text-muted-foreground sm:p-6 sm:pt-0">
+              <div className="market-note">Lead with plain-language title, real photos, city/region, and one direct price.</div>
+              <div className="rounded-xl border p-4">
+                <div className="font-medium text-foreground">Recommended for classifieds</div>
+                <div className="mt-1">Use fixed price for most listings so the detail page stays simple and buyers can act immediately.</div>
+              </div>
+              <div className="rounded-xl border p-4">
+                <div className="font-medium text-foreground">Network</div>
+                <div className="mt-1">This publish flow still settles through {activeChain.name}, but that is now kept as context instead of the main story.</div>
+              </div>
+            </CardContent>
+          </Card>
+        </aside>
+      </div>
     </div>
   );
 }

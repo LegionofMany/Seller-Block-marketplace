@@ -1,6 +1,6 @@
 import * as dotenv from "dotenv";
 import hardhatToolboxMochaEthersPlugin from "@nomicfoundation/hardhat-toolbox-mocha-ethers";
-import { configVariable, defineConfig } from "hardhat/config";
+import { defineConfig } from "hardhat/config";
 
 dotenv.config();
 
@@ -61,4 +61,13 @@ export default defineConfig({
     },
   },
   networks,
+  ...(process.env.ETHERSCAN_API_KEY
+    ? {
+        verify: {
+          etherscan: {
+            apiKey: process.env.ETHERSCAN_API_KEY,
+          },
+        },
+      }
+    : {}),
 });

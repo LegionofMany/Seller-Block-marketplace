@@ -57,11 +57,12 @@ export function SiteHeader() {
   }, [open]);
 
   return (
-    <header className="sticky top-0 z-50 border-b bg-background/80 backdrop-blur">
-      <div className="mx-auto flex w-full max-w-screen-xl items-center justify-between gap-3 px-4 py-3 sm:py-4">
-        <div className="flex min-w-0 items-center gap-3">
-          <Link href="/" className="text-sm font-semibold tracking-tight">
-            Seller Block
+    <header className="sticky top-0 z-50 border-b border-border/70 bg-background/80 backdrop-blur-xl">
+      <div className="mx-auto flex w-full max-w-screen-xl items-center justify-between gap-2 px-3 py-2.5 sm:gap-3 sm:px-4 sm:py-4">
+        <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+          <Link href="/" className="min-w-0">
+            <div className="truncate text-[15px] font-semibold tracking-tight sm:text-base">Seller Block</div>
+            <div className="hidden text-[11px] uppercase tracking-[0.22em] text-muted-foreground sm:block">Marketplace classifieds</div>
           </Link>
           <nav className="hidden items-center gap-2 sm:flex">
             <Button asChild variant="ghost" size="sm">
@@ -82,6 +83,7 @@ export function SiteHeader() {
         </div>
 
         <div className="hidden items-center gap-2 sm:flex">
+          <div className="market-chip">Public replies, local discovery, wallet checkout</div>
           <ConnectButton showBalance={false} chainStatus="icon" />
           {address && !auth.isAuthenticated ? (
             <Button type="button" variant="outline" size="sm" disabled={auth.isLoading} onClick={() => void auth.signIn()}>
@@ -104,7 +106,7 @@ export function SiteHeader() {
           type="button"
           variant="ghost"
           size="icon"
-          className="h-11 w-11 sm:hidden"
+          className="h-10 w-10 sm:hidden"
           aria-label="Open menu"
           onClick={() => setOpen(true)}
         >
@@ -145,17 +147,20 @@ export function SiteHeader() {
           aria-modal="true"
           className={
             open
-              ? "fixed inset-y-0 right-0 w-[85%] max-w-xs border-l bg-background shadow-lg transition-transform duration-200 ease-out translate-x-0"
-              : "fixed inset-y-0 right-0 w-[85%] max-w-xs border-l bg-background shadow-lg transition-transform duration-200 ease-out translate-x-full"
+              ? "fixed inset-y-0 right-0 w-[88%] max-w-[20rem] border-l bg-background shadow-lg transition-transform duration-200 ease-out translate-x-0"
+              : "fixed inset-y-0 right-0 w-[88%] max-w-[20rem] border-l bg-background shadow-lg transition-transform duration-200 ease-out translate-x-full"
           }
         >
           <div className="flex items-center justify-between border-b px-4 py-3">
-            <div className="text-sm font-semibold">Menu</div>
+            <div>
+              <div className="text-sm font-semibold">Menu</div>
+              <div className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Browse and manage</div>
+            </div>
             <Button
               type="button"
               variant="ghost"
               size="icon"
-              className="h-11 w-11"
+              className="h-10 w-10"
               aria-label="Close menu"
               onClick={() => setOpen(false)}
             >
@@ -172,33 +177,34 @@ export function SiteHeader() {
           </div>
 
           <div className="space-y-2 p-4">
-            <Button asChild variant="ghost" className="h-11 w-full justify-start" onClick={() => setOpen(false)}>
+            <div className="market-note text-xs">Public replies, local discovery, and wallet checkout are all available from the main marketplace flow.</div>
+            <Button asChild variant="ghost" className="h-10 w-full justify-start rounded-xl" onClick={() => setOpen(false)}>
               <Link href="/">Listings</Link>
             </Button>
-            <Button asChild variant="ghost" className="h-11 w-full justify-start" onClick={() => setOpen(false)}>
+            <Button asChild variant="ghost" className="h-10 w-full justify-start rounded-xl" onClick={() => setOpen(false)}>
               <Link href="/create">Create</Link>
             </Button>
-            <Button asChild variant="ghost" className="h-11 w-full justify-start" onClick={() => setOpen(false)}>
+            <Button asChild variant="ghost" className="h-10 w-full justify-start rounded-xl" onClick={() => setOpen(false)}>
               <Link href="/dashboard">Dashboard</Link>
             </Button>
             {auth.isAuthenticated ? (
-              <Button asChild variant="ghost" className="h-11 w-full justify-start" onClick={() => setOpen(false)}>
+              <Button asChild variant="ghost" className="h-10 w-full justify-start rounded-xl" onClick={() => setOpen(false)}>
                 <Link href="/dashboard#notifications">Alerts{unreadCount > 0 ? ` (${unreadCount})` : ""}</Link>
               </Button>
             ) : null}
 
-            <div className="pt-2">
+            <div className="rounded-2xl border bg-accent/20 p-3 pt-3">
               <div className="text-xs text-muted-foreground">Wallet</div>
               <div className="mt-2">
                 <ConnectButton showBalance={false} chainStatus="icon" />
               </div>
               {address && !auth.isAuthenticated ? (
-                <Button type="button" variant="outline" className="mt-3 w-full" disabled={auth.isLoading} onClick={() => void auth.signIn()}>
+                <Button type="button" variant="outline" className="mt-3 h-10 w-full rounded-xl" disabled={auth.isLoading} onClick={() => void auth.signIn()}>
                   Sign in
                 </Button>
               ) : null}
               {auth.isAuthenticated ? (
-                <Button type="button" variant="ghost" className="mt-3 w-full" onClick={auth.signOut}>
+                <Button type="button" variant="ghost" className="mt-3 h-10 w-full rounded-xl" onClick={auth.signOut}>
                   Sign out
                 </Button>
               ) : null}

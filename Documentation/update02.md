@@ -53,10 +53,12 @@ Deliver a classifieds product that feels closer to Kijiji or Facebook Marketplac
 
 ## Verification And Rollout
 
-### Production Verification Snapshot (2026-04-04)
-- Verified locally: backend migrations apply, backend health returns {"status":"ok"}, and the config-driven Sepolia indexer starts successfully.
-- Verified against the deployed backend: health and read-path checks were executed as part of the production pass.
+### Production Verification Snapshot (2026-04-11)
+- Verified locally: backend migrations apply, backend health returns {"status":"ok"}, the config-driven Sepolia indexer starts successfully, and the settlement read path returns HTTP 200 with `{ "item": null }` instead of failing when no seller order exists yet.
+- Verified on Sepolia explorer: `MarketplaceSettlementV2` at `0x36c40B5c2cdA7096968CDD43aa6b9C6406f09ceC` is published and verified.
+- Verified in a controlled end-to-end smoke run against Sepolia plus a local backend instance on port `4100`: seller publish, buyer accept, buyer confirm, and buyer refund all completed successfully and the smoke script ended with `SMOKE_OK`.
 - Rollout blocker for true multi-chain production verification: Base Sepolia deployment is not live yet, and the current deployer account has no Base Sepolia gas balance.
+- Remaining production parity task: redeploy the hosted backend with the same settlement-controller and relayer configuration that passed locally so the public Render service matches the validated stack.
 - Current product-scope correction: public comments are replacing private messaging, and Stripe-backed product surfaces are being removed from the live app.
 
 ### Relevant Files
@@ -258,6 +260,209 @@ Do not keep extending the current registry as-is. Build a V2 settlement contract
 5. Backend persistence returns the latest signed order intent after relayer activity.
 6. Monitoring captures relayer failures, contract reverts, and expired typed-data payloads.
 
+## Exact Deployment Runbook
+
+This section converts the rollout checklist into the exact env-by-env cutover steps for the currently deployed Sepolia stack.
+
+### Canonical Live Sepolia Addresses
+
+- `MarketplaceRegistry`: `0x578c8c9faB60776B50B9c6A8a8c7b9060c1dE390`
+- `EscrowVault`: `0x773c86B374537a09406400876E610733dD329924`
+- `AuctionModule`: `0x3112b8B35d7ddB5883DA85feC118908a185c2B73`
+- `RaffleModule`: `0xE92cC6ca1ED88EB6497bdEd7dF7230abe327D686`
+- `MarketplaceSettlementV2`: `0x36c40B5c2cdA7096968CDD43aa6b9C6406f09ceC`
+- `SBUSD` (`Seller Block USD`, permit-enabled, 6 decimals): `0xF5Cb72f0B5300c42f7cad16c93F4B6CD40169dBa`
+- `feeRecipient`: `0x96Dd430B665b244677b5c357c959AFC9884bB2C7`
+- `arbiter`: `0x96Dd430B665b244677b5c357c959AFC9884bB2C7`
+- `relayer wallet`: `0xe1112131D91064518Fb3cDE4D92AeA1FBf2d2ACf`
+- `protocolFeeBps`: `500`
+
+### Render Backend Runbook
+
+1. Open the Render backend service that serves the live API.
+2. Confirm the production Postgres instance is the intended one for this environment.
+3. Apply backend migration `backend/migrations/010_listing_order_intents.sql` before enabling any V2 order publishing.
+4. In Render environment settings, set `NODE_ENV=production` and set `LOG_LEVEL=info` unless incident response requires more verbosity.
+5. Set `DATABASE_URL` to the Render internal Postgres URL for the production database. Do not use the external/local URL in the deployed service.
+6. Set `FRONTEND_APP_URL` to the production Vercel origin only.
+7. Set `CORS_ORIGINS` to the production Vercel origin plus any explicitly approved preview origins. Remove stale preview domains before launch.
+8. Set `AUTH_JWT_SECRET` to a freshly generated production secret.
+9. Set `RELAYER_PRIVATE_KEY` to the dedicated relayer wallet key for the live environment.
+10. Set `MARKETPLACE_SETTLEMENT_V2_ADDRESS=0x36c40B5c2cdA7096968CDD43aa6b9C6406f09ceC`.
+11. Keep `MARKETPLACE_REGISTRY_ADDRESS=0x578c8c9faB60776B50B9c6A8a8c7b9060c1dE390` while the hybrid flow still depends on V1 listing state.
+12. Set `SEPOLIA_RPC_URL` to the production RPC provider and keep `SEPOLIA_RPC_URL_FALLBACK` as a secondary provider.
+13. Replace `CHAIN_CONFIG_JSON` with the exact production JSON below.
+14. Leave `POSTMARK_SERVER_TOKEN` and `NOTIFICATION_EMAIL_FROM` empty only if email alerts are intentionally disabled at launch.
+15. Redeploy the backend.
+16. Verify `/health` first.
+17. Verify the settlement read path with `GET /listings/:id/settlement/order?chainKey=sepolia` on a known fixed-price listing.
+18. Only after the read path succeeds, run seller-order publish and relayed transaction smoke tests.
+
+### Render Production `CHAIN_CONFIG_JSON`
+
+Use this as the single-chain production baseline, replacing only the RPC URLs with final provider values:
+
+```json
+{
+   "defaultChainKey": "sepolia",
+   "chains": [
+      {
+         "key": "sepolia",
+         "name": "Ethereum Sepolia",
+         "chainId": 11155111,
+         "rpcUrl": "<PRIMARY_SEPOLIA_RPC_URL>",
+         "rpcFallbackUrl": "<SECONDARY_SEPOLIA_RPC_URL>",
+         "marketplaceRegistryAddress": "0x578c8c9faB60776B50B9c6A8a8c7b9060c1dE390",
+         "marketplaceSettlementV2Address": "0x36c40B5c2cdA7096968CDD43aa6b9C6406f09ceC",
+         "startBlock": 0,
+         "nativeCurrencySymbol": "ETH",
+         "stablecoins": [
+            {
+               "symbol": "SBUSD",
+               "name": "Seller Block USD",
+               "address": "0xF5Cb72f0B5300c42f7cad16c93F4B6CD40169dBa",
+               "decimals": 6,
+               "permitName": "Seller Block USD",
+               "permitVersion": "1"
+            }
+         ]
+      }
+   ]
+}
+```
+
+### Vercel Frontend Runbook
+
+1. Open the production Vercel project.
+2. Update Production environment variables first. Only mirror those values to Preview if the preview deployment should execute live chain reads.
+3. Set `NEXT_PUBLIC_BACKEND_URL` to the production Render backend URL.
+4. Set `NEXT_PUBLIC_MARKETPLACE_SETTLEMENT_V2_ADDRESS=0x36c40B5c2cdA7096968CDD43aa6b9C6406f09ceC`.
+5. Keep `NEXT_PUBLIC_MARKETPLACE_REGISTRY_ADDRESS=0x578c8c9faB60776B50B9c6A8a8c7b9060c1dE390` while registry-backed reads remain in use.
+6. Keep the current module addresses only if auction and raffle remain exposed in the live app; otherwise remove those UI paths before launch.
+7. Set `NEXT_PUBLIC_CHAIN_CONFIG_JSON` to the production JSON below.
+8. Set `NEXT_PUBLIC_SEPOLIA_RPC_URL` and `NEXT_PUBLIC_SEPOLIA_RPC_FALLBACK_URL` to approved provider URLs.
+9. Trigger a fresh production deploy after all environment changes are saved.
+10. Validate the deployed listing detail page against a real listing and confirm the settlement panel can read the latest seller order.
+
+### Vercel Production `NEXT_PUBLIC_CHAIN_CONFIG_JSON`
+
+```json
+{
+   "defaultChainKey": "sepolia",
+   "chains": [
+      {
+         "key": "sepolia",
+         "name": "Ethereum Sepolia",
+         "chainId": 11155111,
+         "rpcUrl": "<PRIMARY_SEPOLIA_RPC_URL>",
+         "rpcFallbackUrl": "<SECONDARY_SEPOLIA_RPC_URL>",
+         "marketplaceRegistryAddress": "0x578c8c9faB60776B50B9c6A8a8c7b9060c1dE390",
+         "marketplaceSettlementV2Address": "0x36c40B5c2cdA7096968CDD43aa6b9C6406f09ceC",
+         "escrowVaultAddress": "0x773c86B374537a09406400876E610733dD329924",
+         "auctionModuleAddress": "0x3112b8B35d7ddB5883DA85feC118908a185c2B73",
+         "raffleModuleAddress": "0xE92cC6ca1ED88EB6497bdEd7dF7230abe327D686",
+         "fromBlock": 0,
+         "nativeCurrencySymbol": "ETH",
+         "nativeCurrencyName": "Ether",
+         "blockExplorerUrl": "https://sepolia.etherscan.io",
+         "stablecoins": [
+            {
+               "symbol": "SBUSD",
+               "name": "Seller Block USD",
+               "address": "0xF5Cb72f0B5300c42f7cad16c93F4B6CD40169dBa",
+               "decimals": 6,
+               "permitName": "Seller Block USD",
+               "permitVersion": "1"
+            }
+         ]
+      }
+   ]
+}
+```
+
+## Current Env Audit
+
+### Backend `.env` Audit
+
+- `CHAIN_CONFIG_JSON`: locally correct for the validated Sepolia smoke path. It now includes Sepolia registry/V2 addresses plus `SBUSD` token metadata with permit settings.
+- `SEPOLIA_RPC_URL`: set, but the checked-in value should be treated as compromised configuration once shared outside a secrets manager.
+- `SEPOLIA_RPC_URL_FALLBACK`: set.
+- `MARKETPLACE_REGISTRY_ADDRESS`: correct for the live Sepolia deployment.
+- `MARKETPLACE_SETTLEMENT_V2_ADDRESS`: correct for the live Sepolia V2 deployment.
+- `DATABASE_URL`: populated, but the checked-in value must be rotated if it has been exposed outside the private Render environment.
+- `CORS_ORIGINS`: too broad for production. It still includes multiple preview deployments and should be reduced to the exact allowed origins.
+- `AUTH_JWT_SECRET`: populated, but should be rotated before production if this file has been shared or committed.
+- `FRONTEND_APP_URL`: correct for the current production Vercel domain.
+- `NOTIFICATION_EMAIL_FROM`: unset. Acceptable only if email alerts are intentionally disabled.
+- `POSTMARK_SERVER_TOKEN`: unset. Required if email alerts ship at launch.
+- `RELAYER_PRIVATE_KEY`: configured locally and validated against relayer address `0xe1112131D91064518Fb3cDE4D92AeA1FBf2d2ACf`. Render still needs the same secret set in hosted environment variables.
+- `NODE_ENV`: currently `development`. Must be `production` in Render.
+- `LOG_LEVEL`: currently `debug`. Reduce for production unless investigating an incident.
+
+### Frontend `.env.local` Audit
+
+- `NEXT_PUBLIC_CHAIN_CONFIG_JSON`: locally correct for the validated Sepolia smoke path. Contract addresses are present and `stablecoins` now includes `SBUSD` with `permitName` and `permitVersion`.
+- `NEXT_PUBLIC_BACKEND_URL`: points at the live Render backend and is suitable for the current deployment target.
+- `NEXT_PUBLIC_MARKETPLACE_SETTLEMENT_V2_ADDRESS`: correct for the live Sepolia V2 deployment.
+- `NEXT_PUBLIC_MARKETPLACE_REGISTRY_ADDRESS`: correct for the live Sepolia registry deployment.
+- `NEXT_PUBLIC_ESCROW_VAULT_ADDRESS`: correct for the live Sepolia deployment.
+- `NEXT_PUBLIC_AUCTION_MODULE_ADDRESS`: correct for the live Sepolia deployment.
+- `NEXT_PUBLIC_RAFFLE_MODULE_ADDRESS`: correct for the live Sepolia deployment.
+- `NEXT_PUBLIC_SEPOLIA_RPC_URL`: set.
+- `NEXT_PUBLIC_SEPOLIA_RPC_FALLBACK_URL`: set.
+
+### Contracts `.env` Audit
+
+- `SEPOLIA_RPC_URL`: set.
+- `BASE_RPC_URL`: set for Base Sepolia, but that network is not yet part of the live rollout.
+- `PRIVATE_KEY`: populated in the checked-in local file. If this key controls any real deployment account, rotate it immediately and move it to a secrets manager.
+- `VAULT_ADDRESS`: correct for the live Sepolia deployment.
+- `REGISTRY_ADDRESS`: correct for the live Sepolia deployment.
+- `AUCTION_ADDRESS`: correct for the live Sepolia deployment.
+- `RAFFLE_ADDRESS`: correct for the live Sepolia deployment.
+- `FEE_RECIPIENT`: matches the live deployment artifact.
+- `ARBITER`: matches the live deployment artifact.
+- `PROTOCOL_FEE_BPS`: matches the live deployment artifact value of `500`.
+
+## Final Production Values Still Required
+
+These are the values still missing or still needing replacement before a production cutover:
+
+1. Hosted Render `RELAYER_PRIVATE_KEY` must match the validated local relayer secret.
+2. Hosted Render `CHAIN_CONFIG_JSON` and hosted Vercel `NEXT_PUBLIC_CHAIN_CONFIG_JSON` must be updated to include the final `SBUSD` metadata shown above.
+3. Final production `DATABASE_URL` stored only in Render secrets.
+4. Final production `AUTH_JWT_SECRET` stored only in Render secrets.
+5. Reduced `CORS_ORIGINS` list for the exact allowed production origins.
+6. `POSTMARK_SERVER_TOKEN` and `NOTIFICATION_EMAIL_FROM` if email alerts are part of launch scope.
+7. Production logging values: `NODE_ENV=production` and lower `LOG_LEVEL`.
+
+## Current Execution Snapshot
+
+### Contract Verification Checks Run
+
+1. Ran `contracts/scripts/verify-sepolia.ts` from the contracts package root against the deployed Sepolia V1 addresses.
+2. Result: pass.
+3. Observed values:
+   - `Vault controller`: `0x578c8c9faB60776B50B9c6A8a8c7b9060c1dE390`
+   - `Auction registry`: `0x578c8c9faB60776B50B9c6A8a8c7b9060c1dE390`
+   - `Raffle registry`: `0x578c8c9faB60776B50B9c6A8a8c7b9060c1dE390`
+   - `Registry feeRecipient`: `0x96Dd430B665b244677b5c357c959AFC9884bB2C7`
+   - `Registry arbiter`: `0x96Dd430B665b244677b5c357c959AFC9884bB2C7`
+   - `Registry protocolFeeBps`: `500`
+4. Ran the dedicated V2 verify flow against Sepolia using the deployment artifact and Etherscan API configuration.
+5. Result: pass. Hardhat reported that `MarketplaceSettlementV2` at `0x36c40B5c2cdA7096968CDD43aa6b9C6406f09ceC` is already verified, and the Etherscan V2 API returned published source metadata for the contract.
+
+### Live Smoke Checks Run
+
+1. `GET /health` on the deployed Render backend returned `200` with `{\"status\":\"ok\"}`.
+2. `GET /listings?chainKey=sepolia&limit=5` on the deployed backend returned live listing data and confirmed active fixed-price listings exist.
+3. Local validation of the patched settlement read path returned HTTP `200` with `{\"item\":null}` for a listing with no seller order yet.
+4. Full Sepolia settlement smoke was then executed against a controlled local backend instance on port `4100` using the live Sepolia contracts and `SBUSD` token.
+5. Result: pass. The script completed seller publish, buyer accept, buyer confirm, and buyer refund, then ended with `SMOKE_OK`.
+6. Confirm path evidence: escrow status reached `2` (`Released`).
+7. Refund path evidence: escrow status reached `3` (`Refunded`).
+8. Hosted production parity is still pending: the public Render backend must be redeployed with the same validated settlement-controller and relayer configuration before the hosted smoke status can be upgraded from local-controlled pass to public-stack pass.
+
 ## Relayer And Security Audit Before Deploy
 
 ### Current Gaps
@@ -265,7 +470,7 @@ Do not keep extending the current registry as-is. Build a V2 settlement contract
 1. Critical: runtime config still used a zero-address placeholder for `MarketplaceSettlementV2`, which would make the frontend and backend appear configured while all contract calls fail. This is now blocked at env-parse time and must be replaced with the real deployed address.
 2. High: the relayer is currently a single hot wallet model. Production needs a dedicated wallet, funded gas reserves, rotation procedures, and restricted access to the private key.
 3. High: the relayer has no explicit budget guardrails in code today. Before production, add operational caps per wallet, per IP, and per time window so a burst of signed requests cannot drain sponsored gas unexpectedly.
-4. High: supported settlement tokens are not configured yet. Without a strict allowlist of permit-enabled tokens, the gasless path is operationally undefined for production.
+4. High: the initial supported settlement token set is now defined locally as `SBUSD` on Sepolia. Hosted environments still need the exact same allowlist to be deployed before public gasless flow can be considered production-ready.
 5. Medium: relayed actions depend on short-lived signatures and backend uptime. Production needs retry policy, idempotent transaction tracking, and alerting for stuck or failed relays.
 6. Medium: arbiter power is still a single-address role. Production should move arbiter control to a multisig or a governed operational wallet before public value is routed through V2.
 7. Medium: there is no production deploy script for V2 in the current repo baseline. A dedicated deployment path and artifact format are required to avoid hand-edited addresses.

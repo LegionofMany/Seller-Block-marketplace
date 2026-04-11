@@ -382,17 +382,44 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-2">
-        <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
-        <p className="text-sm text-muted-foreground">Manage your marketplace activity.</p>
-      </div>
+      <section className="market-hero px-4 py-5 sm:px-8 sm:py-8">
+        <div className="grid gap-6 lg:grid-cols-[1.5fr_1fr] lg:items-end">
+          <div className="space-y-4">
+            <div className="market-section-title">Your account</div>
+            <div className="space-y-2">
+              <h1 className="text-2xl font-semibold tracking-tight sm:text-4xl">Run your seller profile like a marketplace storefront.</h1>
+              <p className="max-w-2xl text-[13px] leading-6 text-muted-foreground sm:text-base">Profile, saved searches, alerts, and current listings stay in the main flow. Wallet and owner utilities are still available, but pushed into an advanced area so the dashboard reads like a classifieds account center.</p>
+            </div>
+          </div>
 
-      <Card>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-3">
+            <div className="market-stat">
+              <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Saved searches</div>
+              <div className="mt-2 text-2xl font-semibold">{savedSearches.length}</div>
+            </div>
+            <div className="market-stat">
+              <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Unread alerts</div>
+              <div className="mt-2 text-2xl font-semibold">{notificationUnreadCount}</div>
+            </div>
+            <div className="market-stat col-span-2">
+              <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Listings in view</div>
+              <div className="mt-2 text-2xl font-semibold">{Array.isArray(myListingIds) ? myListingIds.length : "—"}</div>
+              <div className="mt-1 text-sm text-muted-foreground">Recent marketplace activity tied to your wallet.</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px] xl:gap-6">
+        <div className="space-y-4 sm:space-y-6">
+
+      <Card className="market-panel">
         <CardHeader>
+          <div className="market-section-title">Public profile</div>
           <CardTitle>Profile</CardTitle>
           <CardDescription>Sign in with your wallet to edit the public profile shown on your seller page.</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-4 p-4 pt-0 sm:p-6 sm:pt-0">
           {!auth.isAuthenticated ? (
             <div className="space-y-3 text-sm">
               <div className="text-muted-foreground">Connect your wallet and complete wallet sign-in to edit your profile.</div>
@@ -447,19 +474,20 @@ export default function DashboardPage() {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="market-panel">
         <CardHeader>
+          <div className="market-section-title">Discovery</div>
           <CardTitle>Saved searches</CardTitle>
           <CardDescription>Review, edit, and remove the alert searches you saved from the listings page.</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-3">
+        <CardContent className="space-y-3 p-4 pt-0 sm:p-6 sm:pt-0">
           {!auth.isAuthenticated ? (
             <div className="text-sm text-muted-foreground">Sign in to manage saved search alerts.</div>
           ) : savedSearches.length === 0 ? (
             <div className="text-sm text-muted-foreground">No saved searches yet.</div>
           ) : (
             savedSearches.map((item) => (
-              <div key={item.id} className="rounded-md border p-3">
+              <div key={item.id} className="rounded-md border p-3 sm:p-4">
                 <div className="space-y-4">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                     <div className="space-y-1">
@@ -503,7 +531,7 @@ export default function DashboardPage() {
                   </div>
 
                   {editingSavedSearchId === item.id && savedSearchDraft ? (
-                    <div className="grid gap-4 rounded-md border bg-muted/20 p-4 lg:grid-cols-3">
+                    <div className="grid gap-3 rounded-md border bg-muted/20 p-3 sm:gap-4 sm:p-4 lg:grid-cols-3">
                       <div className="space-y-2">
                         <Label>Name</Label>
                         <Input
@@ -683,12 +711,13 @@ export default function DashboardPage() {
         </CardContent>
       </Card>
 
-      <Card id="notifications">
+      <Card id="notifications" className="market-panel">
         <CardHeader>
+          <div className="market-section-title">Alerts</div>
           <CardTitle>Notifications</CardTitle>
           <CardDescription>In-app alerts for saved-search matches and marketplace activity.</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-3">
+        <CardContent className="space-y-3 p-4 pt-0 sm:p-6 sm:pt-0">
           <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
             <div>Unread: {notificationUnreadCount}</div>
             {auth.isAuthenticated && notificationUnreadCount > 0 ? (
@@ -720,7 +749,7 @@ export default function DashboardPage() {
               const listingId = typeof item.payload.listingId === "string" ? item.payload.listingId : null;
               const listingChainKey = typeof item.payload.chainKey === "string" ? item.payload.chainKey : null;
               return (
-                <div key={item.id} className={item.readAt ? "rounded-md border p-3" : "rounded-md border border-primary/40 bg-primary/5 p-3"}>
+                <div key={item.id} className={item.readAt ? "rounded-md border p-3 sm:p-4" : "rounded-md border border-primary/40 bg-primary/5 p-3 sm:p-4"}>
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                     <div className="space-y-1">
                       <div className="font-medium">{item.title}</div>
@@ -754,24 +783,61 @@ export default function DashboardPage() {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="market-panel">
         <CardHeader>
+          <div className="market-section-title">Listings</div>
+          <CardTitle>My listings</CardTitle>
+          <CardDescription>Listings you created, surfaced in a simple buyer/seller view.</CardDescription>
+        </CardHeader>
+        <CardContent className="p-4 pt-0 sm:p-6 sm:pt-0">
+          {myListingIds === null || myListings === null ? (
+            <div className="space-y-2">
+              <Skeleton className="h-4 w-64" />
+              <Skeleton className="h-4 w-56" />
+              <Skeleton className="h-4 w-72" />
+            </div>
+          ) : myListingIds.length === 0 ? (
+            <div className="text-sm text-muted-foreground">No listings found.</div>
+          ) : (
+            <div className="space-y-2">
+              {(myListings ?? []).map((row) => (
+                <Link key={row.id} href={buildListingHref(String(row.id), env.defaultChain.key)} className="block rounded-2xl border px-3 py-3 text-sm transition-colors hover:bg-accent/30 sm:px-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="break-all font-medium">{row.id}</div>
+                    <div className="text-xs text-muted-foreground">{statusLabel(row.status as any)}</div>
+                  </div>
+                  {row.buyer && row.buyer !== zeroAddress ? (
+                    <div className="mt-1 text-xs text-muted-foreground">Buyer: {shortenHex(row.buyer)}</div>
+                  ) : null}
+                </Link>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+        </div>
+
+        <aside className="space-y-3 sm:space-y-4">
+      <Card className="market-panel">
+        <CardHeader>
+          <div className="market-section-title">Scope</div>
           <CardTitle>Payments</CardTitle>
           <CardDescription>Stripe and off-chain promotion checkout are no longer part of the active product.</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-4 p-4 pt-0 sm:p-6 sm:pt-0">
           <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
             Wallet connection and on-chain settlement remain in scope. Private inboxes and Stripe-backed placement purchases do not.
           </div>
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="market-panel">
         <CardHeader>
+          <div className="market-section-title">Wallet</div>
           <CardTitle>Wallet</CardTitle>
           <CardDescription>Connected address and quick helpers.</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-2 text-sm">
+        <CardContent className="space-y-2 p-4 pt-0 text-sm sm:p-6 sm:pt-0">
           <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
             <div className="text-muted-foreground">Address</div>
             <div className="font-medium break-all sm:text-right">{address ? shortenHex(address) : "Not connected"}</div>
@@ -789,50 +855,57 @@ export default function DashboardPage() {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Withdraw payout</CardTitle>
-          <CardDescription>Withdraw your credits from EscrowVault through the registry.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="space-y-2">
-            <Label>Token address (optional)</Label>
-            <Input value={token} onChange={(e) => setToken(e.target.value)} placeholder={`Leave empty for ${env.defaultChain.nativeCurrencySymbol}`} />
+      <details className="market-details market-panel overflow-hidden">
+        <summary className="flex items-center justify-between gap-3 px-4 py-4 sm:px-6 sm:py-5">
+          <div>
+            <div className="market-section-title">Advanced tools</div>
+            <div className="mt-1 text-lg font-semibold">Wallet withdrawals and owner utilities</div>
+            <div className="mt-1 text-sm text-muted-foreground">Hidden by default so the main dashboard stays marketplace-first.</div>
           </div>
-          <Button
-            variant="outline"
-            size="lg"
-            className="w-full sm:w-auto"
-            disabled={!address}
-            onClick={async () => {
-              try {
-                if (!publicClient) throw new Error("No public client");
-                const tokenArg = token.trim().length ? (token.trim() as Address) : zeroAddress;
-                const id = toast.loading("Withdrawing…");
-                const hash = await writeContractAsync({
-                  address: env.marketplaceRegistryAddress,
-                  abi: marketplaceRegistryAbi,
-                  functionName: "withdrawPayout",
-                  args: [tokenArg],
-                });
-                await publicClient.waitForTransactionReceipt({ hash });
-                toast.success("Withdraw complete", { id });
-              } catch (e: any) {
-                toast.error(e?.shortMessage ?? e?.message ?? "Withdraw failed");
-              }
-            }}
-          >
-            Withdraw
-          </Button>
-        </CardContent>
-      </Card>
+          <div className="text-sm font-medium text-muted-foreground">Expand</div>
+        </summary>
+        <div className="space-y-4 border-t px-4 py-4 sm:px-6 sm:py-6">
+          <div className="rounded-2xl border p-3 space-y-3 sm:p-4">
+            <div>
+              <div className="text-sm font-semibold">Withdraw payout</div>
+              <div className="text-sm text-muted-foreground">Withdraw your credits from EscrowVault through the registry.</div>
+            </div>
+            <div className="space-y-2">
+              <Label>Token address (optional)</Label>
+              <Input value={token} onChange={(e) => setToken(e.target.value)} placeholder={`Leave empty for ${env.defaultChain.nativeCurrencySymbol}`} />
+            </div>
+            <Button
+              variant="outline"
+              size="lg"
+              className="w-full sm:w-auto"
+              disabled={!address}
+              onClick={async () => {
+                try {
+                  if (!publicClient) throw new Error("No public client");
+                  const tokenArg = token.trim().length ? (token.trim() as Address) : zeroAddress;
+                  const id = toast.loading("Withdrawing…");
+                  const hash = await writeContractAsync({
+                    address: env.marketplaceRegistryAddress,
+                    abi: marketplaceRegistryAbi,
+                    functionName: "withdrawPayout",
+                    args: [tokenArg],
+                  });
+                  await publicClient.waitForTransactionReceipt({ hash });
+                  toast.success("Withdraw complete", { id });
+                } catch (e: any) {
+                  toast.error(e?.shortMessage ?? e?.message ?? "Withdraw failed");
+                }
+              }}
+            >
+              Withdraw
+            </Button>
+          </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Owner tools</CardTitle>
-          <CardDescription>Admin/owner-only utilities for EscrowVault and the registry.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
+          <div className="rounded-2xl border p-3 space-y-4 sm:p-4">
+            <div>
+              <div className="text-sm font-semibold">Owner tools</div>
+              <div className="text-sm text-muted-foreground">Admin and owner-only utilities for EscrowVault and the registry.</div>
+            </div>
           <div className="space-y-2 text-sm">
             <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
               <div className="text-muted-foreground">Registry owner</div>
@@ -862,7 +935,7 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          <div className="rounded-md border p-4 space-y-3">
+          <div className="rounded-md border p-3 space-y-3 sm:p-4">
             <div className="text-sm font-semibold">EscrowVault (owner-only)</div>
             {isVaultOwner ? (
               <>
@@ -940,7 +1013,7 @@ export default function DashboardPage() {
             )}
           </div>
 
-          <div className="rounded-md border p-4 space-y-3">
+          <div className="rounded-md border p-3 space-y-3 sm:p-4">
             <div className="text-sm font-semibold">MarketplaceRegistry (owner-only)</div>
             {isRegistryOwner ? (
               <>
@@ -1012,7 +1085,7 @@ export default function DashboardPage() {
             )}
           </div>
 
-          <div className="rounded-md border p-4 space-y-3">
+          <div className="rounded-md border p-3 space-y-3 sm:p-4">
             <div className="text-sm font-semibold">Inspect EscrowVault (read-only)</div>
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-2">
@@ -1100,40 +1173,11 @@ export default function DashboardPage() {
               <div className="text-xs text-muted-foreground break-all">Credits: {creditAmount.toString()}</div>
             ) : null}
           </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>My listings</CardTitle>
-          <CardDescription>Listings you created (from on-chain events).</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {myListingIds === null || myListings === null ? (
-            <div className="space-y-2">
-              <Skeleton className="h-4 w-64" />
-              <Skeleton className="h-4 w-56" />
-              <Skeleton className="h-4 w-72" />
-            </div>
-          ) : myListingIds.length === 0 ? (
-            <div className="text-sm text-muted-foreground">No listings found.</div>
-          ) : (
-            <div className="space-y-2">
-              {(myListings ?? []).map((row) => (
-                <Link key={row.id} href={buildListingHref(String(row.id), env.defaultChain.key)} className="block rounded-md border px-3 py-2 text-sm hover:bg-accent/30">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="break-all">{row.id}</div>
-                    <div className="text-xs text-muted-foreground">{statusLabel(row.status as any)}</div>
-                  </div>
-                  {row.buyer && row.buyer !== zeroAddress ? (
-                    <div className="mt-1 text-xs text-muted-foreground">Buyer: {shortenHex(row.buyer)}</div>
-                  ) : null}
-                </Link>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+          </div>
+        </div>
+      </details>
+        </aside>
+      </div>
     </div>
   );
 }
