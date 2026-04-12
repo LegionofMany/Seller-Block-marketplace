@@ -53,16 +53,17 @@ export type EscrowActionMessage = {
   deadline: number;
 };
 
-function listingPath(listingId: Hex, chainKey: string) {
-  return `/listings/${listingId}/settlement${chainKey ? `?chain=${encodeURIComponent(chainKey)}` : ""}`;
+function listingPath(listingId: Hex, chainKey: string, suffix = "") {
+  const query = chainKey ? `?chain=${encodeURIComponent(chainKey)}` : "";
+  return `/listings/${listingId}/settlement${suffix}${query}`;
 }
 
 export async function fetchLatestSellerOrder(listingId: Hex, chainKey: string) {
-  return fetchJson<{ item: ListingOrderIntent | null }>(`${listingPath(listingId, chainKey)}/order`, { timeoutMs: 10_000 });
+  return fetchJson<{ item: ListingOrderIntent | null }>(listingPath(listingId, chainKey, "/order"), { timeoutMs: 10_000 });
 }
 
 export async function prepareSellerOrder(listingId: Hex, chainKey: string, body?: { expiry?: number; nonce?: string }) {
-  return fetchJson<TypedDataEnvelope<SettlementOrderMessage> & { orderHash: Hex }>(`${listingPath(listingId, chainKey)}/order/prepare`, {
+  return fetchJson<TypedDataEnvelope<SettlementOrderMessage> & { orderHash: Hex }>(listingPath(listingId, chainKey, "/order/prepare"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body ?? {}),
@@ -76,7 +77,7 @@ export async function publishSellerOrder(
   order: SettlementOrderMessage,
   signature: Hex
 ) {
-  return fetchJson<{ item: ListingOrderIntent }>(`${listingPath(listingId, chainKey)}/order`, {
+  return fetchJson<{ item: ListingOrderIntent }>(listingPath(listingId, chainKey, "/order"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ order, signature }),
@@ -87,7 +88,7 @@ export async function publishSellerOrder(
 export async function prepareBuyerAcceptance(listingId: Hex, chainKey: string, body?: { orderHash?: Hex; deadline?: number }) {
   return fetchJson<
     TypedDataEnvelope<BuyerAcceptanceMessage> & { order: SettlementOrderMessage; orderHash: Hex; sellerSignature: Hex }
-  >(`${listingPath(listingId, chainKey)}/acceptance/prepare`, {
+  >(listingPath(listingId, chainKey, "/acceptance/prepare"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body ?? {}),
@@ -101,7 +102,7 @@ export async function relayAcceptWithPermit(
   body: { orderHash?: Hex; buyerDeadline: number; buyerSignature: Hex; permitSignature: Hex; permitDeadline: number }
 ) {
   const permit = parseSignature(body.permitSignature);
-  return fetchJson<{ txHash: Hex; escrowId: Hex; orderHash: Hex }>(`${listingPath(listingId, chainKey)}/accept`, {
+  return fetchJson<{ txHash: Hex; escrowId: Hex; orderHash: Hex }>(listingPath(listingId, chainKey, "/accept"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -126,7 +127,7 @@ export async function prepareEscrowAction(
   body?: { orderHash?: Hex; deadline?: number }
 ) {
   return fetchJson<TypedDataEnvelope<EscrowActionMessage> & { orderHash: Hex; escrowId: Hex }>(
-    `${listingPath(listingId, chainKey)}/${action}/prepare`,
+    listingPath(listingId, chainKey, `/${action}/prepare`),
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -142,7 +143,7 @@ export async function relayEscrowAction(
   action: "confirm" | "refund",
   body: { orderHash?: Hex; deadline: number; buyerSignature: Hex }
 ) {
-  return fetchJson<{ txHash: Hex; escrowId: Hex; orderHash: Hex }>(`${listingPath(listingId, chainKey)}/${action}`, {
+  return fetchJson<{ txHash: Hex; escrowId: Hex; orderHash: Hex }>(listingPath(listingId, chainKey, `/${action}`), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
