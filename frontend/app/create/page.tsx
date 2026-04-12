@@ -23,8 +23,65 @@ import { fetchJson } from "@/lib/api";
 import { describeToken, getDefaultSettlementToken, getTokenOptions, parseTokenAmount } from "@/lib/tokens";
 import { getChainConfigById, getEnv, type ClientEnv } from "@/lib/env";
 import { buildListingHref } from "@/lib/listings";
-import { marketplaceRegistryAbi } from "@/lib/contracts/abi/MarketplaceRegistry";
 import { CATEGORY_TREE, subcategoriesFor } from "@/lib/categories";
+
+const createListingAbi = [
+  {
+    type: "function",
+    name: "createListing",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "metadataURI", type: "string" },
+      { name: "price", type: "uint256" },
+      { name: "token", type: "address" },
+      { name: "saleType", type: "uint8" },
+    ],
+    outputs: [{ name: "listingId", type: "bytes32" }],
+  },
+  {
+    type: "function",
+    name: "openAuction",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "listingId", type: "bytes32" },
+      { name: "startTime", type: "uint64" },
+      { name: "endTime", type: "uint64" },
+      { name: "reservePrice", type: "uint256" },
+      { name: "minBidIncrement", type: "uint256" },
+      { name: "extensionWindow", type: "uint64" },
+      { name: "extensionSeconds", type: "uint64" },
+    ],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "openRaffle",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "listingId", type: "bytes32" },
+      { name: "startTime", type: "uint64" },
+      { name: "endTime", type: "uint64" },
+      { name: "ticketPrice", type: "uint256" },
+      { name: "targetAmount", type: "uint256" },
+      { name: "minParticipants", type: "uint32" },
+      { name: "commit", type: "bytes32" },
+    ],
+    outputs: [],
+  },
+  {
+    type: "event",
+    name: "ListingCreated",
+    anonymous: false,
+    inputs: [
+      { indexed: true, name: "id", type: "bytes32" },
+      { indexed: false, name: "seller", type: "address" },
+      { indexed: false, name: "saleType", type: "uint8" },
+      { indexed: false, name: "token", type: "address" },
+      { indexed: false, name: "price", type: "uint256" },
+      { indexed: false, name: "metadataURI", type: "string" },
+    ],
+  },
+] as const;
 
 type SaleType = 0 | 1 | 2;
 
@@ -208,7 +265,7 @@ export default function CreateListingPage() {
       const toastId = toast.loading("Creating listing…");
       const hash = await writeContractAsync({
         address: activeChain.marketplaceRegistryAddress,
-        abi: marketplaceRegistryAbi,
+        abi: createListingAbi,
         functionName: "createListing",
         args: [metadataURI, price, token, saleType],
       });
@@ -217,7 +274,7 @@ export default function CreateListingPage() {
 
       for (const log of (receipt as any).logs ?? []) {
         try {
-          const decoded = decodeEventLog({ abi: marketplaceRegistryAbi, data: log.data, topics: log.topics });
+          const decoded = decodeEventLog({ abi: createListingAbi, data: log.data, topics: log.topics });
           if (decoded.eventName === "ListingCreated") {
             listingId = (decoded.args as any).id as Hex;
             break;
@@ -240,7 +297,7 @@ export default function CreateListingPage() {
         const toast2 = toast.loading("Opening auction…");
         const hash2 = await writeContractAsync({
           address: activeChain.marketplaceRegistryAddress,
-          abi: marketplaceRegistryAbi,
+          abi: createListingAbi,
           functionName: "openAuction",
           args: [
             listingId,
@@ -269,7 +326,7 @@ export default function CreateListingPage() {
         const toast2 = toast.loading("Opening raffle…");
         const hash2 = await writeContractAsync({
           address: activeChain.marketplaceRegistryAddress,
-          abi: marketplaceRegistryAbi,
+          abi: createListingAbi,
           functionName: "openRaffle",
           args: [listingId, startTime, endTime, ticket, target, minP, commit],
         });

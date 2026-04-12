@@ -387,7 +387,7 @@ export default function DashboardPage() {
           <div className="space-y-4">
             <div className="market-section-title">Your account</div>
             <div className="space-y-2">
-              <h1 className="text-2xl font-semibold tracking-tight sm:text-4xl">Run your seller profile like a marketplace storefront.</h1>
+              <h1 className="text-2xl font-semibold tracking-tight text-slate-950 sm:text-4xl">Run your seller profile like a marketplace storefront.</h1>
               <p className="max-w-2xl text-[13px] leading-6 text-muted-foreground sm:text-base">Profile, saved searches, alerts, and current listings stay in the main flow. Wallet and owner utilities are still available, but pushed into an advanced area so the dashboard reads like a classifieds account center.</p>
             </div>
           </div>
