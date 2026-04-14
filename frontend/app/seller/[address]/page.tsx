@@ -20,6 +20,7 @@ import { marketplaceRegistryAbi } from "@/lib/contracts/abi/MarketplaceRegistry"
 import { parseListing } from "@/lib/contracts/parse";
 import { isNativeToken, saleTypeLabel, statusLabel, type ListingStatus, type SaleType } from "@/lib/contracts/types";
 import { formatPrice, shortenHex } from "@/lib/format";
+import { ipfsToHttp } from "@/lib/ipfs";
 import { buildListingHref } from "@/lib/listings";
 import { fetchMetadataById, getRenderableListingImage, isSmokeMetadataUri, metadataIdFromUri, type MarketplaceMetadata } from "@/lib/metadata";
 
