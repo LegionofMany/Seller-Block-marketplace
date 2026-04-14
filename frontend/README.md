@@ -76,6 +76,37 @@ Open `http://localhost:3000`.
 - `npm run start` — run the production server
 - `npm run lint` — run ESLint
 
+## Vercel deployment
+
+This frontend is ready to deploy to Vercel as a monorepo subdirectory project.
+
+Recommended Vercel project settings:
+
+- Root Directory: `frontend`
+- Framework Preset: `Next.js`
+- Install Command: `npm install`
+- Build Command: `npm run build`
+
+Required production environment variables:
+
+- `NEXT_PUBLIC_BACKEND_URL`
+- `NEXT_PUBLIC_CHAIN_CONFIG_JSON`
+
+Optional but recommended production environment variables:
+
+- `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID`
+- `NEXT_PUBLIC_IPFS_GATEWAY_BASE_URL`
+
+Production deployment checklist:
+
+1. Set the Vercel project root directory to `frontend`.
+2. Add the production `NEXT_PUBLIC_*` environment variables in the Vercel dashboard.
+3. Point `NEXT_PUBLIC_BACKEND_URL` at the live backend origin.
+4. Ensure the backend `CORS_ORIGINS` includes the Vercel production domain and any approved preview domains.
+5. Redeploy after any chain-config or backend-origin changes.
+
+The included [vercel.json](vercel.json) keeps the frontend build command explicit and adds a small baseline set of response headers for production deployments.
+
 ## Project structure
 
 - `app/` — App Router pages/layout
