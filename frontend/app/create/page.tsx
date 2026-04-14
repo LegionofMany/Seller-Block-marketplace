@@ -355,15 +355,15 @@ export default function CreateListingPage() {
           <div className="space-y-4">
             <div className="market-section-title">Post a listing</div>
             <div className="space-y-2">
-              <h1 className="text-2xl font-semibold tracking-tight sm:text-4xl">List it like a local marketplace, not a protocol dashboard.</h1>
-              <p className="max-w-2xl text-[13px] leading-6 text-muted-foreground sm:text-base">
+              <h1 className="text-2xl font-semibold tracking-tight text-slate-950 sm:text-4xl">List it like a local marketplace, not a protocol dashboard.</h1>
+              <p className="max-w-2xl text-[13px] leading-6 text-slate-700 sm:text-base">
                 Add photos, location, contact details, and a clear price first. Wallet settlement still powers the listing on {activeChain.name}, but the posting flow now prioritizes what shoppers actually need to see.
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
-              <div className="market-chip">Photos up to 12</div>
-              <div className="market-chip">Location-aware metadata</div>
-              <div className="market-chip">Public listing page after publish</div>
+              <div className="market-chip border-amber-200/80 bg-white/95 text-slate-900 shadow-sm">Photos up to 12</div>
+              <div className="market-chip border-amber-200/80 bg-white/95 text-slate-900 shadow-sm">Location-aware metadata</div>
+              <div className="market-chip border-amber-200/80 bg-white/95 text-slate-900 shadow-sm">Public listing page after publish</div>
             </div>
           </div>
 
