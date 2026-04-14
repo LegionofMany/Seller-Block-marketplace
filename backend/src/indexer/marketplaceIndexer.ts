@@ -13,36 +13,22 @@ import {
   updateAuctionBid,
 } from "../services/db";
 import { fetchListingFromChain, getRegistryInterface } from "../services/blockchain";
+import { isTransientRpcError, rpcErrorHint } from "../utils/rpc";
 
 const CONFIRMATIONS = 3;
 
-function unwrapRpcError(err: any): any {
-  return err?.value ?? err?.error ?? err;
-}
-
-function isTransientRpcError(err: any): boolean {
-  const inner = unwrapRpcError(err);
-  const code = (inner?.code ?? err?.code ?? inner?.errno ?? err?.errno ?? "").toString();
-  // Node/network-level
-  if (["ECONNRESET", "ECONNREFUSED", "EPIPE", "ETIMEDOUT", "EAI_AGAIN", "ENOTFOUND"].includes(code)) return true;
-  // ethers v6
-  if (["TIMEOUT", "NETWORK_ERROR", "SERVER_ERROR"].includes(code)) return true;
-
-  const message = (inner?.shortMessage ?? err?.shortMessage ?? inner?.message ?? err?.message ?? "").toString().toLowerCase();
-  if (message.includes("timeout")) return true;
-  if (message.includes("econnreset") || message.includes("enotfound") || message.includes("eai_again")) return true;
-  return false;
-}
-
-function rpcErrorHint(err: any): string | undefined {
-  const inner = unwrapRpcError(err);
-  const code = (inner?.code ?? err?.code ?? inner?.errno ?? err?.errno ?? "").toString();
-  if (code === "ENOTFOUND") return "RPC hostname could not be resolved (check the configured chain RPC URL, DNS, and internet connectivity).";
-  if (code === "ECONNREFUSED") return "RPC host refused the connection (check the configured chain RPC URL and that the endpoint is reachable).";
-  if (code === "TIMEOUT") return "RPC request timed out (endpoint may be down/slow; consider using a different RPC URL).";
-  if (code === "ECONNRESET") return "RPC connection was reset (often transient).";
-  return undefined;
-}
+export type MarketplaceIndexerStatus = {
+  chainKey: string;
+  chainId: number;
+  running: boolean;
+  stopped: boolean;
+  failureCount: number;
+  lastSuccessAt?: number;
+  lastFailureAt?: number;
+  lastError?: string;
+  lastHint?: string;
+  nextRetryMs?: number;
+};
 
 function backoffMs(baseMs: number, failures: number): number {
   const cappedFailures = Math.min(Math.max(failures, 0), 8);
@@ -60,7 +46,18 @@ export function startMarketplaceIndexer(chainConfig?: SupportedChainConfig) {
 
   if (!env.indexerEnabled) {
     logger.info({ enabled: env.indexerEnabled }, "marketplace indexer disabled");
-    return { stop() {} };
+    return {
+      stop() {},
+      getStatus() {
+        return {
+          chainKey: chain.key,
+          chainId: chain.chainId,
+          running: false,
+          stopped: false,
+          failureCount: 0,
+        } satisfies MarketplaceIndexerStatus;
+      },
+    };
   }
 
   const iface = getRegistryInterface();
@@ -87,6 +84,13 @@ export function startMarketplaceIndexer(chainConfig?: SupportedChainConfig) {
   let stopped = false;
   let timer: NodeJS.Timeout | null = null;
   let failureCount = 0;
+  const status: MarketplaceIndexerStatus = {
+    chainKey: chain.key,
+    chainId: chain.chainId,
+    running: false,
+    stopped: false,
+    failureCount: 0,
+  };
 
   async function ensureListingExists(listingId: string, createdAt: number, blockNumber: number) {
     const existing = await findListing(db, listingId, chain.key);
@@ -117,6 +121,7 @@ export function startMarketplaceIndexer(chainConfig?: SupportedChainConfig) {
     if (stopped) return;
     if (running) return;
     running = true;
+    status.running = true;
 
     let nextDelayMs = env.indexerPollMs;
     try {
@@ -314,22 +319,34 @@ export function startMarketplaceIndexer(chainConfig?: SupportedChainConfig) {
       }
 
       failureCount = 0;
+      status.failureCount = 0;
+      status.lastSuccessAt = Date.now();
+      status.lastError = undefined;
+      status.lastHint = undefined;
+      status.nextRetryMs = nextDelayMs;
     } catch (e: any) {
       failureCount += 1;
       const transient = isTransientRpcError(e);
+      const hint = rpcErrorHint(e);
       nextDelayMs = transient ? backoffMs(env.indexerPollMs, failureCount) : env.indexerPollMs;
+      status.failureCount = failureCount;
+      status.lastFailureAt = Date.now();
+      status.lastError = e?.shortMessage ?? e?.message ?? String(e);
+      status.lastHint = hint;
+      status.nextRetryMs = nextDelayMs;
       logger.error(
         {
           err: e,
           transient,
           failureCount,
           nextRetryMs: nextDelayMs,
-          hint: rpcErrorHint(e),
+          hint,
         },
         "indexer tick failed"
       );
     } finally {
       running = false;
+      status.running = false;
       scheduleNext(nextDelayMs);
     }
   }
@@ -354,7 +371,12 @@ export function startMarketplaceIndexer(chainConfig?: SupportedChainConfig) {
   return {
     stop() {
       stopped = true;
+      status.stopped = true;
+      status.running = false;
       if (timer) clearTimeout(timer);
+    },
+    getStatus() {
+      return { ...status };
     },
   };
 }

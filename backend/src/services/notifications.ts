@@ -1,6 +1,13 @@
 import { getContext } from "./context";
 import { createNotification, listAllSavedSearches, queryListings, updateSavedSearchLastCheckedAt, type SavedSearchFilters } from "./db";
 
+export type NotificationsWorkerStatus = {
+  running: boolean;
+  lastSuccessAt?: number;
+  lastFailureAt?: number;
+  lastError?: string;
+};
+
 function parseOptionalBigInt(value: string | undefined): bigint | undefined {
   if (!value) return undefined;
   const trimmed = value.trim();
@@ -108,16 +115,25 @@ export function startNotificationsWorker() {
   const { env, logger } = getContext();
   let timer: NodeJS.Timeout | null = null;
   let running = false;
+  const status: NotificationsWorkerStatus = {
+    running: false,
+  };
 
   const run = async () => {
     if (running) return;
     running = true;
+    status.running = true;
     try {
       await processSavedSearches();
+      status.lastSuccessAt = Date.now();
+      status.lastError = undefined;
     } catch (err) {
+      status.lastFailureAt = Date.now();
+      status.lastError = err instanceof Error ? err.message : String(err);
       logger.warn({ err }, "saved search scan failed");
     } finally {
       running = false;
+      status.running = false;
     }
   };
 
@@ -130,6 +146,9 @@ export function startNotificationsWorker() {
     stop() {
       if (timer) clearInterval(timer);
       timer = null;
+    },
+    getStatus() {
+      return { ...status };
     },
   };
 }
