@@ -807,25 +807,25 @@ export default function ListingDetailPage() {
             <div className="market-section-title">Listing detail</div>
             <div className="space-y-2">
               <div className="flex flex-wrap items-center gap-2">
-                <h1 className="text-2xl font-semibold tracking-tight sm:text-4xl">{pageTitle}</h1>
-                {listing ? <Badge variant="outline">{statusLabel(listing.status)}</Badge> : null}
+                <h1 className="text-2xl font-semibold tracking-tight text-slate-950 sm:text-4xl">{pageTitle}</h1>
+                {listing ? <Badge variant="outline" className="border-amber-200/80 bg-white/95 text-slate-900">{statusLabel(listing.status)}</Badge> : null}
               </div>
-              <p className="max-w-2xl text-[13px] leading-6 text-muted-foreground sm:text-base">{pageDescription}</p>
+              <p className="max-w-2xl text-[13px] leading-6 text-slate-700 sm:text-base">{pageDescription}</p>
             </div>
             <div className="flex flex-wrap gap-2">
-              {metadata?.category ? <div className="market-chip">{metadata.subcategory ? `${metadata.category} / ${metadata.subcategory}` : metadata.category}</div> : null}
-              {locationLabel ? <div className="market-chip">{locationLabel}</div> : null}
-              <div className="market-chip">{priceLabel}</div>
+              {metadata?.category ? <div className="market-chip border-amber-200/80 bg-white/95 text-slate-900 shadow-sm">{metadata.subcategory ? `${metadata.category} / ${metadata.subcategory}` : metadata.category}</div> : null}
+              {locationLabel ? <div className="market-chip border-amber-200/80 bg-white/95 text-slate-900 shadow-sm">{locationLabel}</div> : null}
+              <div className="market-chip border-amber-200/80 bg-white/95 text-slate-900 shadow-sm">{priceLabel}</div>
             </div>
           </div>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 sm:gap-3 lg:grid-cols-1">
             <div className="market-stat">
               <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Seller</div>
-              <div className="mt-2 text-lg font-semibold">{listing ? shortenHex(listing.seller) : "—"}</div>
+              <div className="mt-2 text-lg font-semibold text-slate-950">{listing ? shortenHex(listing.seller) : "—"}</div>
             </div>
             <div className="market-stat">
               <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Checkout</div>
-              <div className="mt-2 text-lg font-semibold">{listing?.saleType === 0 ? "Fixed price" : saleTypeLabel(listing?.saleType ?? 0)}</div>
+              <div className="mt-2 text-lg font-semibold text-slate-950">{listing?.saleType === 0 ? "Fixed price" : saleTypeLabel(listing?.saleType ?? 0)}</div>
             </div>
           </div>
         </div>
