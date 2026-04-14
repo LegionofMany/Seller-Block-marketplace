@@ -9,7 +9,7 @@ import {
   type ListingRow,
 } from "../services/db";
 import { fetchListingFromChain, getRegistryInterface, getRegistryContract } from "../services/blockchain";
-import { normalizeChainKey } from "../utils/listings";
+import { isSmokeMetadataUri, normalizeChainKey } from "../utils/listings";
 import { parseBigint, parseBool, parseLimitOffset, requireAddress, requireBytes32 } from "../utils/validation";
 
 function saleTypeFromQuery(value: unknown): number | undefined {
@@ -151,6 +151,9 @@ export async function getListingById(req: Request, res: Response) {
 
   const listing = ((await findListing(db, id, chainKey)) ?? (await backfillListingIfMissing(id, chainKey)));
   if (!listing) return res.status(404).json({ error: { message: "Listing not found" } });
+  if (isSmokeMetadataUri(listing.metadataURI)) {
+    return res.status(404).json({ error: { message: "Listing not found" } });
+  }
 
   const auction = await findAuction(db, id, listing.chainKey);
   const raffle = await findRaffle(db, id, listing.chainKey);

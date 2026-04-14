@@ -9,17 +9,18 @@ import { type ListingSummary } from "@/lib/hooks/useListings";
 import { buildListingHref } from "@/lib/listings";
 import { saleTypeLabel, statusLabel } from "@/lib/contracts/types";
 import { formatPrice, shortAddress } from "@/lib/format";
-import { useMarketplaceMetadata } from "@/lib/metadata";
+import { getRenderableListingImage, useMarketplaceMetadata } from "@/lib/metadata";
 import { zeroAddress } from "viem";
 
 export function ListingCard({ row }: { row: ListingSummary }) {
   const status = statusLabel(row.status);
   const isNative = row.token === zeroAddress;
   const { metadata } = useMarketplaceMetadata(row.metadataURI);
+  const metadataMissing = !metadata;
 
-  const title = metadata?.title?.trim() || saleTypeLabel(row.saleType);
-  const description = metadata?.description?.trim() || row.metadataURI;
-  const imageUrl = metadata?.image?.trim() || "";
+  const title = metadata?.title?.trim() || `${saleTypeLabel(row.saleType)} listing`;
+  const description = metadata?.description?.trim() || "Listing details are still syncing. Open the listing for price, seller, and checkout status.";
+  const imageUrl = getRenderableListingImage(metadata?.image);
   const subtitleParts = [metadata?.category, metadata?.city, metadata?.region, metadata?.postalCode].filter(Boolean).join(" • ");
 
   return (
@@ -38,19 +39,23 @@ export function ListingCard({ row }: { row: ListingSummary }) {
           </div>
         </CardHeader>
         <CardContent>
-          {imageUrl ? (
-            <div className="mb-3 overflow-hidden rounded-md border">
-              <div className="relative h-40 w-full">
-                <Image
-                  src={imageUrl}
-                  alt={title}
-                  fill
-                  className="object-cover"
-                  sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
-                  unoptimized
-                  priority={false}
-                />
-              </div>
+          <div className="mb-3 overflow-hidden rounded-md border bg-muted/70">
+            <div className="relative h-40 w-full">
+              <Image
+                src={imageUrl}
+                alt={title}
+                fill
+                className="object-cover"
+                sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+                unoptimized
+                priority={false}
+              />
+            </div>
+          </div>
+
+          {metadataMissing ? (
+            <div className="mb-3 rounded-md border border-dashed bg-accent/20 px-3 py-2 text-xs text-muted-foreground">
+              Photos and description are not available yet for this listing.
             </div>
           ) : null}
 

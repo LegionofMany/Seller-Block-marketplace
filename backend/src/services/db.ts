@@ -543,6 +543,9 @@ export async function queryListings(_db: Pool | any, q: ListingsQuery) {
   const where: string[] = [];
   const params: any[] = [];
 
+  // Production feeds should not surface synthetic smoke-test listings.
+  where.push(`LOWER(listings.metadatauri) NOT LIKE 'ipfs://seller-block/smoke-%'`);
+
   const joinMetadata = Boolean(q.q || q.category || q.subcategory || q.city || q.region || q.postalCode);
 
   if (q.seller) {

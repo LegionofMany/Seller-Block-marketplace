@@ -211,7 +211,7 @@ async function readTempMailboxMessage(mailbox, id) {
     body: JSON.stringify({
       title,
       description: `Live smoke listing for ${runId}`,
-      images: ["https://via.placeholder.com/1200x800.png?text=Seller+Block+Smoke"],
+      images: ["/listing-fallback.svg"],
       category: "Electronics",
       subcategory: "Phones",
       city: "Portland",

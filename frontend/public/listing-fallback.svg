@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 900" role="img" aria-labelledby="title desc">
+  <title id="title">Listing preview placeholder</title>
+  <desc id="desc">Neutral placeholder image used when listing media is missing.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0%" stop-color="#fff4dd" />
+      <stop offset="100%" stop-color="#f2ede2" />
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="900" rx="48" fill="url(#bg)" />
+  <circle cx="945" cy="190" r="120" fill="#f6c879" opacity="0.35" />
+  <circle cx="250" cy="730" r="180" fill="#a7d3d1" opacity="0.2" />
+  <rect x="120" y="150" width="960" height="600" rx="36" fill="#ffffff" stroke="#dccfb8" stroke-width="10" />
+  <rect x="180" y="220" width="840" height="330" rx="24" fill="#f7efe0" />
+  <path d="M240 510l150-150 110 110 165-180 235 220H240z" fill="#d7b27b" opacity="0.9" />
+  <circle cx="842" cy="302" r="46" fill="#f2b25d" />
+  <rect x="180" y="600" width="290" height="24" rx="12" fill="#c9bea9" />
+  <rect x="180" y="648" width="500" height="20" rx="10" fill="#ddd3c1" />
+  <rect x="180" y="688" width="430" height="20" rx="10" fill="#e8dfcf" />
+  <text x="600" y="820" text-anchor="middle" font-family="Georgia, serif" font-size="34" fill="#6f5c40">Listing preview unavailable</text>
+</svg>

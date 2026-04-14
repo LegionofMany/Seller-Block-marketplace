@@ -7,3 +7,8 @@ export function normalizeChainKey(value: unknown): string | undefined {
 export function buildListingReportTargetId(chainKey: string, listingId: string) {
   return `${chainKey}:${listingId}`;
 }
+
+export function isSmokeMetadataUri(value: string | null | undefined) {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  return normalized.startsWith("ipfs://seller-block/smoke-");
+}

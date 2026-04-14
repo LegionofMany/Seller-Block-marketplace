@@ -9,6 +9,7 @@ import { fetchJson } from "@/lib/api";
 import { marketplaceRegistryAbi } from "@/lib/contracts/abi/MarketplaceRegistry";
 import { parseListing } from "@/lib/contracts/parse";
 import { type ListingStatus, type SaleType } from "@/lib/contracts/types";
+import { isSmokeMetadataUri } from "@/lib/metadata";
 
 export type ListingSummary = {
   chainKey: string;
@@ -155,7 +156,7 @@ export function useListings(params?: ListingsParams) {
                 metadataURI: row.metadataURI,
                 status: (row.active ? 1 : 2) as ListingStatus,
               }) satisfies ListingSummary
-            );
+            ).filter((row) => !isSmokeMetadataUri(row.metadataURI));
 
             if (items.length > 0) {
               cacheByKey.set(cacheKey, { items, at: Date.now() });
@@ -216,7 +217,7 @@ export function useListings(params?: ListingsParams) {
             const result = multicallResults[i];
             if (!result || result.status !== "success") continue;
             const parsed = parseListing(result.result);
-            listings.push({
+            const candidate = {
               chainKey: env.defaultChain.key,
               chainId: env.defaultChain.chainId,
               id,
@@ -226,7 +227,10 @@ export function useListings(params?: ListingsParams) {
               price: parsed.price,
               metadataURI: parsed.metadataURI,
               status: parsed.status,
-            });
+            } satisfies ListingSummary;
+            if (!isSmokeMetadataUri(candidate.metadataURI)) {
+              listings.push(candidate);
+            }
           }
 
           cacheByKey.set(cacheKey, { items: listings, at: Date.now() });

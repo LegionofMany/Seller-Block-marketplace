@@ -28,7 +28,7 @@ import { isNativeToken, saleTypeLabel, statusLabel } from "@/lib/contracts/types
 import { formatPrice, shortenHex } from "@/lib/format";
 import { useToastTx } from "@/lib/hooks/useToastTx";
 import { buildListingHref } from "@/lib/listings";
-import { fetchMetadataById, fetchMetadataByUri, metadataIdFromUri, type MarketplaceMetadata } from "@/lib/metadata";
+import { fetchMetadataById, fetchMetadataByUri, getRenderableListingImage, isSmokeMetadataUri, LISTING_FALLBACK_IMAGE, metadataIdFromUri, type MarketplaceMetadata } from "@/lib/metadata";
 import { fetchJson } from "@/lib/api";
 import { addBlockedSeller } from "@/lib/blocks";
 import { describeToken } from "@/lib/tokens";
@@ -130,6 +130,7 @@ export default function ListingDetailPage() {
 
   const listingReadError: any = isError ? (error as any) : null;
   const listing = raw ? parseListing(raw) : null;
+  const hiddenSmokeListing = Boolean(listing && isSmokeMetadataUri(listing.metadataURI));
   const native = listing ? isNativeToken(listing.token as Address) : true;
 
   const { data: arbiterAddress } = useReadContract({
@@ -164,7 +165,8 @@ export default function ListingDetailPage() {
       : metadata?.image
         ? [metadata.image]
         : [];
-    return Array.from(new Set(items.filter(Boolean)));
+    const normalized = Array.from(new Set(items.filter(Boolean).map((item) => getRenderableListingImage(item))));
+    return normalized.length ? normalized : [LISTING_FALLBACK_IMAGE];
   }, [metadata?.image, metadata?.images]);
 
   const metadataId = React.useMemo(() => {
@@ -777,9 +779,25 @@ export default function ListingDetailPage() {
     );
   }
 
-  const pageTitle = metadata?.title ?? (listing ? saleTypeLabel(listing.saleType) : "Loading…");
+  if (hiddenSmokeListing) {
+    return (
+      <Card>
+        <CardContent className="p-6 space-y-2">
+          <div className="text-sm font-semibold">Listing not available</div>
+          <div className="text-sm text-muted-foreground break-words">
+            This test listing is hidden from the public marketplace experience.
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const pageTitle = metadata?.title ?? (listing ? `${saleTypeLabel(listing.saleType)} listing` : "Loading…");
   const priceLabel = listing ? formatPrice(listing.price, native, activeChain.nativeCurrencySymbol) : "—";
   const locationLabel = [metadata?.city, metadata?.region, metadata?.postalCode].filter(Boolean).join(", ");
+  const pageDescription = listing
+    ? metadata?.description ?? "Price, seller, and checkout status are available. Photos and full description are still syncing for this listing."
+    : "Loading listing details...";
 
   return (
     <div className="space-y-6">
@@ -792,7 +810,7 @@ export default function ListingDetailPage() {
                 <h1 className="text-2xl font-semibold tracking-tight sm:text-4xl">{pageTitle}</h1>
                 {listing ? <Badge variant="outline">{statusLabel(listing.status)}</Badge> : null}
               </div>
-              <p className="max-w-2xl text-[13px] leading-6 text-muted-foreground sm:text-base">{listing ? metadata?.description ?? listing.metadataURI : "Loading listing details..."}</p>
+              <p className="max-w-2xl text-[13px] leading-6 text-muted-foreground sm:text-base">{pageDescription}</p>
             </div>
             <div className="flex flex-wrap gap-2">
               {metadata?.category ? <div className="market-chip">{metadata.subcategory ? `${metadata.category} / ${metadata.subcategory}` : metadata.category}</div> : null}
@@ -845,19 +863,23 @@ export default function ListingDetailPage() {
 
               <div className="grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_360px] xl:gap-6">
                 <div className="space-y-4 sm:space-y-6">
-                  {galleryImages.length ? (
-                    <div className="overflow-hidden rounded-2xl border bg-muted">
-                      <div className="relative w-full aspect-[4/3]">
-                        <Image
-                          src={galleryImages[0]}
-                          alt={metadata?.title ?? "Listing image"}
-                          fill
-                          className="object-cover"
-                          sizes="100vw"
-                          unoptimized
-                          priority={false}
-                        />
-                      </div>
+                  <div className="overflow-hidden rounded-2xl border bg-muted">
+                    <div className="relative w-full aspect-[4/3]">
+                      <Image
+                        src={galleryImages[0]}
+                        alt={metadata?.title ?? "Listing image"}
+                        fill
+                        className="object-cover"
+                        sizes="100vw"
+                        unoptimized
+                        priority={false}
+                      />
+                    </div>
+                  </div>
+
+                  {!metadata ? (
+                    <div className="rounded-xl border border-dashed bg-accent/20 p-4 text-sm text-muted-foreground">
+                      Listing details are still syncing. Core on-chain data is available, but photos and the full description have not been restored in the metadata service yet.
                     </div>
                   ) : null}
 

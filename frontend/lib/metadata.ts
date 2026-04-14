@@ -5,6 +5,8 @@ import * as React from "react";
 import { fetchJson, type ApiError } from "@/lib/api";
 import { ipfsToHttp, isIpfsUri } from "@/lib/ipfs";
 
+export const LISTING_FALLBACK_IMAGE = "/listing-fallback.svg";
+
 export type MarketplaceMetadata = {
   id: string;
   uri?: string;
@@ -26,6 +28,26 @@ export type MarketplaceMetadata = {
 const cache = new Map<string, MarketplaceMetadata>();
 const inflight = new Map<string, Promise<MarketplaceMetadata | null>>();
 
+export function isSmokeMetadataUri(uri: string | null | undefined): boolean {
+  return (uri ?? "").trim().toLowerCase().startsWith("ipfs://seller-block/smoke-");
+}
+
+function isExternalPlaceholderImage(url: string | null | undefined): boolean {
+  if (!url) return false;
+  try {
+    const parsed = new URL(url);
+    return parsed.hostname === "via.placeholder.com" || parsed.hostname === "placehold.co";
+  } catch {
+    return false;
+  }
+}
+
+export function getRenderableListingImage(image: string | null | undefined): string {
+  const normalized = image ? ipfsToHttp(image).trim() : "";
+  if (!normalized || isExternalPlaceholderImage(normalized)) return LISTING_FALLBACK_IMAGE;
+  return normalized;
+}
+
 export function metadataIdFromUri(uri: string): string | null {
   const trimmed = (uri ?? "").trim();
   const m = /^metadata:\/\/sha256\/([0-9a-fA-F]{64})$/.exec(trimmed);
@@ -33,8 +55,8 @@ export function metadataIdFromUri(uri: string): string | null {
 }
 
 function normalizeForRender(md: MarketplaceMetadata): MarketplaceMetadata {
-  const image = md.image ? ipfsToHttp(md.image) : md.image;
-  const images = Array.isArray(md.images) ? md.images.map((u) => ipfsToHttp(u)) : md.images;
+  const image = getRenderableListingImage(md.image);
+  const images = Array.isArray(md.images) ? md.images.map((u) => getRenderableListingImage(u)) : md.images;
   return { ...md, image, ...(images ? { images } : {}) };
 }
 

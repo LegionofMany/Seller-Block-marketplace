@@ -20,9 +20,8 @@ import { marketplaceRegistryAbi } from "@/lib/contracts/abi/MarketplaceRegistry"
 import { parseListing } from "@/lib/contracts/parse";
 import { isNativeToken, saleTypeLabel, statusLabel, type ListingStatus, type SaleType } from "@/lib/contracts/types";
 import { formatPrice, shortenHex } from "@/lib/format";
-import { ipfsToHttp } from "@/lib/ipfs";
 import { buildListingHref } from "@/lib/listings";
-import { fetchMetadataById, metadataIdFromUri, type MarketplaceMetadata } from "@/lib/metadata";
+import { fetchMetadataById, getRenderableListingImage, isSmokeMetadataUri, metadataIdFromUri, type MarketplaceMetadata } from "@/lib/metadata";
 
 type ListingSummary = {
   chainKey: string;
@@ -125,7 +124,7 @@ export default function SellerListingsPage({ params }: { params: Promise<{ addre
               status: (row.active ? 1 : 2) as ListingStatus,
             }));
 
-            const filtered = rows.filter((row) => row.seller.toLowerCase() === seller.toLowerCase());
+            const filtered = rows.filter((row) => row.seller.toLowerCase() === seller.toLowerCase() && !isSmokeMetadataUri(row.metadataURI));
             if (!cancelled) setListings(filtered);
             return;
           }
@@ -181,7 +180,7 @@ export default function SellerListingsPage({ params }: { params: Promise<{ addre
           const r = results[i];
           if (!r || r.status !== "success") continue;
           const parsed = parseListing(r.result);
-          rows.push({
+          const candidate = {
             chainKey: env.defaultChain.key,
             id,
             seller: parsed.seller,
@@ -191,7 +190,10 @@ export default function SellerListingsPage({ params }: { params: Promise<{ addre
             price: parsed.price,
             metadataURI: parsed.metadataURI,
             status: parsed.status,
-          });
+          } satisfies ListingSummary;
+          if (!isSmokeMetadataUri(candidate.metadataURI)) {
+            rows.push(candidate);
+          }
         }
 
         const filtered = rows.filter((r) => r.seller.toLowerCase() === seller.toLowerCase());
@@ -404,27 +406,23 @@ export default function SellerListingsPage({ params }: { params: Promise<{ addre
                 <Link key={l.id} href={buildListingHref(l.id, l.chainKey)} className="block">
                   <Card className="h-full transition-colors hover:bg-accent/30 active:bg-accent/40">
                     <CardHeader>
-                      {md?.image ? (
-                        <div className="overflow-hidden rounded-md border bg-muted">
-                          <div className="relative aspect-video w-full">
-                            <Image
-                              src={md.image}
-                              alt={md.title ?? "Listing image"}
-                              fill
-                              className="object-cover"
-                              sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
-                              unoptimized
-                              priority={false}
-                            />
-                          </div>
+                      <div className="overflow-hidden rounded-md border bg-muted">
+                        <div className="relative aspect-video w-full">
+                          <Image
+                            src={getRenderableListingImage(md?.image)}
+                            alt={md?.title ?? "Listing preview"}
+                            fill
+                            className="object-cover"
+                            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+                            unoptimized
+                            priority={false}
+                          />
                         </div>
-                      ) : null}
-                      {md?.image ? (
-                        <div className="truncate text-xs text-muted-foreground">Image: {md.image}</div>
-                      ) : null}
-                      <CardTitle className="text-base">{md?.title ?? saleTypeLabel(l.saleType as any)}</CardTitle>
+                      </div>
+                      {!md ? <div className="rounded-md border border-dashed bg-accent/20 px-3 py-2 text-xs text-muted-foreground">Listing details are still syncing.</div> : null}
+                      <CardTitle className="text-base">{md?.title ?? `${saleTypeLabel(l.saleType as any)} listing`}</CardTitle>
                       <CardDescription className="text-sm">
-                        {md?.description ? md.description : l.metadataURI || shortenHex(l.id)}
+                        {md?.description ? md.description : "Price and seller data are available now. Photos and description will appear once metadata is available."}
                       </CardDescription>
                     </CardHeader>
                     <CardContent className="flex items-center justify-between gap-3">
