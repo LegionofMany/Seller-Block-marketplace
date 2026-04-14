@@ -20,7 +20,7 @@ import { commentsRouter } from "./routes/comments";
 import { savedSearchesRouter } from "./routes/savedSearches";
 import { notificationsRouter } from "./routes/notifications";
 import { settlementRouter } from "./routes/settlement";
-import { startMarketplaceIndexer } from "./indexer/marketplaceIndexer";
+import { startMarketplaceIndexer, type MarketplaceIndexerHandle } from "./indexer/marketplaceIndexer";
 import { startNotificationsWorker } from "./services/notifications";
 
 dotenv.config();
@@ -32,7 +32,7 @@ async function main() {
   const shutdownTimeoutMs = 10_000;
   let shutdownPromise: Promise<void> | null = null;
   let shuttingDown = false;
-  let indexers: Array<ReturnType<typeof startMarketplaceIndexer>> = [];
+  let indexers: MarketplaceIndexerHandle[] = [];
   let notificationsWorker: ReturnType<typeof startNotificationsWorker> | null = null;
 
   // Render runs behind a proxy; this makes req.ip and rate limiting correct.

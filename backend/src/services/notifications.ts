@@ -126,7 +126,7 @@ export function startNotificationsWorker() {
     try {
       await processSavedSearches();
       status.lastSuccessAt = Date.now();
-      status.lastError = undefined;
+      delete status.lastError;
     } catch (err) {
       status.lastFailureAt = Date.now();
       status.lastError = err instanceof Error ? err.message : String(err);

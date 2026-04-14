@@ -30,6 +30,11 @@ export type MarketplaceIndexerStatus = {
   nextRetryMs?: number;
 };
 
+export type MarketplaceIndexerHandle = {
+  stop(): void;
+  getStatus(): MarketplaceIndexerStatus;
+};
+
 function backoffMs(baseMs: number, failures: number): number {
   const cappedFailures = Math.min(Math.max(failures, 0), 8);
   const maxMs = Math.max(baseMs, 5 * 60_000);
@@ -39,7 +44,7 @@ function backoffMs(baseMs: number, failures: number): number {
   return Math.max(baseMs, Math.round(exp + jitter));
 }
 
-export function startMarketplaceIndexer(chainConfig?: SupportedChainConfig) {
+export function startMarketplaceIndexer(chainConfig?: SupportedChainConfig): MarketplaceIndexerHandle {
   const { env, db, logger, getProviderForChain, getSupportedChain } = getContext();
   const chain = getSupportedChain(chainConfig?.key);
   const provider = getProviderForChain(chain.key);
@@ -321,8 +326,8 @@ export function startMarketplaceIndexer(chainConfig?: SupportedChainConfig) {
       failureCount = 0;
       status.failureCount = 0;
       status.lastSuccessAt = Date.now();
-      status.lastError = undefined;
-      status.lastHint = undefined;
+      delete status.lastError;
+      delete status.lastHint;
       status.nextRetryMs = nextDelayMs;
     } catch (e: any) {
       failureCount += 1;
@@ -332,7 +337,11 @@ export function startMarketplaceIndexer(chainConfig?: SupportedChainConfig) {
       status.failureCount = failureCount;
       status.lastFailureAt = Date.now();
       status.lastError = e?.shortMessage ?? e?.message ?? String(e);
-      status.lastHint = hint;
+      if (hint) {
+        status.lastHint = hint;
+      } else {
+        delete status.lastHint;
+      }
       status.nextRetryMs = nextDelayMs;
       logger.error(
         {
