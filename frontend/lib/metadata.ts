@@ -27,6 +27,40 @@ export type MarketplaceMetadata = {
 
 const cache = new Map<string, MarketplaceMetadata>();
 const inflight = new Map<string, Promise<MarketplaceMetadata | null>>();
+const missingCache = new Map<string, number>();
+
+const MISSING_CACHE_TTL_MS = 15 * 60 * 1_000;
+
+function isKnownMissing(key: string | null | undefined): boolean {
+  const normalized = (key ?? "").trim();
+  if (!normalized) return false;
+
+  const expiresAt = missingCache.get(normalized);
+  if (!expiresAt) return false;
+  if (expiresAt <= Date.now()) {
+    missingCache.delete(normalized);
+    return false;
+  }
+
+  return true;
+}
+
+function markMissing(...keys: Array<string | null | undefined>) {
+  const expiresAt = Date.now() + MISSING_CACHE_TTL_MS;
+  for (const key of keys) {
+    const normalized = (key ?? "").trim();
+    if (!normalized) continue;
+    missingCache.set(normalized, expiresAt);
+  }
+}
+
+function clearMissing(...keys: Array<string | null | undefined>) {
+  for (const key of keys) {
+    const normalized = (key ?? "").trim();
+    if (!normalized) continue;
+    missingCache.delete(normalized);
+  }
+}
 
 export function isSmokeMetadataUri(uri: string | null | undefined): boolean {
   return (uri ?? "").trim().toLowerCase().startsWith("ipfs://seller-block/smoke-");
@@ -64,6 +98,7 @@ export async function fetchMetadataById(id: string): Promise<MarketplaceMetadata
   const clean = (id ?? "").trim().toLowerCase();
   const existing = cache.get(clean);
   if (existing) return existing;
+  if (isKnownMissing(clean)) return null;
 
   const pending = inflight.get(clean);
   if (pending) return pending;
@@ -71,14 +106,19 @@ export async function fetchMetadataById(id: string): Promise<MarketplaceMetadata
   const promise = fetchJson<MarketplaceMetadata>(`/metadata/${clean}`, { timeoutMs: 5_000 })
     .then((data) => {
       const normalized = normalizeForRender(data);
+      clearMissing(clean, normalized.uri);
       cache.set(clean, normalized);
+      if (normalized.uri) cache.set(normalized.uri, normalized);
       return normalized;
     })
     .catch((err: unknown) => {
       const status = (err as ApiError | undefined)?.status;
       // Older listings may reference metadata IDs that were never uploaded to the backend.
       // Treat that as a cacheable "missing" result instead of a hard error.
-      if (status === 404) return null;
+      if (status === 404) {
+        markMissing(clean);
+        return null;
+      }
       throw err;
     })
     .finally(() => {
@@ -92,9 +132,15 @@ export async function fetchMetadataById(id: string): Promise<MarketplaceMetadata
 export async function fetchMetadataByUri(uri: string): Promise<MarketplaceMetadata | null> {
   const clean = (uri ?? "").trim();
   if (!clean) return null;
+  const metadataId = metadataIdFromUri(clean);
 
   const existing = cache.get(clean);
   if (existing) return existing;
+  if (metadataId) {
+    const idCached = cache.get(metadataId);
+    if (idCached) return idCached;
+  }
+  if (isKnownMissing(clean) || isKnownMissing(metadataId)) return null;
 
   const pending = inflight.get(clean);
   if (pending) return pending;
@@ -104,13 +150,17 @@ export async function fetchMetadataByUri(uri: string): Promise<MarketplaceMetada
   })
     .then((data) => {
       const normalized = normalizeForRender(data);
+      clearMissing(clean, metadataId, normalized.id, normalized.uri);
       cache.set(clean, normalized);
       if (normalized.id) cache.set(String(normalized.id).toLowerCase(), normalized);
       return normalized;
     })
     .catch((err: unknown) => {
       const status = (err as ApiError | undefined)?.status;
-      if (status === 404) return null;
+      if (status === 404) {
+        markMissing(clean, metadataId);
+        return null;
+      }
       throw err;
     })
     .finally(() => {
@@ -144,6 +194,11 @@ export function useMarketplaceMetadata(metadataURI: string | null | undefined) {
       const existing = cache.get(cacheKey);
       if (existing) {
         setMetadata(existing);
+        setIsLoading(false);
+        return;
+      }
+      if (isKnownMissing(cacheKey) || isKnownMissing(metadataURI)) {
+        setMetadata(null);
         setIsLoading(false);
         return;
       }
