@@ -71,7 +71,7 @@ Optional:
 - `CACHE_TTL_MS`
 - `RATE_LIMIT_WINDOW_MS`, `RATE_LIMIT_MAX`
 - `LISTING_AUTOHIDE_REPORTS_THRESHOLD` (default `3`; set to `0` to disable auto-hide)
-- `CORS_ORIGINS` (comma-separated list of allowed origins; set this to your Vercel domain in production)
+- `CORS_ORIGINS` (comma-separated list of allowed origins; include every exact production, custom-domain, and preview frontend origin that should call the API)
 - `LOG_LEVEL`, `NODE_ENV`
 
 ### Multi-chain config format
