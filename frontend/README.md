@@ -48,7 +48,7 @@ Optional but useful:
 - `NEXT_PUBLIC_RAFFLE_MODULE_ADDRESS`
 - `NEXT_PUBLIC_BACKEND_URL` (optional API for indexed listings/search/metadata; default `http://localhost:4000`)
 - `NEXT_PUBLIC_SEPOLIA_START_BLOCK` (improves listings/dashboard load time)
-- `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` (enables WalletConnect)
+- `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` (enables WalletConnect for tablet/mobile sign-in outside wallet browsers)
 
 `NEXT_PUBLIC_CHAIN_CONFIG_JSON` supports either an array of chains or an object with `defaultChainKey` and `chains`. Each chain can define:
 
@@ -95,6 +95,8 @@ Required production environment variables:
 Optional but recommended production environment variables:
 
 - `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID`
+- required if tablet/mobile users need to connect from Chrome/Safari instead of an injected wallet browser
+- the app code already supports it; deployment still needs a real WalletConnect Cloud project id in the frontend env
 - `NEXT_PUBLIC_IPFS_GATEWAY_BASE_URL`
 
 Production deployment checklist:

@@ -85,6 +85,11 @@ export function SiteHeader() {
         <div className="hidden items-center gap-2 sm:flex">
           <div className="market-chip">Public replies, local discovery, wallet checkout</div>
           <ConnectButton showBalance={false} chainStatus="icon" />
+          {!address && !auth.isAuthenticated ? (
+            <Button asChild type="button" variant="outline" size="sm">
+              <Link href="/sign-in">Sign in</Link>
+            </Button>
+          ) : null}
           {address && !auth.isAuthenticated ? (
             <Button type="button" variant="outline" size="sm" disabled={auth.isLoading} onClick={() => void auth.signIn()}>
               Sign in
@@ -198,6 +203,11 @@ export function SiteHeader() {
               <div className="mt-2">
                 <ConnectButton showBalance={false} chainStatus="icon" />
               </div>
+              {!address && !auth.isAuthenticated ? (
+                <Button asChild type="button" variant="outline" className="mt-3 h-10 w-full rounded-xl">
+                  <Link href="/sign-in" onClick={() => setOpen(false)}>Sign in</Link>
+                </Button>
+              ) : null}
               {address && !auth.isAuthenticated ? (
                 <Button type="button" variant="outline" className="mt-3 h-10 w-full rounded-xl" disabled={auth.isLoading} onClick={() => void auth.signIn()}>
                   Sign in

@@ -4,7 +4,7 @@ import { z } from "zod";
 import { HttpError } from "../middlewares/errors";
 import { requireAuthAddress } from "../middlewares/auth";
 import { getContext } from "../services/context";
-import { createUserFollow, deleteUserFollow, ensureUser, getPublicUserProfile, getUser, isUserFollowing, updateUserProfile } from "../services/db";
+import { createUserFollow, deleteUserFollow, ensureUser, getPublicUserProfile, getUser, isUserFollowing, listFollowedUsers, updateUserProfile } from "../services/db";
 import { requireAddress } from "../utils/validation";
 
 function isAvatarValue(value: string): boolean {
@@ -46,6 +46,13 @@ export async function getFollowState(req: Request, res: Response) {
 
   const isFollowing = await isUserFollowing(db, follower, followed);
   return res.json({ isFollowing });
+}
+
+export async function getMyFollowedUsers(req: Request, res: Response) {
+  const { db } = getContext();
+  const follower = requireAuthAddress(req);
+  const items = await listFollowedUsers(db, follower, 100);
+  return res.json({ items });
 }
 
 export async function followUser(req: Request, res: Response) {

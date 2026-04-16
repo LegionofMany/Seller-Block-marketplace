@@ -877,6 +877,19 @@ export async function isUserFollowing(_db: Pool | any, follower: string, followe
   return Boolean(res.rows[0]);
 }
 
+export async function listFollowedUsers(_db: Pool | any, follower: string, limit = 100): Promise<string[]> {
+  const p = ensurePool(_db);
+  const res = await p.query(
+    `SELECT followed
+     FROM user_follows
+     WHERE follower = $1
+     ORDER BY createdat DESC
+     LIMIT $2`,
+    [follower, Math.min(Math.max(limit, 1), 250)]
+  );
+  return res.rows.map((row: any) => String(row.followed).toLowerCase());
+}
+
 export async function createUserFollow(_db: Pool | any, input: { follower: string; followed: string; createdAt: number }) {
   const p = ensurePool(_db);
   await p.query(

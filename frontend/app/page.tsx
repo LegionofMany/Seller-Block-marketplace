@@ -7,6 +7,7 @@ import { ListingCard } from "@/components/listing/ListingCard";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { fetchJson } from "@/lib/api";
 import { useListings } from "@/lib/hooks/useListings";
 
 const marketHubRules = [
@@ -38,10 +39,52 @@ const safetyWarnings = [
 
 export default function HomePage() {
   const auth = useAuth();
-  const { listings, isLoading } = useListings({ limit: 8, sort: "newest" });
+  const { listings, isLoading } = useListings({ limit: 24, sort: "newest" });
+  const [followedSellers, setFollowedSellers] = React.useState<string[]>([]);
+  const [followedError, setFollowedError] = React.useState<string | null>(null);
 
-  const spotlightListings = React.useMemo(() => listings.slice(0, 4), [listings]);
-  const freshListings = React.useMemo(() => listings.slice(0, 8), [listings]);
+  React.useEffect(() => {
+    let cancelled = false;
+
+    async function run() {
+      if (!auth.isAuthenticated) {
+        setFollowedSellers([]);
+        setFollowedError(null);
+        return;
+      }
+
+      try {
+        const res = await fetchJson<{ items: string[] }>("/users/me/follows", { timeoutMs: 5_000 });
+        if (!cancelled) {
+          setFollowedSellers((res.items ?? []).map((item) => String(item).toLowerCase()));
+          setFollowedError(null);
+        }
+      } catch (e: any) {
+        if (!cancelled) {
+          setFollowedSellers([]);
+          setFollowedError(e?.message ?? "Could not load followed sellers");
+        }
+      }
+    }
+
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [auth.isAuthenticated]);
+
+  const followedListings = React.useMemo(
+    () => listings.filter((listing) => followedSellers.includes(String(listing.seller).toLowerCase())).slice(0, 4),
+    [listings, followedSellers]
+  );
+  const spotlightListings = React.useMemo(
+    () => listings.filter((listing) => !followedSellers.includes(String(listing.seller).toLowerCase())).slice(0, 4),
+    [listings, followedSellers]
+  );
+  const freshListings = React.useMemo(
+    () => listings.filter((listing) => !followedSellers.includes(String(listing.seller).toLowerCase())).slice(0, 8),
+    [listings, followedSellers]
+  );
 
   return (
     <div className="space-y-8">
@@ -85,10 +128,67 @@ export default function HomePage() {
             </div>
             <div className="market-note text-sm">
               {auth.isAuthenticated
-                ? "Signed-in members will later see favorite ads, followed sellers, and trust-badge surfacing here first."
-                : "Sign-in and personalized landing inventory will expand here, but raw browsing remains available now through the marketplace route."}
+                ? "Signed-in members now get followed-seller inventory first. Favorites and sponsored placement slots are staged directly underneath it."
+                : "Sign-in and personalized landing inventory expand here, but raw browsing remains available now through the marketplace route."}
             </div>
           </div>
+        </div>
+      </section>
+
+      <section className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
+        <Card className="market-panel">
+          <CardHeader>
+            <CardTitle>Followed sellers first</CardTitle>
+            <CardDescription>This section is driven by your real follow graph, not static homepage copy.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {followedError ? <div className="market-note text-sm">{followedError}</div> : null}
+            {!auth.isAuthenticated ? (
+              <div className="market-note text-sm">
+                Follow a seller from their profile page, then come back here to see their newest ads ahead of the open marketplace feed.
+              </div>
+            ) : followedSellers.length === 0 ? (
+              <div className="market-note text-sm">
+                You are signed in, but you are not following any sellers yet. Visit seller pages, follow trusted profiles, and their newest ads will land here first.
+              </div>
+            ) : followedListings.length === 0 ? (
+              <div className="market-note text-sm">
+                You follow sellers already, but none of their recent inventory is available in the current homepage window yet.
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                {followedListings.map((listing) => (
+                  <ListingCard key={`${listing.chainKey}-${listing.id}`} row={listing} />
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <div className="grid gap-4">
+          <Card className="market-panel">
+            <CardHeader>
+              <CardTitle>Favorites next</CardTitle>
+              <CardDescription>The homepage order now explicitly reserves the second slot for favorite ads and sellers.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="market-note text-sm">
+                Favorites are not persisted by the backend yet, so this slot is intentionally reserved instead of pretending to personalize unsupported data.
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="market-panel">
+            <CardHeader>
+              <CardTitle>Sponsored placements</CardTitle>
+              <CardDescription>Paid MarketHub placements remain a dedicated layer after followed sellers and favorites.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="market-note text-sm">
+                Sponsored placement rules are now part of the homepage structure, but billing, placement inventory, and moderation controls still need backend support before this can go live.
+              </div>
+            </CardContent>
+          </Card>
         </div>
       </section>
 
@@ -128,7 +228,7 @@ export default function HomePage() {
           <div>
             <div className="market-section-title">Live marketplace</div>
             <h2 className="text-2xl font-semibold tracking-tight text-slate-950">Fresh ads now</h2>
-            <p className="mt-1 text-sm text-muted-foreground">Recent inventory stays visible here, while sponsored and followed placements remain curated above.</p>
+            <p className="mt-1 text-sm text-muted-foreground">Recent inventory stays visible here after followed sellers, favorites, and sponsored placement layers are handled above.</p>
           </div>
           <Button asChild variant="outline" className="rounded-full">
             <Link href="/marketplace">Open full marketplace</Link>
@@ -187,6 +287,23 @@ export default function HomePage() {
             ))}
             <Button asChild variant="ghost" className="w-full justify-start rounded-xl">
               <Link href="/marketplace">See all live listings</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      </section>
+
+      <section className="grid gap-4 lg:grid-cols-[1fr_1fr]">
+        <Card className="market-panel">
+          <CardHeader>
+            <CardTitle>Mobile and tablet sign-in</CardTitle>
+            <CardDescription>WalletConnect is the current mobile bridge for users outside wallet browsers.</CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="market-note text-sm">
+              Use the sign-in surface to connect a wallet on tablet/mobile and review the planned non-wallet sign-in flow.
+            </div>
+            <Button asChild className="rounded-full">
+              <Link href="/sign-in">Open sign-in</Link>
             </Button>
           </CardContent>
         </Card>
