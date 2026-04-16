@@ -66,7 +66,7 @@ export function SiteHeader() {
           </Link>
           <nav className="hidden items-center gap-2 sm:flex">
             <Button asChild variant="ghost" size="sm">
-              <Link href="/">Listings</Link>
+              <Link href="/marketplace">Listings</Link>
             </Button>
             <Button asChild variant="ghost" size="sm">
               <Link href="/create">Create</Link>
@@ -179,7 +179,7 @@ export function SiteHeader() {
           <div className="space-y-2 p-4">
             <div className="market-note text-xs">Public replies, local discovery, and wallet checkout are all available from the main marketplace flow.</div>
             <Button asChild variant="ghost" className="h-10 w-full justify-start rounded-xl" onClick={() => setOpen(false)}>
-              <Link href="/">Listings</Link>
+              <Link href="/marketplace">Listings</Link>
             </Button>
             <Button asChild variant="ghost" className="h-10 w-full justify-start rounded-xl" onClick={() => setOpen(false)}>
               <Link href="/create">Create</Link>
