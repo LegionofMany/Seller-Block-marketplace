@@ -81,6 +81,62 @@ const LISTINGS_CACHE_TTL_MS = 15_000;
 const cacheByKey = new Map<string, { at: number; items: ListingSummary[] }>();
 const inflightByKey = new Map<string, Promise<ListingSummary[]>>();
 
+function canUseOnchainFallback(params?: ListingsParams): boolean {
+  const p = params ?? {};
+  return !Boolean(
+    p.q ||
+      p.category ||
+      p.subcategory ||
+      p.city ||
+      p.region ||
+      p.postalCode
+  );
+}
+
+function applyClientSideFilters(items: ListingSummary[], params?: ListingsParams): ListingSummary[] {
+  const p = params ?? {};
+
+  let filtered = items;
+
+  if (p.chainKey) {
+    filtered = filtered.filter((item) => item.chainKey === p.chainKey);
+  }
+
+  if (p.type) {
+    const saleType = p.type === "fixed" ? 0 : p.type === "auction" ? 1 : 2;
+    filtered = filtered.filter((item) => item.saleType === saleType);
+  }
+
+  if (p.minPrice) {
+    try {
+      const minPrice = BigInt(p.minPrice);
+      filtered = filtered.filter((item) => item.price >= minPrice);
+    } catch {
+      // Ignore malformed optional filter and leave validation to the backend path when available.
+    }
+  }
+
+  if (p.maxPrice) {
+    try {
+      const maxPrice = BigInt(p.maxPrice);
+      filtered = filtered.filter((item) => item.price <= maxPrice);
+    } catch {
+      // Ignore malformed optional filter and leave validation to the backend path when available.
+    }
+  }
+
+  const sorted = [...filtered];
+  if (p.sort === "price_asc") {
+    sorted.sort((left, right) => (left.price === right.price ? 0 : left.price < right.price ? -1 : 1));
+  } else if (p.sort === "price_desc") {
+    sorted.sort((left, right) => (left.price === right.price ? 0 : left.price > right.price ? -1 : 1));
+  }
+
+  const offset = p.offset ?? 0;
+  const limit = p.limit ?? 50;
+  return sorted.slice(offset, offset + limit);
+}
+
 function buildQuery(params: ListingsParams | undefined): string {
   const p = params ?? {};
   const sp = new URLSearchParams();
@@ -113,7 +169,7 @@ export function useListings(params?: ListingsParams) {
 
     const query = buildQuery(params);
     const cacheKey = `listings:${query}`;
-    const allowOnchainFallback = !params || Object.keys(params).length === 0;
+    const allowOnchainFallback = canUseOnchainFallback(params);
 
     async function run() {
       try {
@@ -199,7 +255,8 @@ export function useListings(params?: ListingsParams) {
           }
 
           const ids = logs.map((l) => l.args.id as Hex).filter(Boolean).reverse();
-          const uniqueIds = Array.from(new Set(ids)).slice(0, 50);
+          const desiredWindow = Math.max((params?.offset ?? 0) + (params?.limit ?? 50), 50);
+          const uniqueIds = Array.from(new Set(ids)).slice(0, Math.min(desiredWindow * 4, 200));
 
           const multicallResults = await publicClient.multicall({
             allowFailure: true,
@@ -233,8 +290,9 @@ export function useListings(params?: ListingsParams) {
             }
           }
 
-          cacheByKey.set(cacheKey, { items: listings, at: Date.now() });
-          return listings;
+          const filteredListings = applyClientSideFilters(listings, params);
+          cacheByKey.set(cacheKey, { items: filteredListings, at: Date.now() });
+          return filteredListings;
         })();
 
         inflightByKey.set(cacheKey, promise);
