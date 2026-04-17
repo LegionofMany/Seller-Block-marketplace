@@ -1,0 +1,5 @@
+Contact: https://github.com/LegionofMany/Seller-Block-marketplace/security/advisories/new
+Expires: 2027-04-17T00:00:00.000Z
+Preferred-Languages: en
+Policy: https://github.com/LegionofMany/Seller-Block-marketplace/security/policy
+Hiring: https://github.com/LegionofMany/Seller-Block-marketplace

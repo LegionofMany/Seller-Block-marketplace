@@ -47,6 +47,8 @@ Optional but useful:
 - `NEXT_PUBLIC_AUCTION_MODULE_ADDRESS`
 - `NEXT_PUBLIC_RAFFLE_MODULE_ADDRESS`
 - `NEXT_PUBLIC_BACKEND_URL` (optional API for indexed listings/search/metadata; default `http://localhost:4000`)
+- `NEXT_PUBLIC_SITE_URL` (recommended for canonical metadata, `robots.txt`, and `sitemap.xml`)
+- `NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION` (optional Google site verification token)
 - `NEXT_PUBLIC_SEPOLIA_START_BLOCK` (improves listings/dashboard load time)
 - `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` (enables WalletConnect for tablet/mobile sign-in outside wallet browsers)
 
@@ -98,6 +100,8 @@ Optional but recommended production environment variables:
 - required if tablet/mobile users need to connect from Chrome/Safari instead of an injected wallet browser
 - the app code already supports it; deployment still needs a real WalletConnect Cloud project id in the frontend env
 - `NEXT_PUBLIC_IPFS_GATEWAY_BASE_URL`
+- `NEXT_PUBLIC_SITE_URL`
+- `NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION`
 
 Production deployment checklist:
 

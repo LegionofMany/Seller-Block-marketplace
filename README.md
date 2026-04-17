@@ -2,6 +2,9 @@
 
 Seller Block Marketplace is a monorepo for an on-chain escrow + marketplace smart-contract system, plus a web frontend and a backend API scaffold.
 
+Live site: https://www.zonycs.com
+GitHub wiki: https://github.com/LegionofMany/Seller-Block-marketplace/wiki
+
 ## What’s in this repo (current state)
 
 This repository contains three workspaces:
@@ -142,6 +145,12 @@ Notes:
 
 - Keep contract logic in `contracts/` and covered by tests.
 - Treat `backend/` and `frontend/` as independent apps (separate dependency installs).
+
+## Trust / verification surfaces
+
+- The frontend can expose canonical metadata, `robots.txt`, `sitemap.xml`, and Google site verification when `NEXT_PUBLIC_SITE_URL` and `NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION` are configured.
+- The repository includes `SECURITY.md` and the frontend serves `.well-known/security.txt` for public trust and contact disclosure.
+- For a website ↔ GitHub ↔ wiki verification loop, keep the deployed site URL linked from the GitHub repo/wiki and keep the site linking back to the repo/wiki.
 
 ## License
 
