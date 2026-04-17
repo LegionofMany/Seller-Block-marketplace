@@ -4,6 +4,7 @@ import * as React from "react";
 import { WagmiProvider, createConfig, fallback, http } from "wagmi";
 import { injected, walletConnect } from "wagmi/connectors";
 import { defineChain, type Chain } from "viem";
+import { base, baseSepolia, mainnet, sepolia } from "viem/chains";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RainbowKitProvider, darkTheme } from "@rainbow-me/rainbowkit";
 
@@ -19,6 +20,13 @@ const queryClient = new QueryClient({
   },
 });
 
+const knownChainsById = new Map<number, Chain>([
+  [mainnet.id, mainnet],
+  [sepolia.id, sepolia],
+  [base.id, base],
+  [baseSepolia.id, baseSepolia],
+]);
+
 export function Web3Providers({ children }: { children: React.ReactNode }) {
   const [state, setState] = React.useState<
     | { status: "loading" }
@@ -31,6 +39,7 @@ export function Web3Providers({ children }: { children: React.ReactNode }) {
       const env = getEnv();
       const chains = env.chains.map((chain) =>
         defineChain({
+          ...knownChainsById.get(chain.chainId),
           id: chain.chainId,
           name: chain.name,
           nativeCurrency: {
@@ -42,6 +51,11 @@ export function Web3Providers({ children }: { children: React.ReactNode }) {
             default: { http: [chain.rpcUrl, ...(chain.rpcFallbackUrl ? [chain.rpcFallbackUrl] : [])] },
             public: { http: [chain.rpcUrl, ...(chain.rpcFallbackUrl ? [chain.rpcFallbackUrl] : [])] },
           },
+          ...(knownChainsById.get(chain.chainId)?.contracts
+            ? {
+                contracts: knownChainsById.get(chain.chainId)?.contracts,
+              }
+            : {}),
           ...(chain.blockExplorerUrl
             ? {
                 blockExplorers: {
