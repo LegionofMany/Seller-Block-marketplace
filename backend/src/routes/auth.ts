@@ -2,13 +2,15 @@ import { Router } from "express";
 
 import { asyncHandler } from "../middlewares/async";
 import { authenticate } from "../middlewares/auth";
-import { getMe, issueNonce, verifyNonce } from "../controllers/authController";
+import { getMe, issueNonce, loginWithEmail, registerWithEmail, verifyNonce } from "../controllers/authController";
 
 export function authRouter() {
   const router = Router();
 
   router.post("/auth/nonce", asyncHandler(issueNonce));
   router.post("/auth/verify", asyncHandler(verifyNonce));
+  router.post("/auth/email/register", asyncHandler(registerWithEmail));
+  router.post("/auth/email/login", asyncHandler(loginWithEmail));
   router.get("/auth/me", authenticate, asyncHandler(getMe));
 
   return router;

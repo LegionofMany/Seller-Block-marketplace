@@ -3,6 +3,11 @@ export type UserProfile = {
   displayName?: string | null;
   bio?: string | null;
   avatarCid?: string | null;
+  email?: string | null;
+  emailVerifiedAt?: number | null;
+  authMethod?: "wallet" | "email";
+  linkedWalletAddress?: string | null;
+  lastLoginAt?: number | null;
   createdAt: number;
   updatedAt: number;
 };

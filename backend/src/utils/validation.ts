@@ -37,3 +37,11 @@ export function parseBigint(value: unknown): bigint | undefined {
     return undefined;
   }
 }
+
+export function normalizeEmail(value: string, name = "email") {
+  const normalized = value.trim().toLowerCase();
+  if (!normalized || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized)) {
+    throw new HttpError(400, `Invalid ${name}`);
+  }
+  return normalized;
+}

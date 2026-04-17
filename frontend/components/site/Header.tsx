@@ -10,6 +10,13 @@ import { useAuth } from "@/components/providers/AuthProvider";
 import { fetchJson } from "@/lib/api";
 import { shortenHex } from "@/lib/format";
 
+function formatIdentityLabel(address: string | null, email?: string | null, displayName?: string | null) {
+  if (displayName?.trim()) return displayName.trim();
+  if (email?.trim()) return email.trim();
+  if (!address) return "Signed in";
+  return address.startsWith("0x") ? shortenHex(address) : address.replace(/^email:/, "");
+}
+
 export function SiteHeader() {
   const [open, setOpen] = React.useState(false);
   const [unreadCount, setUnreadCount] = React.useState(0);
@@ -98,7 +105,7 @@ export function SiteHeader() {
           {auth.isAuthenticated ? (
             <>
               <div className="max-w-36 truncate text-xs text-muted-foreground">
-                {auth.user?.displayName?.trim() || shortenHex(auth.address ?? address ?? "")}
+                {formatIdentityLabel(auth.address ?? address ?? null, auth.user?.email, auth.user?.displayName)}
               </div>
               <Button type="button" variant="ghost" size="sm" onClick={auth.signOut}>
                 Sign out
@@ -212,6 +219,9 @@ export function SiteHeader() {
                 <Button type="button" variant="outline" className="mt-3 h-10 w-full rounded-xl" disabled={auth.isLoading} onClick={() => void auth.signIn()}>
                   Sign in
                 </Button>
+              ) : null}
+              {auth.isAuthenticated ? (
+                <div className="mt-3 truncate text-xs text-muted-foreground">{formatIdentityLabel(auth.address, auth.user?.email, auth.user?.displayName)}</div>
               ) : null}
               {auth.isAuthenticated ? (
                 <Button type="button" variant="ghost" className="mt-3 h-10 w-full rounded-xl" onClick={auth.signOut}>

@@ -66,6 +66,37 @@ type NotificationItem = {
   createdAt: number;
 };
 
+type PromotionAdminItem = {
+  id: number;
+  listingId: string;
+  listingChainKey: string;
+  type: string;
+  status: "draft" | "active" | "paused" | "archived";
+  priority: number;
+  placementSlot?: string | null;
+  campaignName?: string | null;
+  sponsorLabel?: string | null;
+  createdBy?: string | null;
+  notes?: string | null;
+  startsAt: number;
+  endsAt: number;
+  createdAt: number;
+  updatedAt: number;
+};
+
+type PromotionDraft = {
+  listingId: string;
+  listingChainKey: string;
+  status: PromotionAdminItem["status"];
+  priority: number;
+  placementSlot: string;
+  campaignName: string;
+  sponsorLabel: string;
+  notes: string;
+  startsAt: string;
+  endsAt: string;
+};
+
 function formatFilters(filters: SavedSearchFilters) {
   return Object.entries(filters)
     .map(([key, value]) => `${key}: ${value}`)
@@ -74,6 +105,49 @@ function formatFilters(filters: SavedSearchFilters) {
 
 function formatDateTime(value: number) {
   return new Date(value).toLocaleString();
+}
+
+function formatDateTimeInput(value: number) {
+  const date = new Date(value);
+  const offsetMinutes = date.getTimezoneOffset();
+  const local = new Date(date.getTime() - offsetMinutes * 60_000);
+  return local.toISOString().slice(0, 16);
+}
+
+function parseDateTimeInput(value: string) {
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function emptyPromotionDraft(defaultChainKey: string): PromotionDraft {
+  const now = Date.now();
+  return {
+    listingId: "",
+    listingChainKey: defaultChainKey,
+    status: "active",
+    priority: 90,
+    placementSlot: "homepage-hero",
+    campaignName: "",
+    sponsorLabel: "",
+    notes: "",
+    startsAt: formatDateTimeInput(now),
+    endsAt: formatDateTimeInput(now + 7 * 24 * 60 * 60 * 1000),
+  };
+}
+
+function toPromotionDraft(item: PromotionAdminItem): PromotionDraft {
+  return {
+    listingId: item.listingId,
+    listingChainKey: item.listingChainKey,
+    status: item.status,
+    priority: item.priority,
+    placementSlot: item.placementSlot ?? "",
+    campaignName: item.campaignName ?? "",
+    sponsorLabel: item.sponsorLabel ?? "",
+    notes: item.notes ?? "",
+    startsAt: formatDateTimeInput(item.startsAt),
+    endsAt: formatDateTimeInput(item.endsAt),
+  };
 }
 
 function toSavedSearchDraft(item: SavedSearch): SavedSearchDraft {
@@ -151,6 +225,22 @@ export default function DashboardPage() {
   const [savedSearchDraft, setSavedSearchDraft] = React.useState<SavedSearchDraft | null>(null);
   const [isSavingSavedSearch, setIsSavingSavedSearch] = React.useState(false);
   const [dashboardRefreshKey, setDashboardRefreshKey] = React.useState(0);
+  const [promotions, setPromotions] = React.useState<PromotionAdminItem[]>([]);
+  const [isLoadingPromotions, setIsLoadingPromotions] = React.useState(false);
+  const [isSavingPromotion, setIsSavingPromotion] = React.useState(false);
+  const [editingPromotionId, setEditingPromotionId] = React.useState<number | null>(null);
+  const [promotionDraft, setPromotionDraft] = React.useState<PromotionDraft | null>(null);
+
+  let env: ReturnType<typeof getEnv>;
+  try {
+    env = getEnv();
+  } catch (e: any) {
+    return (
+      <Card>
+        <CardContent className="p-6 text-sm text-destructive">{e?.message ?? "Missing env vars"}</CardContent>
+      </Card>
+    );
+  }
 
   React.useEffect(() => {
     setDisplayName(auth.user?.displayName ?? "");
@@ -191,21 +281,42 @@ export default function DashboardPage() {
     };
   }, [auth.isAuthenticated, dashboardRefreshKey]);
 
+  React.useEffect(() => {
+    let cancelled = false;
+
+    async function run() {
+      if (!auth.isAuthenticated || !auth.isAdmin) {
+        setPromotions([]);
+        setEditingPromotionId(null);
+        setPromotionDraft(null);
+        return;
+      }
+
+      try {
+        setIsLoadingPromotions(true);
+        const res = await fetchJson<{ items: PromotionAdminItem[] }>("/promotions/admin?type=homepage_sponsored", { timeoutMs: 7_000 });
+        if (cancelled) return;
+        setPromotions(res.items ?? []);
+        setPromotionDraft((current) => current ?? emptyPromotionDraft(env.defaultChain.key));
+      } catch (e: any) {
+        if (!cancelled) {
+          toast.error(e?.message ?? "Failed to load MarketHub placements");
+        }
+      } finally {
+        if (!cancelled) setIsLoadingPromotions(false);
+      }
+    }
+
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [auth.isAuthenticated, auth.isAdmin, dashboardRefreshKey, env.defaultChain.key]);
+
   const activeSavedSearchSubcategories = React.useMemo(() => {
     if (!savedSearchDraft?.filters.category) return [];
     return subcategoriesFor(savedSearchDraft.filters.category);
   }, [savedSearchDraft?.filters.category]);
-
-  let env: ReturnType<typeof getEnv>;
-  try {
-    env = getEnv();
-  } catch (e: any) {
-    return (
-      <Card>
-        <CardContent className="p-6 text-sm text-destructive">{e?.message ?? "Missing env vars"}</CardContent>
-      </Card>
-    );
-  }
 
   const { data: lastListingId } = useReadContract({
     address: env.marketplaceRegistryAddress,
@@ -473,6 +584,309 @@ export default function DashboardPage() {
           )}
         </CardContent>
       </Card>
+
+      {auth.isAdmin ? (
+        <Card className="market-panel border-amber-300/60 bg-[linear-gradient(180deg,rgba(255,252,244,0.92),rgba(255,255,255,0.98))]">
+          <CardHeader>
+            <div className="market-section-title">MarketHub admin</div>
+            <CardTitle>Sponsored homepage placements</CardTitle>
+            <CardDescription>Manage the inventory that appears in the sponsored layer on the landing page. Changes here write directly to the backend placement model.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-5 p-4 pt-0 sm:p-6 sm:pt-0">
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="market-stat bg-white/90">
+                <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Total campaigns</div>
+                <div className="mt-2 text-2xl font-semibold">{promotions.length}</div>
+              </div>
+              <div className="market-stat bg-white/90">
+                <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Live now</div>
+                <div className="mt-2 text-2xl font-semibold">{promotions.filter((item) => item.status === "active").length}</div>
+              </div>
+              <div className="market-stat bg-white/90">
+                <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Admin identity</div>
+                <div className="mt-2 break-all text-sm font-semibold">{auth.user?.email?.trim() || auth.address || "Signed in"}</div>
+              </div>
+            </div>
+
+            <div className="grid gap-5 xl:grid-cols-[minmax(0,1.1fr)_minmax(320px,0.9fr)]">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-semibold">Current placement inventory</div>
+                    <div className="text-sm text-muted-foreground">Review priority, timing, and sponsorship labels before they surface on the landing page.</div>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setEditingPromotionId(null);
+                      setPromotionDraft(emptyPromotionDraft(env.defaultChain.key));
+                    }}
+                  >
+                    New placement
+                  </Button>
+                </div>
+
+                {isLoadingPromotions ? (
+                  <div className="space-y-2">
+                    <Skeleton className="h-16 w-full" />
+                    <Skeleton className="h-16 w-full" />
+                    <Skeleton className="h-16 w-full" />
+                  </div>
+                ) : promotions.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed bg-white/70 p-4 text-sm text-muted-foreground">No sponsored placements exist yet. Create the first campaign from the form on the right.</div>
+                ) : (
+                  promotions.map((item) => (
+                    <div key={item.id} className="rounded-2xl border bg-white/80 p-4">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="space-y-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <div className="font-semibold">{item.campaignName?.trim() || item.sponsorLabel?.trim() || "Untitled placement"}</div>
+                            <span className="rounded-full border px-2 py-0.5 text-[11px] uppercase tracking-[0.16em] text-muted-foreground">{item.status}</span>
+                            <span className="rounded-full border px-2 py-0.5 text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Priority {item.priority}</span>
+                          </div>
+                          <div className="text-xs text-muted-foreground">Slot: {item.placementSlot || "homepage"}</div>
+                          <div className="break-all text-xs text-muted-foreground">Listing: {item.listingId}</div>
+                          <div className="text-xs text-muted-foreground">Window: {formatDateTime(item.startsAt)} to {formatDateTime(item.endsAt)}</div>
+                          {item.notes ? <div className="text-sm text-slate-700">{item.notes}</div> : null}
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setEditingPromotionId(item.id);
+                              setPromotionDraft(toPromotionDraft(item));
+                            }}
+                          >
+                            Edit
+                          </Button>
+                          <Button asChild type="button" variant="ghost" size="sm">
+                            <Link href={buildListingHref(item.listingId, item.listingChainKey)}>Open listing</Link>
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled={isSavingPromotion}
+                            onClick={async () => {
+                              try {
+                                setIsSavingPromotion(true);
+                                await fetchJson(`/promotions/admin/${item.id}`, { method: "DELETE" });
+                                setPromotions((current) => current.filter((entry) => entry.id !== item.id));
+                                if (editingPromotionId === item.id) {
+                                  setEditingPromotionId(null);
+                                  setPromotionDraft(emptyPromotionDraft(env.defaultChain.key));
+                                }
+                                toast.success("Placement removed");
+                              } catch (e: any) {
+                                toast.error(e?.message ?? "Failed to remove placement");
+                              } finally {
+                                setIsSavingPromotion(false);
+                              }
+                            }}
+                          >
+                            Delete
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              <div className="rounded-2xl border bg-white/90 p-4 sm:p-5">
+                <div className="space-y-1">
+                  <div className="text-sm font-semibold">{editingPromotionId ? "Update placement" : "Create placement"}</div>
+                  <div className="text-sm text-muted-foreground">Use a real listing id and a clean campaign label so the landing page reads like curated inventory instead of raw ad tech.</div>
+                </div>
+
+                {promotionDraft ? (
+                  <div className="mt-4 grid gap-4">
+                    <div className="space-y-2">
+                      <Label>Listing id</Label>
+                      <Input
+                        value={promotionDraft.listingId}
+                        onChange={(e) => setPromotionDraft((current) => current ? { ...current, listingId: e.target.value } : current)}
+                        placeholder="0x..."
+                      />
+                    </div>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label>Chain key</Label>
+                        <Input
+                          value={promotionDraft.listingChainKey}
+                          onChange={(e) => setPromotionDraft((current) => current ? { ...current, listingChainKey: e.target.value } : current)}
+                          placeholder={env.defaultChain.key}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Status</Label>
+                        <select
+                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                          value={promotionDraft.status}
+                          onChange={(e) => setPromotionDraft((current) => current ? { ...current, status: e.target.value as PromotionDraft["status"] } : current)}
+                        >
+                          <option value="draft">Draft</option>
+                          <option value="active">Active</option>
+                          <option value="paused">Paused</option>
+                          <option value="archived">Archived</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label>Campaign name</Label>
+                        <Input
+                          value={promotionDraft.campaignName}
+                          onChange={(e) => setPromotionDraft((current) => current ? { ...current, campaignName: e.target.value } : current)}
+                          placeholder="Weekend local spotlight"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Sponsor label</Label>
+                        <Input
+                          value={promotionDraft.sponsorLabel}
+                          onChange={(e) => setPromotionDraft((current) => current ? { ...current, sponsorLabel: e.target.value } : current)}
+                          placeholder="Zonycs MarketHub"
+                        />
+                      </div>
+                    </div>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label>Placement slot</Label>
+                        <Input
+                          value={promotionDraft.placementSlot}
+                          onChange={(e) => setPromotionDraft((current) => current ? { ...current, placementSlot: e.target.value } : current)}
+                          placeholder="homepage-hero"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Priority</Label>
+                        <Input
+                          type="number"
+                          min={0}
+                          max={1000}
+                          value={promotionDraft.priority}
+                          onChange={(e) => setPromotionDraft((current) => current ? { ...current, priority: Number(e.target.value || 0) } : current)}
+                        />
+                      </div>
+                    </div>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label>Start time</Label>
+                        <Input
+                          type="datetime-local"
+                          value={promotionDraft.startsAt}
+                          onChange={(e) => setPromotionDraft((current) => current ? { ...current, startsAt: e.target.value } : current)}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>End time</Label>
+                        <Input
+                          type="datetime-local"
+                          value={promotionDraft.endsAt}
+                          onChange={(e) => setPromotionDraft((current) => current ? { ...current, endsAt: e.target.value } : current)}
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Notes</Label>
+                      <Textarea
+                        rows={4}
+                        value={promotionDraft.notes}
+                        onChange={(e) => setPromotionDraft((current) => current ? { ...current, notes: e.target.value } : current)}
+                        placeholder="Why this placement exists, who approved it, and what part of the homepage it is meant to influence."
+                      />
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        type="button"
+                        disabled={isSavingPromotion}
+                        onClick={async () => {
+                          if (!promotionDraft) return;
+
+                          const startsAt = parseDateTimeInput(promotionDraft.startsAt);
+                          const endsAt = parseDateTimeInput(promotionDraft.endsAt);
+                          if (!promotionDraft.listingId.trim()) {
+                            toast.error("Listing id is required");
+                            return;
+                          }
+                          if (!promotionDraft.listingChainKey.trim()) {
+                            toast.error("Chain key is required");
+                            return;
+                          }
+                          if (startsAt == null || endsAt == null) {
+                            toast.error("Start and end time are required");
+                            return;
+                          }
+                          if (endsAt <= startsAt) {
+                            toast.error("End time must be after start time");
+                            return;
+                          }
+
+                          const payload = {
+                            listingId: promotionDraft.listingId.trim(),
+                            listingChainKey: promotionDraft.listingChainKey.trim(),
+                            status: promotionDraft.status,
+                            priority: Math.max(0, Math.min(1000, Number(promotionDraft.priority) || 0)),
+                            placementSlot: promotionDraft.placementSlot.trim(),
+                            campaignName: promotionDraft.campaignName.trim(),
+                            sponsorLabel: promotionDraft.sponsorLabel.trim(),
+                            notes: promotionDraft.notes.trim(),
+                            startsAt,
+                            endsAt,
+                          };
+
+                          try {
+                            setIsSavingPromotion(true);
+                            const res = await fetchJson<{ item: PromotionAdminItem }>(
+                              editingPromotionId ? `/promotions/admin/${editingPromotionId}` : "/promotions/admin",
+                              {
+                                method: editingPromotionId ? "PUT" : "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify(payload),
+                              }
+                            );
+
+                            setPromotions((current) => {
+                              if (editingPromotionId) {
+                                return current.map((entry) => (entry.id === editingPromotionId ? res.item : entry));
+                              }
+                              return [res.item, ...current];
+                            });
+                            setEditingPromotionId(null);
+                            setPromotionDraft(emptyPromotionDraft(env.defaultChain.key));
+                            toast.success(editingPromotionId ? "Placement updated" : "Placement created");
+                          } catch (e: any) {
+                            toast.error(e?.message ?? "Failed to save placement");
+                          } finally {
+                            setIsSavingPromotion(false);
+                          }
+                        }}
+                      >
+                        {editingPromotionId ? "Save placement" : "Create placement"}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        disabled={isSavingPromotion}
+                        onClick={() => {
+                          setEditingPromotionId(null);
+                          setPromotionDraft(emptyPromotionDraft(env.defaultChain.key));
+                        }}
+                      >
+                        Reset
+                      </Button>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
 
       <Card className="market-panel">
         <CardHeader>

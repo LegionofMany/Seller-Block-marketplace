@@ -11,12 +11,22 @@ type AuthContextValue = {
   token: string | null;
   address: string | null;
   user: UserProfile | null;
+  isAdmin: boolean;
   isLoading: boolean;
   isAuthenticated: boolean;
   signIn: () => Promise<void>;
+  signInWithEmail: (input: { email: string; password: string }) => Promise<void>;
+  registerWithEmail: (input: { email: string; password: string; displayName?: string }) => Promise<void>;
   signOut: () => void;
   refresh: () => Promise<void>;
   setUser: (user: UserProfile | null) => void;
+};
+
+type AuthSessionResponse = {
+  token: string;
+  address: string;
+  user: UserProfile | null;
+  isAdmin?: boolean;
 };
 
 const AuthContext = React.createContext<AuthContextValue | null>(null);
@@ -28,13 +38,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [token, setToken] = React.useState<string | null>(null);
   const [address, setAddress] = React.useState<string | null>(null);
   const [user, setUser] = React.useState<UserProfile | null>(null);
+  const [isAdmin, setIsAdmin] = React.useState(false);
   const [isLoading, setIsLoading] = React.useState(true);
+
+  const applySession = React.useCallback((session: { token: string; address: string; user: UserProfile | null; isAdmin?: boolean }) => {
+    setStoredAuthToken(session.token);
+    setToken(session.token);
+    setAddress(session.address);
+    setUser(session.user);
+    setIsAdmin(Boolean(session.isAdmin));
+  }, []);
 
   const signOut = React.useCallback(() => {
     clearStoredAuthToken();
     setToken(null);
     setAddress(null);
     setUser(null);
+    setIsAdmin(false);
   }, []);
 
   const refresh = React.useCallback(async () => {
@@ -49,17 +69,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     try {
       setIsLoading(true);
-      const res = await fetchJson<{ address: string; user: UserProfile | null }>("/auth/me", {
+      const res = await fetchJson<{ address: string; user: UserProfile | null; isAdmin?: boolean }>("/auth/me", {
         timeoutMs: 7_000,
       });
       setToken(stored);
       setAddress(res.address);
       setUser(res.user);
+      setIsAdmin(Boolean(res.isAdmin));
     } catch {
       clearStoredAuthToken();
       setToken(null);
       setAddress(null);
       setUser(null);
+      setIsAdmin(false);
     } finally {
       setIsLoading(false);
     }
@@ -71,7 +93,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   React.useEffect(() => {
     if (!walletAddress || !address) return;
-    if (walletAddress.toLowerCase() !== address.toLowerCase()) {
+    if (address.startsWith("0x") && walletAddress.toLowerCase() !== address.toLowerCase()) {
       signOut();
     }
   }, [walletAddress, address, signOut]);
@@ -91,7 +113,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
 
       const signature = await signMessageAsync({ message: nonce.message });
-      const verified = await fetchJson<{ token: string; address: string; user: UserProfile | null }>("/auth/verify", {
+      const verified = await fetchJson<AuthSessionResponse>("/auth/verify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -101,31 +123,67 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }),
       });
 
-      setStoredAuthToken(verified.token);
-      setToken(verified.token);
-      setAddress(verified.address);
-      setUser(verified.user);
+      applySession(verified);
       toast.success("Signed in");
     } catch (e: any) {
       toast.error(e?.message ?? "Sign in failed");
     } finally {
       setIsLoading(false);
     }
-  }, [walletAddress, signMessageAsync]);
+  }, [applySession, walletAddress, signMessageAsync]);
+
+  const signInWithEmail = React.useCallback(async ({ email, password }: { email: string; password: string }) => {
+    try {
+      setIsLoading(true);
+      const verified = await fetchJson<AuthSessionResponse>("/auth/email/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+      applySession(verified);
+      toast.success("Signed in");
+    } catch (e: any) {
+      toast.error(e?.message ?? "Email sign in failed");
+      throw e;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [applySession]);
+
+  const registerWithEmail = React.useCallback(async ({ email, password, displayName }: { email: string; password: string; displayName?: string }) => {
+    try {
+      setIsLoading(true);
+      const verified = await fetchJson<AuthSessionResponse>("/auth/email/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password, displayName }),
+      });
+      applySession(verified);
+      toast.success("Account created");
+    } catch (e: any) {
+      toast.error(e?.message ?? "Email registration failed");
+      throw e;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [applySession]);
 
   const value = React.useMemo<AuthContextValue>(
     () => ({
       token,
       address,
       user,
+      isAdmin,
       isLoading,
       isAuthenticated: Boolean(token && address),
       signIn,
+      signInWithEmail,
+      registerWithEmail,
       signOut,
       refresh,
       setUser,
     }),
-    [token, address, user, isLoading, signIn, refresh, signOut]
+    [token, address, user, isAdmin, isLoading, signIn, signInWithEmail, registerWithEmail, refresh, signOut]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -20,6 +20,8 @@ import { commentsRouter } from "./routes/comments";
 import { savedSearchesRouter } from "./routes/savedSearches";
 import { notificationsRouter } from "./routes/notifications";
 import { settlementRouter } from "./routes/settlement";
+import { favoritesRouter } from "./routes/favorites";
+import { promotionsRouter } from "./routes/promotions";
 import { startMarketplaceIndexer, type MarketplaceIndexerHandle } from "./indexer/marketplaceIndexer";
 import { startNotificationsWorker } from "./services/notifications";
 
@@ -145,6 +147,8 @@ async function main() {
   app.use(commentsRouter());
   app.use(savedSearchesRouter());
   app.use(notificationsRouter());
+  app.use(favoritesRouter());
+  app.use(promotionsRouter());
   app.use(settlementRouter());
 
   app.use(notFound);

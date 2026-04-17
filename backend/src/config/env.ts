@@ -45,6 +45,8 @@ export type Env = {
   authJwtSecret: string;
   authTokenTtlSeconds: number;
   authNonceTtlSeconds: number;
+  adminEmails: string[];
+  adminWalletAddresses: string[];
   frontendAppUrl?: string;
   notificationsScanMs: number;
   notificationEmailFrom?: string;
@@ -157,6 +159,27 @@ function parseOrigins(raw: string | undefined): string[] | undefined {
     }
   }
   return parts;
+}
+
+function parseEmailList(raw: string | undefined): string[] {
+  if (!raw) return [];
+  return raw
+    .split(",")
+    .map((value) => value.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+function parseWalletAddressList(raw: string | undefined): string[] {
+  if (!raw) return [];
+  return raw
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .map((value) => {
+      if (!isAddress(value)) throw new Error(`Invalid admin wallet address: ${value}`);
+      assertNonZeroAddress(value, `admin wallet address ${value}`);
+      return getAddress(value).toLowerCase();
+    });
 }
 
 function parseSupportedChains(raw: string | undefined): { defaultChainKey?: string; chains: SupportedChainConfig[] } | null {
@@ -331,6 +354,8 @@ export function getEnv(): Env {
   const authJwtSecret = optional("AUTH_JWT_SECRET") ?? "seller-block-local-dev-secret-change-me";
   const authTokenTtlSeconds = numberFromEnv("AUTH_TOKEN_TTL_SECONDS", 60 * 60 * 8);
   const authNonceTtlSeconds = numberFromEnv("AUTH_NONCE_TTL_SECONDS", 60 * 10);
+  const adminEmails = parseEmailList(optional("ADMIN_EMAILS"));
+  const adminWalletAddresses = parseWalletAddressList(optional("ADMIN_WALLET_ADDRESSES"));
 
   const frontendAppUrl = optional("FRONTEND_APP_URL") ?? optional("APP_BASE_URL");
   if (frontendAppUrl) validateRpcUrl("FRONTEND_APP_URL", frontendAppUrl);
@@ -368,6 +393,8 @@ export function getEnv(): Env {
     authJwtSecret,
     authTokenTtlSeconds,
     authNonceTtlSeconds,
+    adminEmails,
+    adminWalletAddresses,
     ...(frontendAppUrl ? { frontendAppUrl } : {}),
     notificationsScanMs,
     ...(notificationEmailFrom ? { notificationEmailFrom } : {}),

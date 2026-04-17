@@ -72,6 +72,8 @@ Optional:
 - `RATE_LIMIT_WINDOW_MS`, `RATE_LIMIT_MAX`
 - `LISTING_AUTOHIDE_REPORTS_THRESHOLD` (default `3`; set to `0` to disable auto-hide)
 - `CORS_ORIGINS` (comma-separated list of allowed origins; include every exact production, custom-domain, and preview frontend origin that should call the API)
+- `ADMIN_EMAILS` (comma-separated admin emails for MarketHub placement management)
+- `ADMIN_WALLET_ADDRESSES` (comma-separated wallet addresses allowed to manage MarketHub placements)
 - `LOG_LEVEL`, `NODE_ENV`
 
 ### Multi-chain config format
@@ -136,6 +138,26 @@ Metadata
 
 - `POST /metadata` (JSON body: `{ title, description, image, attributes }`)
 - `GET /metadata/:id`
+
+Auth
+
+- `POST /auth/email/register`
+- `POST /auth/email/login`
+
+Favorites
+
+- `GET /favorites/listings`
+- `GET /favorites/listings/:listingId/state?chain=<chainKey>`
+- `POST /favorites/listings`
+- `DELETE /favorites/listings/:listingId?chain=<chainKey>`
+
+Promotions
+
+- `GET /promotions/homepage`
+- `GET /promotions/admin`
+- `POST /promotions/admin`
+- `PUT /promotions/admin/:id`
+- `DELETE /promotions/admin/:id`
 
 ## Project structure
 

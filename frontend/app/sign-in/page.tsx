@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import * as React from "react";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { useAccount } from "wagmi";
 
@@ -16,6 +17,12 @@ export default function SignInPage() {
   const { address } = useAccount();
   const env = getEnv();
   const walletConnectEnabled = Boolean(env.walletConnectProjectId);
+  const [email, setEmail] = React.useState("");
+  const [password, setPassword] = React.useState("");
+  const [displayName, setDisplayName] = React.useState("");
+  const [mode, setMode] = React.useState<"login" | "register">("login");
+
+  const emailDisabled = auth.isLoading;
 
   return (
     <div className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
@@ -56,29 +63,57 @@ export default function SignInPage() {
 
       <Card className="market-panel">
         <CardHeader>
-          <CardTitle>Email sign-in design</CardTitle>
-          <CardDescription>This is the non-wallet flow that still needs backend implementation.</CardDescription>
+          <CardTitle>Email sign-in</CardTitle>
+          <CardDescription>Create a marketplace account without a wallet, then keep favorites, alerts, and homepage personalization tied to that session.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          <div className="flex gap-2">
+            <Button type="button" variant={mode === "login" ? "default" : "outline"} onClick={() => setMode("login")} disabled={emailDisabled}>
+              Sign in
+            </Button>
+            <Button type="button" variant={mode === "register" ? "default" : "outline"} onClick={() => setMode("register")} disabled={emailDisabled}>
+              Create account
+            </Button>
+          </div>
           <div className="grid gap-4">
+            {mode === "register" ? (
+              <div className="space-y-2">
+                <Label htmlFor="displayName">Display name</Label>
+                <Input id="displayName" value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder="MarketHub shopper" disabled={emailDisabled} />
+              </div>
+            ) : null}
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
-              <Input id="email" type="email" placeholder="name@example.com" disabled />
+              <Input id="email" type="email" placeholder="name@example.com" value={email} onChange={(e) => setEmail(e.target.value)} disabled={emailDisabled} />
             </div>
             <div className="space-y-2">
               <Label htmlFor="password">Password</Label>
-              <Input id="password" type="password" placeholder="Create a password" disabled />
+              <Input id="password" type="password" placeholder={mode === "register" ? "Create a password" : "Enter your password"} value={password} onChange={(e) => setPassword(e.target.value)} disabled={emailDisabled} />
             </div>
-            <Button type="button" disabled>
-              Email sign-in coming next
+            <Button
+              type="button"
+              disabled={emailDisabled || !email.trim() || password.trim().length < 8}
+              onClick={() =>
+                void (mode === "login"
+                  ? auth.signInWithEmail({ email: email.trim(), password })
+                  : auth.registerWithEmail({ email: email.trim(), password, displayName: displayName.trim() || undefined }))
+              }
+            >
+              {mode === "login" ? "Sign in with email" : "Create email account"}
             </Button>
           </div>
 
           <div className="space-y-2 text-sm text-slate-700">
-            <div>Planned flow: email verification, password login, reset-password, and optional wallet linking after account creation.</div>
-            <div>Backend work still required: users table fields for email/password, verification tokens, reset tokens, auth routes, and rate limiting.</div>
-            <div>Frontend work still required: active form submission, session handling, account-link UI, and recovery flows.</div>
+            <div>Email accounts now create a real backend session and keep homepage favorites, followed-seller ordering, and alerts tied to that account.</div>
+            <div>Wallet checkout and on-chain seller actions still require a connected wallet. This page keeps both paths available side by side.</div>
+            <div>Account recovery and wallet-linking can be added next without replacing this session model.</div>
           </div>
+
+          {auth.isAuthenticated ? (
+            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-slate-700">
+              Signed in as {auth.user?.displayName?.trim() || auth.user?.email?.trim() || auth.address}.
+            </div>
+          ) : null}
 
           <div className="flex flex-wrap gap-3">
             <Button asChild variant="outline">

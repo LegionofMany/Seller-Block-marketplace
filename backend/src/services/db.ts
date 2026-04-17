@@ -54,6 +54,38 @@ export type UserRow = {
   displayName?: string | null;
   bio?: string | null;
   avatarCid?: string | null;
+  email?: string | null;
+  emailVerifiedAt?: number | null;
+  authMethod: "wallet" | "email";
+  linkedWalletAddress?: string | null;
+  lastLoginAt?: number | null;
+  createdAt: number;
+  updatedAt: number;
+};
+
+export type FavoriteListingRow = {
+  userAddress: string;
+  listingChainKey: string;
+  listingId: string;
+  createdAt: number;
+};
+
+export type PromotionRow = {
+  id: number;
+  listingId: string;
+  listingChainKey: string;
+  paymentId?: number | null;
+  type: string;
+  status: string;
+  priority: number;
+  placementSlot?: string | null;
+  campaignName?: string | null;
+  sponsorLabel?: string | null;
+  createdBy?: string | null;
+  notes?: string | null;
+  metadata: Record<string, unknown>;
+  startsAt: number;
+  endsAt: number;
   createdAt: number;
   updatedAt: number;
 };
@@ -714,6 +746,42 @@ function toUserRow(r: any): UserRow {
     displayName: r.displayName ?? r.displayname ?? null,
     bio: r.bio ?? null,
     avatarCid: r.avatarCid ?? r.avatarcid ?? null,
+    email: r.email ?? null,
+    emailVerifiedAt: r.emailVerifiedAt ?? r.emailverifiedat ?? null,
+    authMethod: String(r.authMethod ?? r.authmethod ?? "wallet") === "email" ? "email" : "wallet",
+    linkedWalletAddress: r.linkedWalletAddress ?? r.linkedwalletaddress ?? null,
+    lastLoginAt: r.lastLoginAt ?? r.lastloginat ?? null,
+    createdAt: Number(r.createdAt ?? r.createdat ?? 0),
+    updatedAt: Number(r.updatedAt ?? r.updatedat ?? 0),
+  };
+}
+
+function toFavoriteListingRow(r: any): FavoriteListingRow {
+  return {
+    userAddress: String(r.userAddress ?? r.useraddress),
+    listingChainKey: String(r.listingChainKey ?? r.listingchainkey),
+    listingId: String(r.listingId ?? r.listingid),
+    createdAt: Number(r.createdAt ?? r.createdat ?? 0),
+  };
+}
+
+function toPromotionRow(r: any): PromotionRow {
+  return {
+    id: Number(r.id),
+    listingId: String(r.listingId ?? r.listingid),
+    listingChainKey: String(r.listingChainKey ?? r.listingchainkey),
+    paymentId: r.paymentId ?? r.paymentid ?? null,
+    type: String(r.type),
+    status: String(r.status),
+    priority: Number(r.priority ?? 0),
+    placementSlot: r.placementSlot ?? r.placementslot ?? null,
+    campaignName: r.campaignName ?? r.campaignname ?? null,
+    sponsorLabel: r.sponsorLabel ?? r.sponsorlabel ?? null,
+    createdBy: r.createdBy ?? r.createdby ?? null,
+    notes: r.notes ?? null,
+    metadata: parseJsonObject(r.metadataJson ?? r.metadatajson),
+    startsAt: Number(r.startsAt ?? r.startsat ?? 0),
+    endsAt: Number(r.endsAt ?? r.endsat ?? 0),
     createdAt: Number(r.createdAt ?? r.createdat ?? 0),
     updatedAt: Number(r.updatedAt ?? r.updatedat ?? 0),
   };
@@ -797,10 +865,42 @@ export async function ensureUser(_db: Pool | any, address: string, createdAt: nu
   );
 }
 
+export async function findUserByEmail(_db: Pool | any, email: string): Promise<UserRow | null> {
+  const p = ensurePool(_db);
+  const res = await p.query(
+    'SELECT address, displayname AS "displayName", bio, avatarcid AS "avatarCid", email, emailverifiedat AS "emailVerifiedAt", authmethod AS "authMethod", linkedwalletaddress AS "linkedWalletAddress", lastloginat AS "lastLoginAt", createdat AS "createdAt", updatedat AS "updatedAt" FROM users WHERE emailnormalized = $1 LIMIT 1',
+    [email]
+  );
+  return res.rows[0] ? toUserRow(res.rows[0]) : null;
+}
+
+export async function getUserPasswordHash(_db: Pool | any, address: string): Promise<string | null> {
+  const p = ensurePool(_db);
+  const res = await p.query('SELECT passwordhash FROM users WHERE address = $1 LIMIT 1', [address]);
+  return typeof res.rows?.[0]?.passwordhash === "string" ? res.rows[0].passwordhash : null;
+}
+
+export async function createEmailUser(
+  _db: Pool | any,
+  input: { address: string; email: string; passwordHash: string; displayName?: string | null; createdAt: number }
+) {
+  const p = ensurePool(_db);
+  await p.query(
+    `INSERT INTO users(address, displayname, email, emailnormalized, passwordhash, emailverifiedat, authmethod, createdat, updatedat, lastloginat)
+     VALUES($1,$2,$3,$3,$4,$5,'email',$5,$5,$5)`,
+    [input.address, input.displayName ?? null, input.email, input.passwordHash, input.createdAt]
+  );
+}
+
+export async function updateUserLastLogin(_db: Pool | any, address: string, lastLoginAt: number) {
+  const p = ensurePool(_db);
+  await p.query('UPDATE users SET lastloginat = $2, updatedat = GREATEST(updatedat, $2) WHERE address = $1', [address, lastLoginAt]);
+}
+
 export async function getUser(_db: Pool | any, address: string): Promise<UserRow | null> {
   const p = ensurePool(_db);
   const res = await p.query(
-    'SELECT address, displayname AS "displayName", bio, avatarcid AS "avatarCid", createdat AS "createdAt", updatedat AS "updatedAt" FROM users WHERE address = $1',
+    'SELECT address, displayname AS "displayName", bio, avatarcid AS "avatarCid", email, emailverifiedat AS "emailVerifiedAt", authmethod AS "authMethod", linkedwalletaddress AS "linkedWalletAddress", lastloginat AS "lastLoginAt", createdat AS "createdAt", updatedat AS "updatedAt" FROM users WHERE address = $1',
     [address]
   );
   return res.rows[0] ? toUserRow(res.rows[0]) : null;
@@ -851,6 +951,11 @@ export async function getPublicUserProfile(_db: Pool | any, address: string): Pr
     displayName: null,
     bio: null,
     avatarCid: null,
+    email: null,
+    emailVerifiedAt: null,
+    authMethod: "wallet",
+    linkedWalletAddress: null,
+    lastLoginAt: null,
     createdAt: firstCreatedAt || Date.now(),
     updatedAt: firstCreatedAt || Date.now(),
   };
@@ -903,6 +1008,223 @@ export async function createUserFollow(_db: Pool | any, input: { follower: strin
 export async function deleteUserFollow(_db: Pool | any, follower: string, followed: string) {
   const p = ensurePool(_db);
   await p.query('DELETE FROM user_follows WHERE follower = $1 AND followed = $2', [follower, followed]);
+}
+
+export async function listFavoriteListingsByUser(_db: Pool | any, userAddress: string, limit = 100): Promise<FavoriteListingRow[]> {
+  const p = ensurePool(_db);
+  const res = await p.query(
+    `SELECT useraddress AS "userAddress", listingchainkey AS "listingChainKey", listingid AS "listingId", createdat AS "createdAt"
+     FROM user_favorite_listings
+     WHERE useraddress = $1
+     ORDER BY createdat DESC
+     LIMIT $2`,
+    [userAddress, Math.min(Math.max(limit, 1), 250)]
+  );
+  return res.rows.map(toFavoriteListingRow);
+}
+
+export async function isListingFavorited(_db: Pool | any, userAddress: string, listingChainKey: string, listingId: string): Promise<boolean> {
+  const p = ensurePool(_db);
+  const res = await p.query(
+    'SELECT 1 FROM user_favorite_listings WHERE useraddress = $1 AND listingchainkey = $2 AND listingid = $3 LIMIT 1',
+    [userAddress, listingChainKey, listingId]
+  );
+  return Boolean(res.rows[0]);
+}
+
+export async function createFavoriteListing(_db: Pool | any, input: FavoriteListingRow) {
+  const p = ensurePool(_db);
+  await p.query(
+    `INSERT INTO user_favorite_listings(useraddress, listingchainkey, listingid, createdat)
+     VALUES($1,$2,$3,$4)
+     ON CONFLICT (useraddress, listingchainkey, listingid) DO NOTHING`,
+    [input.userAddress, input.listingChainKey, input.listingId, input.createdAt]
+  );
+}
+
+export async function deleteFavoriteListing(_db: Pool | any, userAddress: string, listingChainKey: string, listingId: string) {
+  const p = ensurePool(_db);
+  await p.query('DELETE FROM user_favorite_listings WHERE useraddress = $1 AND listingchainkey = $2 AND listingid = $3', [userAddress, listingChainKey, listingId]);
+}
+
+export async function listHomepageSponsoredPromotions(_db: Pool | any, now: number, limit = 8): Promise<PromotionRow[]> {
+  const p = ensurePool(_db);
+  const res = await p.query(
+    `SELECT id,
+            listingid AS "listingId",
+            listingchainkey AS "listingChainKey",
+            paymentid AS "paymentId",
+            type,
+            status,
+            priority,
+            placementslot AS "placementSlot",
+            campaignname AS "campaignName",
+            sponsorlabel AS "sponsorLabel",
+            createdby AS "createdBy",
+            notes,
+            metadatajson AS "metadataJson",
+            startsat AS "startsAt",
+            endsat AS "endsAt",
+            createdat AS "createdAt",
+            updatedat AS "updatedAt"
+     FROM promotions
+     WHERE type = 'homepage_sponsored'
+       AND status = 'active'
+       AND startsat <= $1
+       AND endsat >= $1
+     ORDER BY priority DESC, startsat ASC, id DESC
+     LIMIT $2`,
+    [now, Math.min(Math.max(limit, 1), 24)]
+  );
+  return res.rows.map(toPromotionRow);
+}
+
+export async function listAllPromotions(_db: Pool | any, type?: string): Promise<PromotionRow[]> {
+  const p = ensurePool(_db);
+  const values: any[] = [];
+  const where: string[] = [];
+  if (type) {
+    values.push(type);
+    where.push(`type = $${values.length}`);
+  }
+  const res = await p.query(
+    `SELECT id,
+            listingid AS "listingId",
+            listingchainkey AS "listingChainKey",
+            paymentid AS "paymentId",
+            type,
+            status,
+            priority,
+            placementslot AS "placementSlot",
+            campaignname AS "campaignName",
+            sponsorlabel AS "sponsorLabel",
+            createdby AS "createdBy",
+            notes,
+            metadatajson AS "metadataJson",
+            startsat AS "startsAt",
+            endsat AS "endsAt",
+            createdat AS "createdAt",
+            updatedat AS "updatedAt"
+     FROM promotions
+     ${where.length ? `WHERE ${where.join(" AND ")}` : ""}
+     ORDER BY updatedat DESC, id DESC`,
+    values
+  );
+  return res.rows.map(toPromotionRow);
+}
+
+export async function createPromotion(
+  _db: Pool | any,
+  input: Omit<PromotionRow, "id" | "paymentId" | "createdAt" | "updatedAt" | "metadata"> & { paymentId?: number | null; metadata?: Record<string, unknown>; createdAt: number; updatedAt: number }
+): Promise<PromotionRow> {
+  const p = ensurePool(_db);
+  const res = await p.query(
+    `INSERT INTO promotions(listingid, listingchainkey, paymentid, type, status, priority, placementslot, campaignname, sponsorlabel, createdby, notes, metadatajson, startsat, endsat, createdat, updatedat)
+     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+     RETURNING id,
+               listingid AS "listingId",
+               listingchainkey AS "listingChainKey",
+               paymentid AS "paymentId",
+               type,
+               status,
+               priority,
+               placementslot AS "placementSlot",
+               campaignname AS "campaignName",
+               sponsorlabel AS "sponsorLabel",
+               createdby AS "createdBy",
+               notes,
+               metadatajson AS "metadataJson",
+               startsat AS "startsAt",
+               endsat AS "endsAt",
+               createdat AS "createdAt",
+               updatedat AS "updatedAt"`,
+    [
+      input.listingId,
+      input.listingChainKey,
+      input.paymentId ?? null,
+      input.type,
+      input.status,
+      input.priority,
+      input.placementSlot ?? null,
+      input.campaignName ?? null,
+      input.sponsorLabel ?? null,
+      input.createdBy ?? null,
+      input.notes ?? null,
+      JSON.stringify(input.metadata ?? {}),
+      input.startsAt,
+      input.endsAt,
+      input.createdAt,
+      input.updatedAt,
+    ]
+  );
+  return toPromotionRow(res.rows[0]);
+}
+
+export async function updatePromotion(
+  _db: Pool | any,
+  input: Omit<PromotionRow, "paymentId" | "createdAt" | "updatedAt" | "metadata"> & { paymentId?: number | null; metadata?: Record<string, unknown>; updatedAt: number }
+): Promise<PromotionRow | null> {
+  const p = ensurePool(_db);
+  const res = await p.query(
+    `UPDATE promotions
+     SET listingid = $2,
+         listingchainkey = $3,
+         paymentid = $4,
+         type = $5,
+         status = $6,
+         priority = $7,
+         placementslot = $8,
+         campaignname = $9,
+         sponsorlabel = $10,
+         createdby = $11,
+         notes = $12,
+         metadatajson = $13,
+         startsat = $14,
+         endsat = $15,
+         updatedat = $16
+     WHERE id = $1
+     RETURNING id,
+               listingid AS "listingId",
+               listingchainkey AS "listingChainKey",
+               paymentid AS "paymentId",
+               type,
+               status,
+               priority,
+               placementslot AS "placementSlot",
+               campaignname AS "campaignName",
+               sponsorlabel AS "sponsorLabel",
+               createdby AS "createdBy",
+               notes,
+               metadatajson AS "metadataJson",
+               startsat AS "startsAt",
+               endsat AS "endsAt",
+               createdat AS "createdAt",
+               updatedat AS "updatedAt"`,
+    [
+      input.id,
+      input.listingId,
+      input.listingChainKey,
+      input.paymentId ?? null,
+      input.type,
+      input.status,
+      input.priority,
+      input.placementSlot ?? null,
+      input.campaignName ?? null,
+      input.sponsorLabel ?? null,
+      input.createdBy ?? null,
+      input.notes ?? null,
+      JSON.stringify(input.metadata ?? {}),
+      input.startsAt,
+      input.endsAt,
+      input.updatedAt,
+    ]
+  );
+  return res.rows[0] ? toPromotionRow(res.rows[0]) : null;
+}
+
+export async function deletePromotion(_db: Pool | any, id: number) {
+  const p = ensurePool(_db);
+  await p.query('DELETE FROM promotions WHERE id = $1', [id]);
 }
 
 export async function hasUserBlockBetween(_db: Pool | any, a: string, b: string): Promise<boolean> {

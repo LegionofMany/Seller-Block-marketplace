@@ -147,6 +147,8 @@ export default function ListingDetailPage() {
   const [commentsError, setCommentsError] = React.useState<string | null>(null);
   const [isLoadingComments, setIsLoadingComments] = React.useState(false);
   const [isSubmittingComment, setIsSubmittingComment] = React.useState(false);
+  const [isFavorite, setIsFavorite] = React.useState(false);
+  const [isFavoriteLoading, setIsFavoriteLoading] = React.useState(false);
   const [commentDraft, setCommentDraft] = React.useState("");
   const [sellerOrder, setSellerOrder] = React.useState<ListingOrderIntent | null>(null);
   const [sellerOrderError, setSellerOrderError] = React.useState<string | null>(null);
@@ -194,6 +196,34 @@ export default function ListingDetailPage() {
 
     void run();
   }, [listingId, activeChain.key]);
+
+  React.useEffect(() => {
+    let cancelled = false;
+
+    async function run() {
+      if (!listingId || !auth.isAuthenticated) {
+        setIsFavorite(false);
+        return;
+      }
+
+      try {
+        setIsFavoriteLoading(true);
+        const res = await fetchJson<{ isFavorite: boolean }>(`/favorites/listings/${listingId}/state?chain=${encodeURIComponent(activeChain.key)}`, {
+          timeoutMs: 5_000,
+        });
+        if (!cancelled) setIsFavorite(Boolean(res.isFavorite));
+      } catch {
+        if (!cancelled) setIsFavorite(false);
+      } finally {
+        if (!cancelled) setIsFavoriteLoading(false);
+      }
+    }
+
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeChain.key, auth.isAuthenticated, listingId]);
 
   const refreshSellerOrder = React.useCallback(async () => {
     if (!listingId || !listing || listing.saleType !== 0) {
@@ -430,6 +460,35 @@ export default function ListingDetailPage() {
       toast.error(e?.message ?? "Failed to post comment");
     } finally {
       setIsSubmittingComment(false);
+    }
+  }
+
+  async function toggleFavorite() {
+    if (!listingId) return;
+    if (!auth.isAuthenticated) {
+      toast.error("Sign in first to save favorites");
+      return;
+    }
+
+    try {
+      setIsFavoriteLoading(true);
+      if (isFavorite) {
+        await fetchJson(`/favorites/listings/${listingId}?chain=${encodeURIComponent(activeChain.key)}`, { method: "DELETE" });
+        setIsFavorite(false);
+        toast.success("Removed from favorites");
+      } else {
+        await fetchJson("/favorites/listings", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ listingId, chainKey: activeChain.key }),
+        });
+        setIsFavorite(true);
+        toast.success("Saved to favorites");
+      }
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to update favorites");
+    } finally {
+      setIsFavoriteLoading(false);
     }
   }
 
@@ -1018,6 +1077,16 @@ export default function ListingDetailPage() {
                   <div className="rounded-xl border bg-background/80 p-3 space-y-2 sm:p-4">
                     <div className="text-sm font-medium">Safety</div>
                     <div className="flex flex-col gap-2 sm:flex-row">
+                      <Button type="button" variant={isFavorite ? "default" : "outline"} size="lg" className="w-full sm:w-auto" disabled={isFavoriteLoading} onClick={() => void toggleFavorite()}>
+                        {isFavorite ? "Saved" : "Save favorite"}
+                      </Button>
+                      {!auth.isAuthenticated ? (
+                        <Button asChild type="button" variant="ghost" size="lg" className="w-full sm:w-auto">
+                          <Link href="/sign-in">Sign in to save</Link>
+                        </Button>
+                      ) : null}
+                    </div>
+                    <div className="flex flex-col gap-2 sm:flex-row">
                       <Button type="button" variant="outline" size="lg" className="w-full sm:w-auto" onClick={blockSeller}>
                         Block seller
                       </Button>
@@ -1029,6 +1098,16 @@ export default function ListingDetailPage() {
                 ) : (
                   <div className="rounded-xl border bg-background/80 p-3 space-y-2 sm:p-4">
                     <div className="text-sm font-medium">Safety</div>
+                    <div className="flex flex-col gap-2 sm:flex-row">
+                      <Button type="button" variant={isFavorite ? "default" : "outline"} size="lg" className="w-full sm:w-auto" disabled={isFavoriteLoading} onClick={() => void toggleFavorite()}>
+                        {isFavorite ? "Saved" : "Save favorite"}
+                      </Button>
+                      {!auth.isAuthenticated ? (
+                        <Button asChild type="button" variant="ghost" size="lg" className="w-full sm:w-auto">
+                          <Link href="/sign-in">Sign in to save</Link>
+                        </Button>
+                      ) : null}
+                    </div>
                     <Button type="button" variant="outline" size="lg" className="w-full sm:w-auto" onClick={reportListing}>
                       Report listing
                     </Button>

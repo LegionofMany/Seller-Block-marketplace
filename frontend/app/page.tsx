@@ -8,7 +8,47 @@ import { useAuth } from "@/components/providers/AuthProvider";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { fetchJson } from "@/lib/api";
-import { useListings } from "@/lib/hooks/useListings";
+import { type ListingSummary, useListings } from "@/lib/hooks/useListings";
+
+type FavoriteListing = {
+  listingChainKey: string;
+  listingId: string;
+  createdAt: number;
+};
+
+type PromotionItem = {
+  id: number;
+  listingId: string;
+  listingChainKey: string;
+  sponsorLabel?: string | null;
+  campaignName?: string | null;
+};
+
+type BackendListingRow = {
+  chainKey: string;
+  chainId: number;
+  id: string;
+  seller: string;
+  metadataURI: string;
+  price: string;
+  token: string;
+  saleType: number;
+  active: 0 | 1;
+};
+
+function toListingSummary(row: BackendListingRow): ListingSummary {
+  return {
+    chainKey: row.chainKey,
+    chainId: row.chainId,
+    id: row.id as `0x${string}`,
+    seller: row.seller as `0x${string}`,
+    saleType: row.saleType as 0 | 1 | 2,
+    token: row.token as `0x${string}`,
+    price: BigInt(row.price),
+    metadataURI: row.metadataURI,
+    status: (row.active ? 1 : 2) as 1 | 2,
+  };
+}
 
 const marketHubRules = [
   {
@@ -42,6 +82,10 @@ export default function HomePage() {
   const { listings, isLoading } = useListings({ limit: 24, sort: "newest" });
   const [followedSellers, setFollowedSellers] = React.useState<string[]>([]);
   const [followedError, setFollowedError] = React.useState<string | null>(null);
+  const [favoriteListings, setFavoriteListings] = React.useState<ListingSummary[]>([]);
+  const [favoriteError, setFavoriteError] = React.useState<string | null>(null);
+  const [sponsoredListings, setSponsoredListings] = React.useState<Array<{ listing: ListingSummary; sponsorLabel?: string | null; campaignName?: string | null }>>([]);
+  const [sponsoredError, setSponsoredError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -72,6 +116,82 @@ export default function HomePage() {
       cancelled = true;
     };
   }, [auth.isAuthenticated]);
+
+  React.useEffect(() => {
+    let cancelled = false;
+
+    async function run() {
+      if (!auth.isAuthenticated) {
+        setFavoriteListings([]);
+        setFavoriteError(null);
+        return;
+      }
+
+      try {
+        const favorites = await fetchJson<{ items: FavoriteListing[] }>("/favorites/listings", { timeoutMs: 5_000 });
+        const uniqueKeys = Array.from(new Set((favorites.items ?? []).map((item) => `${item.listingChainKey}:${item.listingId}`))).slice(0, 4);
+        const listingResponses = await Promise.all(
+          uniqueKeys.map(async (key) => {
+            const [chainKey, listingId] = key.split(":");
+            const detail = await fetchJson<{ listing: BackendListingRow }>(`/listings/${listingId}?chain=${encodeURIComponent(chainKey)}`, { timeoutMs: 5_000 });
+            return toListingSummary(detail.listing);
+          })
+        );
+
+        if (!cancelled) {
+          setFavoriteListings(listingResponses);
+          setFavoriteError(null);
+        }
+      } catch (e: any) {
+        if (!cancelled) {
+          setFavoriteListings([]);
+          setFavoriteError(e?.message ?? "Could not load favorite listings");
+        }
+      }
+    }
+
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [auth.isAuthenticated]);
+
+  React.useEffect(() => {
+    let cancelled = false;
+
+    async function run() {
+      try {
+        const promotions = await fetchJson<{ items: PromotionItem[] }>("/promotions/homepage", { timeoutMs: 5_000 });
+        const items = await Promise.all(
+          (promotions.items ?? []).slice(0, 4).map(async (item) => {
+            const detail = await fetchJson<{ listing: BackendListingRow }>(`/listings/${item.listingId}?chain=${encodeURIComponent(item.listingChainKey)}`, {
+              timeoutMs: 5_000,
+            });
+            return {
+              listing: toListingSummary(detail.listing),
+              sponsorLabel: item.sponsorLabel ?? null,
+              campaignName: item.campaignName ?? null,
+            };
+          })
+        );
+
+        if (!cancelled) {
+          setSponsoredListings(items);
+          setSponsoredError(null);
+        }
+      } catch (e: any) {
+        if (!cancelled) {
+          setSponsoredListings([]);
+          setSponsoredError(e?.message ?? "Could not load sponsored placements");
+        }
+      }
+    }
+
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const followedListings = React.useMemo(
     () => listings.filter((listing) => followedSellers.includes(String(listing.seller).toLowerCase())).slice(0, 4),
@@ -172,9 +292,18 @@ export default function HomePage() {
               <CardDescription>The homepage order now explicitly reserves the second slot for favorite ads and sellers.</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="market-note text-sm">
-                Favorites are not persisted by the backend yet, so this slot is intentionally reserved instead of pretending to personalize unsupported data.
-              </div>
+              {favoriteError ? <div className="market-note text-sm">{favoriteError}</div> : null}
+              {!auth.isAuthenticated ? (
+                <div className="market-note text-sm">Sign in with email or wallet, save listings from their detail pages, and they will appear here on your next visit.</div>
+              ) : favoriteListings.length === 0 ? (
+                <div className="market-note text-sm">You do not have favorite listings yet. Open any listing and save it to lift it into this homepage layer.</div>
+              ) : (
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  {favoriteListings.map((listing) => (
+                    <ListingCard key={`${listing.chainKey}-${listing.id}`} row={listing} />
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -184,9 +313,22 @@ export default function HomePage() {
               <CardDescription>Paid MarketHub placements remain a dedicated layer after followed sellers and favorites.</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="market-note text-sm">
-                Sponsored placement rules are now part of the homepage structure, but billing, placement inventory, and moderation controls still need backend support before this can go live.
-              </div>
+              {sponsoredError ? <div className="market-note text-sm">{sponsoredError}</div> : null}
+              {sponsoredListings.length === 0 ? (
+                <div className="market-note text-sm">No sponsored placements are active right now. MarketHub inventory will appear here as soon as an admin activates a campaign window.</div>
+              ) : (
+                <div className="grid gap-4">
+                  {sponsoredListings.map((item) => (
+                    <div key={`${item.listing.chainKey}-${item.listing.id}`} className="space-y-2">
+                      <div className="flex flex-wrap items-center gap-2 text-xs uppercase tracking-[0.16em] text-muted-foreground">
+                        <span>{item.sponsorLabel || "MarketHub placement"}</span>
+                        {item.campaignName ? <span>{item.campaignName}</span> : null}
+                      </div>
+                      <ListingCard row={item.listing} />
+                    </div>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
