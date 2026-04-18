@@ -16,7 +16,17 @@ type AuthContextValue = {
   isAuthenticated: boolean;
   signIn: () => Promise<void>;
   signInWithEmail: (input: { email: string; password: string }) => Promise<void>;
-  registerWithEmail: (input: { email: string; password: string; displayName?: string }) => Promise<void>;
+  registerWithEmail: (input: {
+    email: string;
+    password: string;
+    fullName?: string;
+    displayName?: string;
+    streetAddress1?: string;
+    streetAddress2?: string;
+    city?: string;
+    region?: string;
+    postalCode?: string;
+  }) => Promise<void>;
   signOut: () => void;
   refresh: () => Promise<void>;
   setUser: (user: UserProfile | null) => void;
@@ -150,13 +160,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [applySession]);
 
-  const registerWithEmail = React.useCallback(async ({ email, password, displayName }: { email: string; password: string; displayName?: string }) => {
+  const registerWithEmail = React.useCallback(async (
+    {
+      email,
+      password,
+      fullName,
+      displayName,
+      streetAddress1,
+      streetAddress2,
+      city,
+      region,
+      postalCode,
+    }: {
+      email: string;
+      password: string;
+      fullName?: string;
+      displayName?: string;
+      streetAddress1?: string;
+      streetAddress2?: string;
+      city?: string;
+      region?: string;
+      postalCode?: string;
+    }
+  ) => {
     try {
       setIsLoading(true);
       const verified = await fetchJson<AuthSessionResponse>("/auth/email/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password, displayName }),
+        body: JSON.stringify({ email, password, fullName, displayName, streetAddress1, streetAddress2, city, region, postalCode }),
       });
       applySession(verified);
       toast.success("Account created");

@@ -51,6 +51,7 @@ export type MetadataRow = {
 
 export type UserRow = {
   address: string;
+  fullName?: string | null;
   displayName?: string | null;
   bio?: string | null;
   avatarCid?: string | null;
@@ -58,6 +59,11 @@ export type UserRow = {
   emailVerifiedAt?: number | null;
   authMethod: "wallet" | "email";
   linkedWalletAddress?: string | null;
+  streetAddress1?: string | null;
+  streetAddress2?: string | null;
+  city?: string | null;
+  region?: string | null;
+  postalCode?: string | null;
   lastLoginAt?: number | null;
   createdAt: number;
   updatedAt: number;
@@ -743,6 +749,7 @@ export async function createReport(_db: Pool | any, input: CreateReportInput): P
 function toUserRow(r: any): UserRow {
   return {
     address: String(r.address),
+    fullName: r.fullName ?? r.fullname ?? null,
     displayName: r.displayName ?? r.displayname ?? null,
     bio: r.bio ?? null,
     avatarCid: r.avatarCid ?? r.avatarcid ?? null,
@@ -750,6 +757,11 @@ function toUserRow(r: any): UserRow {
     emailVerifiedAt: r.emailVerifiedAt ?? r.emailverifiedat ?? null,
     authMethod: String(r.authMethod ?? r.authmethod ?? "wallet") === "email" ? "email" : "wallet",
     linkedWalletAddress: r.linkedWalletAddress ?? r.linkedwalletaddress ?? null,
+    streetAddress1: r.streetAddress1 ?? r.streetaddress1 ?? null,
+    streetAddress2: r.streetAddress2 ?? r.streetaddress2 ?? null,
+    city: r.city ?? null,
+    region: r.region ?? null,
+    postalCode: r.postalCode ?? r.postalcode ?? null,
     lastLoginAt: r.lastLoginAt ?? r.lastloginat ?? null,
     createdAt: Number(r.createdAt ?? r.createdat ?? 0),
     updatedAt: Number(r.updatedAt ?? r.updatedat ?? 0),
@@ -868,7 +880,7 @@ export async function ensureUser(_db: Pool | any, address: string, createdAt: nu
 export async function findUserByEmail(_db: Pool | any, email: string): Promise<UserRow | null> {
   const p = ensurePool(_db);
   const res = await p.query(
-    'SELECT address, displayname AS "displayName", bio, avatarcid AS "avatarCid", email, emailverifiedat AS "emailVerifiedAt", authmethod AS "authMethod", linkedwalletaddress AS "linkedWalletAddress", lastloginat AS "lastLoginAt", createdat AS "createdAt", updatedat AS "updatedAt" FROM users WHERE emailnormalized = $1 LIMIT 1',
+    'SELECT address, fullname AS "fullName", displayname AS "displayName", bio, avatarcid AS "avatarCid", email, emailverifiedat AS "emailVerifiedAt", authmethod AS "authMethod", linkedwalletaddress AS "linkedWalletAddress", streetaddress1 AS "streetAddress1", streetaddress2 AS "streetAddress2", city, region, postalcode AS "postalCode", lastloginat AS "lastLoginAt", createdat AS "createdAt", updatedat AS "updatedAt" FROM users WHERE emailnormalized = $1 LIMIT 1',
     [email]
   );
   return res.rows[0] ? toUserRow(res.rows[0]) : null;
@@ -882,13 +894,37 @@ export async function getUserPasswordHash(_db: Pool | any, address: string): Pro
 
 export async function createEmailUser(
   _db: Pool | any,
-  input: { address: string; email: string; passwordHash: string; displayName?: string | null; createdAt: number }
+  input: {
+    address: string;
+    email: string;
+    passwordHash: string;
+    fullName?: string | null;
+    displayName?: string | null;
+    streetAddress1?: string | null;
+    streetAddress2?: string | null;
+    city?: string | null;
+    region?: string | null;
+    postalCode?: string | null;
+    createdAt: number;
+  }
 ) {
   const p = ensurePool(_db);
   await p.query(
-    `INSERT INTO users(address, displayname, email, emailnormalized, passwordhash, emailverifiedat, authmethod, createdat, updatedat, lastloginat)
-     VALUES($1,$2,$3,$3,$4,$5,'email',$5,$5,$5)`,
-    [input.address, input.displayName ?? null, input.email, input.passwordHash, input.createdAt]
+    `INSERT INTO users(address, fullname, displayname, email, emailnormalized, passwordhash, emailverifiedat, authmethod, streetaddress1, streetaddress2, city, region, postalcode, createdat, updatedat, lastloginat)
+     VALUES($1,$2,$3,$4,$4,$5,$6,'email',$7,$8,$9,$10,$11,$6,$6,$6)`,
+    [
+      input.address,
+      input.fullName ?? null,
+      input.displayName ?? null,
+      input.email,
+      input.passwordHash,
+      input.createdAt,
+      input.streetAddress1 ?? null,
+      input.streetAddress2 ?? null,
+      input.city ?? null,
+      input.region ?? null,
+      input.postalCode ?? null,
+    ]
   );
 }
 
@@ -900,23 +936,56 @@ export async function updateUserLastLogin(_db: Pool | any, address: string, last
 export async function getUser(_db: Pool | any, address: string): Promise<UserRow | null> {
   const p = ensurePool(_db);
   const res = await p.query(
-    'SELECT address, displayname AS "displayName", bio, avatarcid AS "avatarCid", email, emailverifiedat AS "emailVerifiedAt", authmethod AS "authMethod", linkedwalletaddress AS "linkedWalletAddress", lastloginat AS "lastLoginAt", createdat AS "createdAt", updatedat AS "updatedAt" FROM users WHERE address = $1',
+    'SELECT address, fullname AS "fullName", displayname AS "displayName", bio, avatarcid AS "avatarCid", email, emailverifiedat AS "emailVerifiedAt", authmethod AS "authMethod", linkedwalletaddress AS "linkedWalletAddress", streetaddress1 AS "streetAddress1", streetaddress2 AS "streetAddress2", city, region, postalcode AS "postalCode", lastloginat AS "lastLoginAt", createdat AS "createdAt", updatedat AS "updatedAt" FROM users WHERE address = $1',
     [address]
   );
   return res.rows[0] ? toUserRow(res.rows[0]) : null;
 }
 
-export async function updateUserProfile(_db: Pool | any, row: { address: string; displayName?: string | null; bio?: string | null; avatarCid?: string | null; updatedAt: number }) {
+export async function updateUserProfile(
+  _db: Pool | any,
+  row: {
+    address: string;
+    fullName?: string | null;
+    displayName?: string | null;
+    bio?: string | null;
+    avatarCid?: string | null;
+    streetAddress1?: string | null;
+    streetAddress2?: string | null;
+    city?: string | null;
+    region?: string | null;
+    postalCode?: string | null;
+    updatedAt: number;
+  }
+) {
   const p = ensurePool(_db);
   await p.query(
-    `INSERT INTO users(address, displayName, bio, avatarCid, createdAt, updatedAt)
-     VALUES($1,$2,$3,$4,$5,$5)
+    `INSERT INTO users(address, fullname, displayName, bio, avatarCid, streetaddress1, streetaddress2, city, region, postalcode, createdAt, updatedAt)
+     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$11)
      ON CONFLICT (address) DO UPDATE SET
+       fullName = EXCLUDED.fullName,
        displayName = EXCLUDED.displayName,
        bio = EXCLUDED.bio,
        avatarCid = EXCLUDED.avatarCid,
+       streetaddress1 = EXCLUDED.streetaddress1,
+       streetaddress2 = EXCLUDED.streetaddress2,
+       city = EXCLUDED.city,
+       region = EXCLUDED.region,
+       postalcode = EXCLUDED.postalcode,
        updatedAt = EXCLUDED.updatedAt`,
-    [row.address, row.displayName ?? null, row.bio ?? null, row.avatarCid ?? null, row.updatedAt]
+    [
+      row.address,
+      row.fullName ?? null,
+      row.displayName ?? null,
+      row.bio ?? null,
+      row.avatarCid ?? null,
+      row.streetAddress1 ?? null,
+      row.streetAddress2 ?? null,
+      row.city ?? null,
+      row.region ?? null,
+      row.postalCode ?? null,
+      row.updatedAt,
+    ]
   );
 }
 
@@ -948,6 +1017,7 @@ export async function getPublicUserProfile(_db: Pool | any, address: string): Pr
 
   const fallbackUser: UserRow = user ?? {
     address,
+    fullName: null,
     displayName: null,
     bio: null,
     avatarCid: null,
@@ -955,6 +1025,11 @@ export async function getPublicUserProfile(_db: Pool | any, address: string): Pr
     emailVerifiedAt: null,
     authMethod: "wallet",
     linkedWalletAddress: null,
+    streetAddress1: null,
+    streetAddress2: null,
+    city: null,
+    region: null,
+    postalCode: null,
     lastLoginAt: null,
     createdAt: firstCreatedAt || Date.now(),
     updatedAt: firstCreatedAt || Date.now(),

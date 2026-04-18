@@ -79,7 +79,13 @@ export async function registerWithEmail(req: Request, res: Response) {
     .object({
       email: z.string().min(3).max(320),
       password: z.string().min(8).max(128),
+      fullName: z.string().max(120).optional(),
       displayName: z.string().max(80).optional(),
+      streetAddress1: z.string().max(160).optional(),
+      streetAddress2: z.string().max(160).optional(),
+      city: z.string().max(80).optional(),
+      region: z.string().max(80).optional(),
+      postalCode: z.string().max(32).optional(),
     })
     .safeParse(req.body);
   if (!parsed.success) throw new HttpError(400, "Invalid email registration payload", "INVALID_EMAIL_AUTH");
@@ -99,7 +105,13 @@ export async function registerWithEmail(req: Request, res: Response) {
     address,
     email,
     passwordHash,
+    fullName: parsed.data.fullName?.trim() ? parsed.data.fullName.trim() : null,
     displayName: parsed.data.displayName?.trim() ? parsed.data.displayName.trim() : null,
+    streetAddress1: parsed.data.streetAddress1?.trim() ? parsed.data.streetAddress1.trim() : null,
+    streetAddress2: parsed.data.streetAddress2?.trim() ? parsed.data.streetAddress2.trim() : null,
+    city: parsed.data.city?.trim() ? parsed.data.city.trim() : null,
+    region: parsed.data.region?.trim() ? parsed.data.region.trim() : null,
+    postalCode: parsed.data.postalCode?.trim() ? parsed.data.postalCode.trim() : null,
     createdAt: now,
   });
 

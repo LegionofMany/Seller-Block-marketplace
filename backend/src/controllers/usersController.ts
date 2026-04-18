@@ -85,16 +85,31 @@ export async function updateMyProfile(req: Request, res: Response) {
   const { db } = getContext();
   const address = requireAuthAddress(req);
   const parsed = z.object({
+    fullName: z.string().max(120).optional(),
     displayName: z.string().max(80).optional(),
     bio: z.string().max(1000).optional(),
     avatarCid: z.string().max(2048).optional(),
+    streetAddress1: z.string().max(160).optional(),
+    streetAddress2: z.string().max(160).optional(),
+    city: z.string().max(80).optional(),
+    region: z.string().max(80).optional(),
+    postalCode: z.string().max(32).optional(),
   }).safeParse(req.body);
   if (!parsed.success) throw new HttpError(400, "Invalid profile payload", "INVALID_PROFILE");
 
+  const fullName = parsed.data.fullName?.trim() ? parsed.data.fullName.trim() : null;
   const displayName = parsed.data.displayName?.trim() ? parsed.data.displayName.trim() : null;
   const bio = parsed.data.bio?.trim() ? parsed.data.bio.trim() : null;
   const avatarCid = parsed.data.avatarCid?.trim() ? parsed.data.avatarCid.trim() : null;
+  const streetAddress1 = parsed.data.streetAddress1?.trim() ? parsed.data.streetAddress1.trim() : null;
+  const streetAddress2 = parsed.data.streetAddress2?.trim() ? parsed.data.streetAddress2.trim() : null;
+  const city = parsed.data.city?.trim() ? parsed.data.city.trim() : null;
+  const region = parsed.data.region?.trim() ? parsed.data.region.trim() : null;
+  const postalCode = parsed.data.postalCode?.trim() ? parsed.data.postalCode.trim() : null;
 
+  if (fullName && /[<>]/.test(fullName)) {
+    throw new HttpError(400, "Full name contains invalid characters", "INVALID_PROFILE");
+  }
   if (displayName && /[<>]/.test(displayName)) {
     throw new HttpError(400, "Display name contains invalid characters", "INVALID_PROFILE");
   }
@@ -108,9 +123,15 @@ export async function updateMyProfile(req: Request, res: Response) {
   await ensureUser(db, address, Date.now());
   await updateUserProfile(db, {
     address,
+    fullName,
     displayName,
     bio,
     avatarCid,
+    streetAddress1,
+    streetAddress2,
+    city,
+    region,
+    postalCode,
     updatedAt: Date.now(),
   });
 

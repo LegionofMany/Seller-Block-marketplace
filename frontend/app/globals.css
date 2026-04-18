@@ -191,6 +191,39 @@
     color: hsl(var(--muted-foreground));
   }
 
+  .market-tab-strip {
+    display: flex;
+    gap: 0.75rem;
+    scrollbar-width: none;
+  }
+
+  .market-tab-strip::-webkit-scrollbar {
+    display: none;
+  }
+
+  .market-tab-button {
+    min-width: 13rem;
+    flex: 1 0 13rem;
+    border: 1px solid hsl(var(--border));
+    border-radius: 1.25rem;
+    background: rgba(255, 255, 255, 0.72);
+    padding: 1rem 1rem 0.95rem;
+    text-align: left;
+    transition: background-color 120ms ease, border-color 120ms ease, transform 120ms ease;
+  }
+
+  .market-tab-button:hover {
+    background: rgba(255, 250, 241, 0.92);
+    border-color: hsl(var(--ring));
+  }
+
+  .market-tab-button-active {
+    border-color: hsl(var(--ring));
+    background: linear-gradient(180deg, rgba(255, 251, 245, 0.96), rgba(255, 241, 220, 0.84));
+    box-shadow: 0 10px 24px rgba(84, 60, 24, 0.08);
+    transform: translateY(-1px);
+  }
+
   .market-details summary {
     cursor: pointer;
     list-style: none;
@@ -220,6 +253,12 @@
 
     .market-note {
       padding: 0.8rem 0.9rem;
+    }
+
+    .market-tab-button {
+      min-width: 11.5rem;
+      flex-basis: 11.5rem;
+      padding: 0.9rem 0.9rem 0.85rem;
     }
   }
 }

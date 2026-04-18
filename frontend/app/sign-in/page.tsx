@@ -1,8 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import * as React from "react";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
+import { toast } from "sonner";
 import { useAccount } from "wagmi";
 
 import { useAuth } from "@/components/providers/AuthProvider";
@@ -15,18 +17,89 @@ import { getEnv } from "@/lib/env";
 export default function SignInPage() {
   const auth = useAuth();
   const { address } = useAccount();
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const env = getEnv();
   const walletConnectEnabled = Boolean(env.walletConnectProjectId);
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
+  const [confirmPassword, setConfirmPassword] = React.useState("");
+  const [fullName, setFullName] = React.useState("");
   const [displayName, setDisplayName] = React.useState("");
+  const [streetAddress1, setStreetAddress1] = React.useState("");
+  const [streetAddress2, setStreetAddress2] = React.useState("");
+  const [city, setCity] = React.useState("");
+  const [region, setRegion] = React.useState("");
+  const [postalCode, setPostalCode] = React.useState("");
   const [mode, setMode] = React.useState<"login" | "register">("login");
 
   const emailDisabled = auth.isLoading;
+  const registrationMissingFields = [
+    !fullName.trim() ? "full name" : null,
+    !displayName.trim() ? "display name" : null,
+    !streetAddress1.trim() ? "street address" : null,
+    !city.trim() ? "city" : null,
+    !region.trim() ? "region/state" : null,
+    !postalCode.trim() ? "postal code" : null,
+  ].filter(Boolean) as string[];
+  const registrationReady = registrationMissingFields.length === 0 && password.trim().length >= 8 && password === confirmPassword;
+  const passwordMismatch = mode === "register" && confirmPassword.length > 0 && password !== confirmPassword;
+
+  React.useEffect(() => {
+    const requestedMode = searchParams.get("mode") === "register" ? "register" : "login";
+    setMode((current) => (current === requestedMode ? current : requestedMode));
+  }, [searchParams]);
+
+  const setModeWithQuery = React.useCallback(
+    (nextMode: "login" | "register") => {
+      setMode(nextMode);
+      const params = new URLSearchParams(searchParams.toString());
+      if (nextMode === "register") {
+        params.set("mode", "register");
+      } else {
+        params.delete("mode");
+      }
+      const query = params.toString();
+      router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+    },
+    [pathname, router, searchParams]
+  );
+
+  async function handleEmailSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (mode === "register") {
+      if (registrationMissingFields.length > 0) {
+        toast.error(`Complete: ${registrationMissingFields.join(", ")}`);
+        return;
+      }
+      if (passwordMismatch) {
+        toast.error("Passwords must match");
+        return;
+      }
+
+      await auth.registerWithEmail({
+        email: email.trim(),
+        password,
+        fullName: fullName.trim() || undefined,
+        displayName: displayName.trim() || undefined,
+        streetAddress1: streetAddress1.trim() || undefined,
+        streetAddress2: streetAddress2.trim() || undefined,
+        city: city.trim() || undefined,
+        region: region.trim() || undefined,
+        postalCode: postalCode.trim() || undefined,
+      });
+    } else {
+      await auth.signInWithEmail({ email: email.trim(), password });
+    }
+
+    router.push("/dashboard");
+  }
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
-      <Card className="market-panel">
+    <div className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
+      <Card className="market-panel order-2 xl:order-1">
         <CardHeader>
           <CardTitle>Wallet sign-in</CardTitle>
           <CardDescription>Desktop extension wallets still work, but tablet and mobile users usually need WalletConnect unless they are already inside a wallet browser.</CardDescription>
@@ -61,52 +134,102 @@ export default function SignInPage() {
         </CardContent>
       </Card>
 
-      <Card className="market-panel">
+      <Card className="market-panel order-1 xl:order-2 border-slate-300/80 bg-[linear-gradient(180deg,rgba(252,248,239,0.92),rgba(255,255,255,0.98))]">
         <CardHeader>
-          <CardTitle>Email sign-in</CardTitle>
-          <CardDescription>Create a marketplace account without a wallet, then keep favorites, alerts, and homepage personalization tied to that session.</CardDescription>
+          <div className="market-section-title">Account access</div>
+          <CardTitle>{mode === "login" ? "Email sign-in" : "Create your account"}</CardTitle>
+          <CardDescription>
+            {mode === "login"
+              ? "Use your marketplace account on phone, tablet, or desktop without relying on wallet browser support."
+              : "Build a standard marketplace account with profile and location details so local inventory, follows, alerts, and garage activity have a real identity behind them."}
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex gap-2">
-            <Button type="button" variant={mode === "login" ? "default" : "outline"} onClick={() => setMode("login")} disabled={emailDisabled}>
+          <div className="grid grid-cols-2 gap-2">
+            <Button type="button" variant={mode === "login" ? "default" : "outline"} onClick={() => setModeWithQuery("login")} disabled={emailDisabled} className="w-full">
               Sign in
             </Button>
-            <Button type="button" variant={mode === "register" ? "default" : "outline"} onClick={() => setMode("register")} disabled={emailDisabled}>
+            <Button type="button" variant={mode === "register" ? "default" : "outline"} onClick={() => setModeWithQuery("register")} disabled={emailDisabled} className="w-full">
               Create account
             </Button>
           </div>
-          <div className="grid gap-4">
+          {mode === "register" ? (
+            <div className="rounded-2xl border border-slate-200 bg-white/80 px-4 py-3 text-sm text-slate-700">
+              This form is mobile-first: start with identity and location, then create the password that keeps your garage, follows, and alerts together across devices. Postal code is used to make local discovery and nearby inventory more useful.
+            </div>
+          ) : null}
+          <form className="grid gap-4" onSubmit={(event) => void handleEmailSubmit(event)}>
             {mode === "register" ? (
-              <div className="space-y-2">
-                <Label htmlFor="displayName">Display name</Label>
-                <Input id="displayName" value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder="MarketHub shopper" disabled={emailDisabled} />
-              </div>
+              <>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="fullName">Full name</Label>
+                    <Input id="fullName" autoComplete="name" enterKeyHint="next" value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Victor Adeyemi" disabled={emailDisabled} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="displayName">Display name</Label>
+                    <Input id="displayName" autoComplete="nickname" enterKeyHint="next" value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder="Victor's Garage" disabled={emailDisabled} />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="streetAddress1">Street address</Label>
+                  <Input id="streetAddress1" autoComplete="address-line1" enterKeyHint="next" value={streetAddress1} onChange={(e) => setStreetAddress1(e.target.value)} placeholder="123 Market Street" disabled={emailDisabled} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="streetAddress2">Address line 2</Label>
+                  <Input id="streetAddress2" autoComplete="address-line2" enterKeyHint="next" value={streetAddress2} onChange={(e) => setStreetAddress2(e.target.value)} placeholder="Suite, unit, or landmark (optional)" disabled={emailDisabled} />
+                </div>
+                <div className="grid gap-4 sm:grid-cols-3">
+                  <div className="space-y-2 sm:col-span-1">
+                    <Label htmlFor="city">City</Label>
+                    <Input id="city" autoComplete="address-level2" enterKeyHint="next" value={city} onChange={(e) => setCity(e.target.value)} placeholder="Lagos" disabled={emailDisabled} />
+                  </div>
+                  <div className="space-y-2 sm:col-span-1">
+                    <Label htmlFor="region">Region / State</Label>
+                    <Input id="region" autoComplete="address-level1" enterKeyHint="next" value={region} onChange={(e) => setRegion(e.target.value)} placeholder="Lagos State" disabled={emailDisabled} />
+                  </div>
+                  <div className="space-y-2 sm:col-span-1">
+                    <Label htmlFor="postalCode">Postal code</Label>
+                    <Input id="postalCode" autoComplete="postal-code" inputMode="numeric" enterKeyHint="next" value={postalCode} onChange={(e) => setPostalCode(e.target.value)} placeholder="100001" disabled={emailDisabled} />
+                  </div>
+                </div>
+              </>
             ) : null}
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
-              <Input id="email" type="email" placeholder="name@example.com" value={email} onChange={(e) => setEmail(e.target.value)} disabled={emailDisabled} />
+              <Input id="email" type="email" autoComplete="email" enterKeyHint="next" placeholder="name@example.com" value={email} onChange={(e) => setEmail(e.target.value)} disabled={emailDisabled} />
             </div>
             <div className="space-y-2">
               <Label htmlFor="password">Password</Label>
-              <Input id="password" type="password" placeholder={mode === "register" ? "Create a password" : "Enter your password"} value={password} onChange={(e) => setPassword(e.target.value)} disabled={emailDisabled} />
+              <Input id="password" type="password" autoComplete={mode === "register" ? "new-password" : "current-password"} enterKeyHint={mode === "register" ? "next" : "go"} placeholder={mode === "register" ? "Create a password" : "Enter your password"} value={password} onChange={(e) => setPassword(e.target.value)} disabled={emailDisabled} />
             </div>
+            {mode === "register" ? (
+              <div className="space-y-2">
+                <Label htmlFor="confirmPassword">Confirm password</Label>
+                <Input id="confirmPassword" type="password" autoComplete="new-password" enterKeyHint="go" placeholder="Confirm your password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} disabled={emailDisabled} />
+              </div>
+            ) : null}
+            {mode === "register" ? (
+              <div className="rounded-2xl border border-slate-200/80 bg-white/70 px-4 py-3 text-sm text-slate-700">
+                {passwordMismatch
+                  ? "Passwords do not match yet."
+                  : registrationMissingFields.length > 0
+                    ? `Complete these fields before creating the account: ${registrationMissingFields.join(", ")}.`
+                    : "Your profile and location details are ready to create the account."}
+              </div>
+            ) : null}
             <Button
-              type="button"
-              disabled={emailDisabled || !email.trim() || password.trim().length < 8}
-              onClick={() =>
-                void (mode === "login"
-                  ? auth.signInWithEmail({ email: email.trim(), password })
-                  : auth.registerWithEmail({ email: email.trim(), password, displayName: displayName.trim() || undefined }))
-              }
+              type="submit"
+              disabled={emailDisabled || !email.trim() || password.trim().length < 8 || (mode === "register" && !registrationReady)}
             >
               {mode === "login" ? "Sign in with email" : "Create email account"}
             </Button>
-          </div>
+          </form>
 
           <div className="space-y-2 text-sm text-slate-700">
-            <div>Email accounts now create a real backend session and keep homepage favorites, followed-seller ordering, and alerts tied to that account.</div>
+            <div>Email accounts now create a real backend session and keep homepage favorites, followed-seller ordering, alerts, and garage activity tied to that account.</div>
             <div>Wallet checkout and on-chain seller actions still require a connected wallet. This page keeps both paths available side by side.</div>
-            <div>Account recovery and wallet-linking can be added next without replacing this session model.</div>
+            <div>Profile editing, local discovery, and account tabs now use the same identity model instead of a separate onboarding placeholder.</div>
           </div>
 
           {auth.isAuthenticated ? (
@@ -116,6 +239,11 @@ export default function SignInPage() {
           ) : null}
 
           <div className="flex flex-wrap gap-3">
+            {auth.isAuthenticated ? (
+              <Button asChild>
+                <Link href="/dashboard">Continue to dashboard</Link>
+              </Button>
+            ) : null}
             <Button asChild variant="outline">
               <Link href="/marketplace">Back to marketplace</Link>
             </Button>

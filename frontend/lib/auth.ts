@@ -1,5 +1,6 @@
 export type UserProfile = {
   address: string;
+  fullName?: string | null;
   displayName?: string | null;
   bio?: string | null;
   avatarCid?: string | null;
@@ -7,6 +8,11 @@ export type UserProfile = {
   emailVerifiedAt?: number | null;
   authMethod?: "wallet" | "email";
   linkedWalletAddress?: string | null;
+  streetAddress1?: string | null;
+  streetAddress2?: string | null;
+  city?: string | null;
+  region?: string | null;
+  postalCode?: string | null;
   lastLoginAt?: number | null;
   createdAt: number;
   updatedAt: number;

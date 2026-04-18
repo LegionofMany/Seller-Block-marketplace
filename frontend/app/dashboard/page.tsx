@@ -2,10 +2,12 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { type Address, type Hex, isAddress, parseAbiItem, zeroAddress } from "viem";
 import { useAccount, usePublicClient, useReadContract, useWriteContract } from "wagmi";
 import { toast } from "sonner";
 
+import { ListingCard } from "@/components/listing/ListingCard";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -24,6 +26,7 @@ import { statusLabel } from "@/lib/contracts/types";
 import { shortenHex } from "@/lib/format";
 import { type UserProfile } from "@/lib/auth";
 import { buildListingHref } from "@/lib/listings";
+import { type ListingSummary } from "@/lib/hooks/useListings";
 
 const listingCreatedEvent = parseAbiItem(
   "event ListingCreated(bytes32 indexed id, address seller, uint8 saleType, address token, uint256 price, string metadataURI)"
@@ -55,6 +58,24 @@ type SavedSearchDraft = {
   name: string;
   email: string;
   filters: SavedSearchFilters;
+};
+
+type FavoriteListing = {
+  listingChainKey: string;
+  listingId: string;
+  createdAt: number;
+};
+
+type BackendListingRow = {
+  chainKey: string;
+  chainId: number;
+  id: string;
+  seller: string;
+  metadataURI: string;
+  price: string;
+  token: string;
+  saleType: number;
+  active: 0 | 1;
 };
 
 type NotificationItem = {
@@ -97,6 +118,8 @@ type PromotionDraft = {
   endsAt: string;
 };
 
+type AccountTab = "profile" | "follows" | "garage" | "dealer-garage";
+
 function formatFilters(filters: SavedSearchFilters) {
   return Object.entries(filters)
     .map(([key, value]) => `${key}: ${value}`)
@@ -117,6 +140,20 @@ function formatDateTimeInput(value: number) {
 function parseDateTimeInput(value: string) {
   const parsed = Date.parse(value);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function toListingSummary(row: BackendListingRow): ListingSummary {
+  return {
+    chainKey: row.chainKey,
+    chainId: row.chainId,
+    id: row.id as Hex,
+    seller: row.seller as Address,
+    saleType: row.saleType as 0 | 1 | 2,
+    token: row.token as Address,
+    price: BigInt(row.price),
+    metadataURI: row.metadataURI,
+    status: (row.active ? 1 : 2) as 1 | 2,
+  };
 }
 
 function emptyPromotionDraft(defaultChainKey: string): PromotionDraft {
@@ -190,10 +227,24 @@ export default function DashboardPage() {
   const publicClient = usePublicClient();
   const { writeContractAsync } = useWriteContract();
   const auth = useAuth();
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
 
+  const [accountTab, setAccountTab] = React.useState<AccountTab>("profile");
+  const [fullName, setFullName] = React.useState("");
   const [displayName, setDisplayName] = React.useState("");
   const [bio, setBio] = React.useState("");
   const [avatarCid, setAvatarCid] = React.useState("");
+  const [streetAddress1, setStreetAddress1] = React.useState("");
+  const [streetAddress2, setStreetAddress2] = React.useState("");
+  const [city, setCity] = React.useState("");
+  const [region, setRegion] = React.useState("");
+  const [postalCode, setPostalCode] = React.useState("");
+  const [followedSellers, setFollowedSellers] = React.useState<string[]>([]);
+  const [followedError, setFollowedError] = React.useState<string | null>(null);
+  const [favoriteListings, setFavoriteListings] = React.useState<ListingSummary[]>([]);
+  const [favoriteError, setFavoriteError] = React.useState<string | null>(null);
 
   const [token, setToken] = React.useState<string>("");
   const [vaultController, setVaultController] = React.useState<string>("");
@@ -243,10 +294,106 @@ export default function DashboardPage() {
   }
 
   React.useEffect(() => {
+    setFullName(auth.user?.fullName ?? "");
     setDisplayName(auth.user?.displayName ?? "");
     setBio(auth.user?.bio ?? "");
     setAvatarCid(auth.user?.avatarCid ?? "");
+    setStreetAddress1(auth.user?.streetAddress1 ?? "");
+    setStreetAddress2(auth.user?.streetAddress2 ?? "");
+    setCity(auth.user?.city ?? "");
+    setRegion(auth.user?.region ?? "");
+    setPostalCode(auth.user?.postalCode ?? "");
   }, [auth.user]);
+
+  React.useEffect(() => {
+    const requestedTab = searchParams.get("tab");
+    const nextTab: AccountTab = requestedTab === "follows" || requestedTab === "garage" || requestedTab === "dealer-garage" ? requestedTab : "profile";
+    setAccountTab((current) => (current === nextTab ? current : nextTab));
+  }, [searchParams]);
+
+  const selectAccountTab = React.useCallback(
+    (nextTab: AccountTab) => {
+      setAccountTab(nextTab);
+      const params = new URLSearchParams(searchParams.toString());
+      if (nextTab === "profile") {
+        params.delete("tab");
+      } else {
+        params.set("tab", nextTab);
+      }
+      const query = params.toString();
+      router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+    },
+    [pathname, router, searchParams]
+  );
+
+  React.useEffect(() => {
+    let cancelled = false;
+
+    async function run() {
+      if (!auth.isAuthenticated) {
+        setFollowedSellers([]);
+        setFollowedError(null);
+        return;
+      }
+
+      try {
+        const res = await fetchJson<{ items: string[] }>("/users/me/follows", { timeoutMs: 5_000 });
+        if (!cancelled) {
+          setFollowedSellers((res.items ?? []).map((item) => String(item).toLowerCase()));
+          setFollowedError(null);
+        }
+      } catch (e: any) {
+        if (!cancelled) {
+          setFollowedSellers([]);
+          setFollowedError(e?.message ?? "Could not load followed sellers");
+        }
+      }
+    }
+
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [auth.isAuthenticated]);
+
+  React.useEffect(() => {
+    let cancelled = false;
+
+    async function run() {
+      if (!auth.isAuthenticated) {
+        setFavoriteListings([]);
+        setFavoriteError(null);
+        return;
+      }
+
+      try {
+        const favorites = await fetchJson<{ items: FavoriteListing[] }>("/favorites/listings", { timeoutMs: 5_000 });
+        const uniqueKeys = Array.from(new Set((favorites.items ?? []).map((item) => `${item.listingChainKey}:${item.listingId}`))).slice(0, 12);
+        const listingResponses = await Promise.all(
+          uniqueKeys.map(async (key) => {
+            const [chainKey, listingId] = key.split(":");
+            const detail = await fetchJson<{ listing: BackendListingRow }>(`/listings/${listingId}?chain=${encodeURIComponent(chainKey)}`, { timeoutMs: 5_000 });
+            return toListingSummary(detail.listing);
+          })
+        );
+
+        if (!cancelled) {
+          setFavoriteListings(listingResponses);
+          setFavoriteError(null);
+        }
+      } catch (e: any) {
+        if (!cancelled) {
+          setFavoriteListings([]);
+          setFavoriteError(e?.message ?? "Could not load favorite listings");
+        }
+      }
+    }
+
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [auth.isAuthenticated]);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -317,6 +464,18 @@ export default function DashboardPage() {
     if (!savedSearchDraft?.filters.category) return [];
     return subcategoriesFor(savedSearchDraft.filters.category);
   }, [savedSearchDraft?.filters.category]);
+
+  const accountTabs = React.useMemo(
+    () => [
+      { key: "profile" as const, label: "Profile", description: "Identity, address, and account settings", count: auth.user?.postalCode?.trim() ? auth.user.postalCode.trim() : auth.user?.email?.trim() || "Setup" },
+      { key: "follows" as const, label: "Follows", description: "Seller profiles you want to revisit", count: String(followedSellers.length) },
+      { key: "garage" as const, label: "Garage", description: "Favorite listings saved for later", count: String(favoriteListings.length) },
+      { key: "dealer-garage" as const, label: "Dealer Garage", description: "Listings connected to your seller wallet", count: Array.isArray(myListingIds) ? String(myListingIds.length) : "-" },
+    ],
+    [auth.user?.email, auth.user?.postalCode, favoriteListings.length, followedSellers.length, myListingIds]
+  );
+
+  const activeTabMeta = accountTabs.find((tab) => tab.key === accountTab) ?? accountTabs[0];
 
   const { data: lastListingId } = useReadContract({
     address: env.marketplaceRegistryAddress,
@@ -498,94 +657,190 @@ export default function DashboardPage() {
           <div className="space-y-4">
             <div className="market-section-title">Your account</div>
             <div className="space-y-2">
-              <h1 className="text-2xl font-semibold tracking-tight text-slate-950 sm:text-4xl">Run your seller profile like a marketplace storefront.</h1>
-              <p className="max-w-2xl text-[13px] leading-6 text-muted-foreground sm:text-base">Profile, saved searches, alerts, and current listings stay in the main flow. Wallet and owner utilities are still available, but pushed into an advanced area so the dashboard reads like a classifieds account center.</p>
+              <h1 className="text-2xl font-semibold tracking-tight text-slate-950 sm:text-4xl">Run your account like a local marketplace hub.</h1>
+              <p className="max-w-2xl text-[13px] leading-6 text-muted-foreground sm:text-base">Profile, follows, saved garage items, and dealer inventory now sit behind a clearer account shell. Wallet and owner utilities still exist, but they no longer compete with the main account flow.</p>
             </div>
           </div>
 
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-3">
             <div className="market-stat">
-              <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Saved searches</div>
-              <div className="mt-2 text-2xl font-semibold">{savedSearches.length}</div>
+              <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Follows</div>
+              <div className="mt-2 text-2xl font-semibold">{followedSellers.length}</div>
+            </div>
+            <div className="market-stat">
+              <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Garage saves</div>
+              <div className="mt-2 text-2xl font-semibold">{favoriteListings.length}</div>
             </div>
             <div className="market-stat">
               <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Unread alerts</div>
               <div className="mt-2 text-2xl font-semibold">{notificationUnreadCount}</div>
             </div>
-            <div className="market-stat col-span-2">
-              <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Listings in view</div>
+            <div className="market-stat">
+              <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Dealer garage</div>
               <div className="mt-2 text-2xl font-semibold">{Array.isArray(myListingIds) ? myListingIds.length : "—"}</div>
-              <div className="mt-1 text-sm text-muted-foreground">Recent marketplace activity tied to your wallet.</div>
+              <div className="mt-1 text-sm text-muted-foreground">Listings tied to your current seller wallet.</div>
             </div>
           </div>
         </div>
       </section>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px] xl:gap-6">
-        <div className="space-y-4 sm:space-y-6">
+      <div className="market-tab-strip -mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0" role="tablist" aria-label="Account sections">
+        {accountTabs.map((tab) => (
+          <button
+            key={tab.key}
+            type="button"
+            role="tab"
+            aria-selected={accountTab === tab.key}
+            className={accountTab === tab.key ? "market-tab-button market-tab-button-active" : "market-tab-button"}
+            onClick={() => selectAccountTab(tab.key)}
+          >
+            <span className="text-sm font-semibold text-slate-950">{tab.label}</span>
+            <span className="mt-1 text-xs text-muted-foreground">{tab.description}</span>
+            <span className="mt-3 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">{tab.count}</span>
+          </button>
+        ))}
+      </div>
 
-      <Card className="market-panel">
-        <CardHeader>
-          <div className="market-section-title">Public profile</div>
-          <CardTitle>Profile</CardTitle>
-          <CardDescription>Sign in with your wallet to edit the public profile shown on your seller page.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4 p-4 pt-0 sm:p-6 sm:pt-0">
-          {!auth.isAuthenticated ? (
-            <div className="space-y-3 text-sm">
-              <div className="text-muted-foreground">Connect your wallet and complete wallet sign-in to edit your profile.</div>
-              {address ? (
-                <Button type="button" variant="outline" size="lg" className="w-full sm:w-auto" disabled={auth.isLoading} onClick={() => void auth.signIn()}>
-                  Sign in
-                </Button>
-              ) : null}
-            </div>
-          ) : (
-            <div className="grid gap-4">
-              <div className="space-y-2">
-                <Label>Display name</Label>
-                <Input value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder="e.g. Victor's Store" />
-              </div>
-              <div className="space-y-2">
-                <Label>Bio</Label>
-                <Textarea value={bio} onChange={(e) => setBio(e.target.value)} placeholder="Tell buyers what you sell and how to reach you." />
-              </div>
-              <div className="space-y-2">
-                <Label>Avatar URI (optional)</Label>
-                <Input value={avatarCid} onChange={(e) => setAvatarCid(e.target.value)} placeholder="ipfs://... or https://..." />
-              </div>
-              <Button
-                type="button"
-                size="lg"
-                className="w-full sm:w-auto"
-                disabled={auth.isLoading}
-                onClick={async () => {
-                  try {
-                    const res = await fetchJson<{ user: UserProfile }>("/users/me", {
-                      method: "PUT",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({
-                        displayName,
-                        bio,
-                        avatarCid,
-                      }),
-                    });
-                    auth.setUser(res.user);
-                    await auth.refresh();
-                    toast.success("Profile updated");
-                  } catch (e: any) {
-                    toast.error(e?.message ?? "Failed to update profile");
-                  }
-                }}
-              >
-                Save profile
+      <Card className="market-panel border-slate-200/80 bg-white/78">
+        <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
+          <div>
+            <div className="market-section-title">{activeTabMeta.label}</div>
+            <div className="mt-1 text-sm text-muted-foreground">{activeTabMeta.description}</div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {accountTab === "garage" ? (
+              <Button asChild variant="outline" size="sm">
+                <Link href="/marketplace">Browse listings</Link>
               </Button>
-            </div>
-          )}
+            ) : null}
+            {accountTab === "follows" ? (
+              <Button asChild variant="outline" size="sm">
+                <Link href="/marketplace">Find sellers</Link>
+              </Button>
+            ) : null}
+            {accountTab === "dealer-garage" ? (
+              <Button asChild variant="outline" size="sm">
+                <Link href="/create">Create listing</Link>
+              </Button>
+            ) : null}
+          </div>
         </CardContent>
       </Card>
 
-      {auth.isAdmin ? (
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px] xl:gap-6">
+        <div className="space-y-4 sm:space-y-6">
+          {accountTab === "profile" ? (
+            <>
+              <Card className="market-panel">
+                <CardHeader>
+                  <div className="market-section-title">Public profile</div>
+                  <CardTitle>Profile</CardTitle>
+                  <CardDescription>Update the account identity buyers, alerts, and local discovery use across your marketplace session.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4 p-4 pt-0 sm:p-6 sm:pt-0">
+                  {!auth.isAuthenticated ? (
+                    <div className="space-y-3 text-sm">
+                      <div className="text-muted-foreground">Sign in with email or wallet to edit your profile and location settings.</div>
+                      {address && !auth.isAuthenticated ? (
+                        <Button type="button" variant="outline" size="lg" className="w-full sm:w-auto" disabled={auth.isLoading} onClick={() => void auth.signIn()}>
+                          Sign in with wallet
+                        </Button>
+                      ) : null}
+                      <Button asChild type="button" variant="outline" size="lg" className="w-full sm:w-auto">
+                        <Link href="/sign-in">Open sign-in</Link>
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="grid gap-4">
+                      <div className="flex flex-wrap gap-2 text-xs">
+                        {auth.user?.email?.trim() ? <span className="market-chip">Email account</span> : null}
+                        {auth.user?.postalCode?.trim() ? <span className="market-chip">Local zone {auth.user.postalCode.trim()}</span> : null}
+                        {address ? <span className="market-chip">Wallet {shortenHex(address)}</span> : null}
+                      </div>
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <div className="space-y-2">
+                          <Label>Full name</Label>
+                          <Input value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Victor Adeyemi" />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Display name</Label>
+                          <Input value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder="e.g. Victor's Store" />
+                        </div>
+                      </div>
+                      {auth.user?.email ? (
+                        <div className="space-y-2">
+                          <Label>Email</Label>
+                          <Input value={auth.user.email} disabled />
+                        </div>
+                      ) : null}
+                      <div className="space-y-2">
+                        <Label>Street address</Label>
+                        <Input value={streetAddress1} onChange={(e) => setStreetAddress1(e.target.value)} placeholder="123 Market Street" />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Address line 2</Label>
+                        <Input value={streetAddress2} onChange={(e) => setStreetAddress2(e.target.value)} placeholder="Suite, unit, or landmark" />
+                      </div>
+                      <div className="grid gap-4 sm:grid-cols-3">
+                        <div className="space-y-2">
+                          <Label>City</Label>
+                          <Input value={city} onChange={(e) => setCity(e.target.value)} placeholder="Lagos" />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Region / State</Label>
+                          <Input value={region} onChange={(e) => setRegion(e.target.value)} placeholder="Lagos State" />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Postal code</Label>
+                          <Input value={postalCode} onChange={(e) => setPostalCode(e.target.value)} placeholder="100001" />
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Bio</Label>
+                        <Textarea value={bio} onChange={(e) => setBio(e.target.value)} placeholder="Tell buyers what you sell and how to reach you." />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Avatar URI (optional)</Label>
+                        <Input value={avatarCid} onChange={(e) => setAvatarCid(e.target.value)} placeholder="ipfs://... or https://..." />
+                      </div>
+                      <Button
+                        type="button"
+                        size="lg"
+                        className="w-full sm:w-auto"
+                        disabled={auth.isLoading}
+                        onClick={async () => {
+                          try {
+                            const res = await fetchJson<{ user: UserProfile }>("/users/me", {
+                              method: "PUT",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({
+                                fullName,
+                                displayName,
+                                streetAddress1,
+                                streetAddress2,
+                                city,
+                                region,
+                                postalCode,
+                                bio,
+                                avatarCid,
+                              }),
+                            });
+                            auth.setUser(res.user);
+                            await auth.refresh();
+                            toast.success("Profile updated");
+                          } catch (e: any) {
+                            toast.error(e?.message ?? "Failed to update profile");
+                          }
+                        }}
+                      >
+                        Save profile
+                      </Button>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {auth.isAdmin ? (
         <Card className="market-panel border-amber-300/60 bg-[linear-gradient(180deg,rgba(255,252,244,0.92),rgba(255,255,255,0.98))]">
           <CardHeader>
             <div className="market-section-title">MarketHub admin</div>
@@ -886,9 +1141,9 @@ export default function DashboardPage() {
             </div>
           </CardContent>
         </Card>
-      ) : null}
+              ) : null}
 
-      <Card className="market-panel">
+              <Card className="market-panel">
         <CardHeader>
           <div className="market-section-title">Discovery</div>
           <CardTitle>Saved searches</CardTitle>
@@ -1125,7 +1380,7 @@ export default function DashboardPage() {
         </CardContent>
       </Card>
 
-      <Card id="notifications" className="market-panel">
+              <Card id="notifications" className="market-panel">
         <CardHeader>
           <div className="market-section-title">Alerts</div>
           <CardTitle>Notifications</CardTitle>
@@ -1197,11 +1452,89 @@ export default function DashboardPage() {
         </CardContent>
       </Card>
 
-      <Card className="market-panel">
+            </>
+          ) : null}
+
+          {accountTab === "follows" ? (
+            <Card className="market-panel">
+              <CardHeader>
+                <div className="market-section-title">Network</div>
+                <CardTitle>Follows</CardTitle>
+                <CardDescription>People and seller pages you chose to keep in your repeat-buying circle.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3 p-4 pt-0 sm:p-6 sm:pt-0">
+                {!auth.isAuthenticated ? (
+                  <div className="space-y-3 text-sm text-muted-foreground">
+                    <div>Sign in to manage the seller profiles you follow.</div>
+                    <Button asChild variant="outline" size="sm">
+                      <Link href="/sign-in">Sign in</Link>
+                    </Button>
+                  </div>
+                ) : followedError ? (
+                  <div className="text-sm text-muted-foreground">{followedError}</div>
+                ) : followedSellers.length === 0 ? (
+                  <div className="space-y-3 text-sm text-muted-foreground">
+                    <div>You are not following any sellers yet.</div>
+                    <Button asChild variant="outline" size="sm">
+                      <Link href="/marketplace">Browse marketplace</Link>
+                    </Button>
+                  </div>
+                ) : (
+                  followedSellers.map((sellerAddress) => (
+                    <Link key={sellerAddress} href={`/seller/${sellerAddress}`} className="flex items-center justify-between rounded-2xl border px-4 py-3 text-sm transition-colors hover:bg-accent/30">
+                      <div>
+                        <div className="font-medium">Seller profile</div>
+                        <div className="text-xs text-muted-foreground">{sellerAddress}</div>
+                      </div>
+                      <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Open</div>
+                    </Link>
+                  ))
+                )}
+              </CardContent>
+            </Card>
+          ) : null}
+
+          {accountTab === "garage" ? (
+            <Card className="market-panel">
+              <CardHeader>
+                <div className="market-section-title">Saved inventory</div>
+                <CardTitle>Garage</CardTitle>
+                <CardDescription>Listings you saved for later comparison, follow-up, or local pickup planning.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3 p-4 pt-0 sm:p-6 sm:pt-0">
+                {!auth.isAuthenticated ? (
+                  <div className="space-y-3 text-sm text-muted-foreground">
+                    <div>Sign in to keep favorite listings in your garage.</div>
+                    <Button asChild variant="outline" size="sm">
+                      <Link href="/sign-in?mode=register">Create account</Link>
+                    </Button>
+                  </div>
+                ) : favoriteError ? (
+                  <div className="text-sm text-muted-foreground">{favoriteError}</div>
+                ) : favoriteListings.length === 0 ? (
+                  <div className="space-y-3 text-sm text-muted-foreground">
+                    <div>Your garage is empty. Save a listing from any detail page to see it here.</div>
+                    <Button asChild variant="outline" size="sm">
+                      <Link href="/marketplace">Browse listings</Link>
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                    {favoriteListings.map((listing) => (
+                      <ListingCard key={`${listing.chainKey}-${listing.id}`} row={listing} />
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          ) : null}
+
+          {accountTab === "dealer-garage" ? (
+            <Card className="market-panel">
         <CardHeader>
           <div className="market-section-title">Listings</div>
-          <CardTitle>My listings</CardTitle>
-          <CardDescription>Listings you created, surfaced in a simple buyer/seller view.</CardDescription>
+          <CardTitle>Dealer Garage</CardTitle>
+          <CardDescription>Listings you created, surfaced in a simple buyer and seller inventory view.</CardDescription>
         </CardHeader>
         <CardContent className="p-4 pt-0 sm:p-6 sm:pt-0">
           {myListingIds === null || myListings === null ? (
@@ -1211,7 +1544,12 @@ export default function DashboardPage() {
               <Skeleton className="h-4 w-72" />
             </div>
           ) : myListingIds.length === 0 ? (
-            <div className="text-sm text-muted-foreground">No listings found.</div>
+            <div className="space-y-3 text-sm text-muted-foreground">
+              <div>No listings found.</div>
+              <Button asChild variant="outline" size="sm">
+                <Link href="/create">Create your first listing</Link>
+              </Button>
+            </div>
           ) : (
             <div className="space-y-2">
               {(myListings ?? []).map((row) => (
@@ -1229,6 +1567,7 @@ export default function DashboardPage() {
           )}
         </CardContent>
       </Card>
+          ) : null}
         </div>
 
         <aside className="space-y-3 sm:space-y-4">

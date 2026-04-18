@@ -1,0 +1,8 @@
+ALTER TABLE users ADD COLUMN IF NOT EXISTS fullname TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS streetaddress1 TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS streetaddress2 TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS city TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS region TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS postalcode TEXT;
+
+CREATE INDEX IF NOT EXISTS idx_users_postalcode_updatedat ON users(postalcode, updatedat DESC);
