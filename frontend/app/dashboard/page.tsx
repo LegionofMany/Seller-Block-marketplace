@@ -701,6 +701,10 @@ export default function DashboardPage() {
         ))}
       </div>
 
+      <div className="market-tab-affordance sm:hidden" aria-hidden="true">
+        Swipe to see Garage and Dealer Garage.
+      </div>
+
       <Card className="market-panel border-slate-200/80 bg-white/78">
         <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
           <div>
@@ -1570,7 +1574,7 @@ export default function DashboardPage() {
           ) : null}
         </div>
 
-        <aside className="space-y-3 sm:space-y-4">
+        <aside className={auth.isAuthenticated ? "space-y-3 sm:space-y-4" : "hidden xl:block xl:space-y-4"}>
       <Card className="market-panel">
         <CardHeader>
           <div className="market-section-title">Scope</div>
