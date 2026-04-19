@@ -78,14 +78,14 @@ export function Web3Providers({ children }: { children: React.ReactNode }) {
         connectors,
         transports: Object.fromEntries(
           env.chains.map((chain) => {
-            const primary = chain.rpcFallbackUrl ?? chain.rpcUrl;
-            const secondary = chain.rpcFallbackUrl ? chain.rpcUrl : chain.rpcUrl;
+            const primary = chain.rpcUrl;
+            const secondary = chain.rpcFallbackUrl;
             return [
               chain.chainId,
               fallback(
                 [
                   http(primary, { timeout: 15_000, retryCount: 0 }),
-                  http(secondary, { timeout: 15_000, retryCount: 0 }),
+                  ...(secondary ? [http(secondary, { timeout: 15_000, retryCount: 0 })] : []),
                 ],
                 { rank: false }
               ),
