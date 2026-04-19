@@ -82,6 +82,15 @@ export function getRenderableListingImage(image: string | null | undefined): str
   return normalized;
 }
 
+export function hasCompleteMarketplaceMetadata(metadata: MarketplaceMetadata | null | undefined): boolean {
+  if (!metadata) return false;
+  const title = metadata.title?.trim();
+  const description = metadata.description?.trim();
+  const images = Array.isArray(metadata.images) && metadata.images.length ? metadata.images : metadata.image ? [metadata.image] : [];
+  const hasRealImage = images.some((item) => getRenderableListingImage(item) !== LISTING_FALLBACK_IMAGE);
+  return Boolean(title && description && hasRealImage);
+}
+
 export function metadataIdFromUri(uri: string): string | null {
   const trimmed = (uri ?? "").trim();
   const m = /^metadata:\/\/sha256\/([0-9a-fA-F]{64})$/.exec(trimmed);

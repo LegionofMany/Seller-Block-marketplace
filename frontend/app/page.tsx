@@ -50,10 +50,10 @@ function toListingSummary(row: BackendListingRow): ListingSummary {
   };
 }
 
-const marketHubRules = [
+const spotlightRules = [
   {
-    title: "Paid subscription placement",
-    detail: "Homepage spotlight inventory is reserved for sellers who pay for a MarketHub placement or partner campaign.",
+    title: "Curated spotlight placements",
+    detail: "Homepage spotlight inventory is scheduled by admins and partner campaigns, separate from the open marketplace feed.",
   },
   {
     title: "Profile favorites",
@@ -66,7 +66,7 @@ const marketHubRules = [
 ];
 
 const ecosystemSignals = [
-  "MarketHub is the paid banner and advertising layer for promoted listings.",
+  "Homepage spotlight is a curated placement layer for featured listings and partner campaigns.",
   "BlockPages increases seller verification, social trust, and partner visibility.",
   "Trusted seller badges and response signals will sit beside profile reputation, not inside random listing tiles.",
 ];
@@ -182,7 +182,7 @@ export default function HomePage() {
       } catch (e: any) {
         if (!cancelled) {
           setSponsoredListings([]);
-          setSponsoredError(e?.message ?? "Could not load sponsored placements");
+          setSponsoredError(e?.message ?? "Could not load spotlight placements");
         }
       }
     }
@@ -214,7 +214,7 @@ export default function HomePage() {
             <div className="market-section-title">Zonycs marketplace</div>
             <div className="space-y-3">
               <h1 className="max-w-3xl text-3xl font-semibold tracking-tight text-slate-950 sm:text-5xl">
-                Local classifieds first, trust and promotion layered in through MarketHub.
+                Local classifieds first, trust and curated spotlight layered in with discipline.
               </h1>
               <p className="max-w-2xl text-sm leading-7 text-slate-700 sm:text-base">
                 The landing page now behaves like a consumer marketplace entry point instead of a protocol dashboard. Buyers land on curated inventory, seller trust signals, and a clear path into the live marketplace.
@@ -234,7 +234,7 @@ export default function HomePage() {
             <div className="flex flex-wrap gap-2">
               <div className="market-chip border-amber-200/80 bg-white/95 text-slate-900 shadow-sm">Desktop-first for power sellers</div>
               <div className="market-chip border-amber-200/80 bg-white/95 text-slate-900 shadow-sm">Tablet/mobile support for camera uploads</div>
-              <div className="market-chip border-amber-200/80 bg-white/95 text-slate-900 shadow-sm">Wallet checkout stays available when needed</div>
+              <div className="market-chip border-amber-200/80 bg-white/95 text-slate-900 shadow-sm">Wallet settlement stays available when needed</div>
             </div>
           </div>
 
@@ -243,12 +243,12 @@ export default function HomePage() {
               <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Front-page rules</div>
               <div className="mt-2 text-xl font-semibold text-slate-950">Homepage placements are curated, not open feed inventory.</div>
               <div className="mt-2 text-sm text-slate-700">
-                The marketplace feed lives under Browse. The landing page is reserved for paid placements, favorite-driven visibility, and followed-profile discovery.
+                The marketplace feed lives under Browse. The landing page is reserved for curated spotlight inventory, favorite-driven visibility, and followed-profile discovery.
               </div>
             </div>
             <div className="market-note text-sm">
               {auth.isAuthenticated
-                ? "Signed-in members now get followed-seller inventory first. Favorites and sponsored placement slots are staged directly underneath it."
+                ? "Signed-in members now get followed-seller inventory first. Favorites and curated spotlight slots are staged directly underneath it."
                 : "Sign-in and personalized landing inventory expand here, but raw browsing remains available now through the marketplace route."}
             </div>
           </div>
@@ -309,19 +309,19 @@ export default function HomePage() {
 
           <Card className="market-panel">
             <CardHeader>
-              <CardTitle>Sponsored placements</CardTitle>
-              <CardDescription>Paid MarketHub placements remain a dedicated layer after followed sellers and favorites.</CardDescription>
+              <CardTitle>Homepage spotlight</CardTitle>
+              <CardDescription>Curated placements remain a dedicated layer after followed sellers and favorites.</CardDescription>
             </CardHeader>
             <CardContent>
               {sponsoredError ? <div className="market-note text-sm">{sponsoredError}</div> : null}
               {sponsoredListings.length === 0 ? (
-                <div className="market-note text-sm">No sponsored placements are active right now. MarketHub inventory will appear here as soon as an admin activates a campaign window.</div>
+                <div className="market-note text-sm">No spotlight placements are active right now. Featured inventory will appear here as soon as an admin activates a campaign window.</div>
               ) : (
                 <div className="grid gap-4">
                   {sponsoredListings.map((item) => (
                     <div key={`${item.listing.chainKey}-${item.listing.id}`} className="space-y-2">
                       <div className="flex flex-wrap items-center gap-2 text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                        <span>{item.sponsorLabel || "MarketHub placement"}</span>
+                        <span>{item.sponsorLabel || "Spotlight placement"}</span>
                         {item.campaignName ? <span>{item.campaignName}</span> : null}
                       </div>
                       <ListingCard row={item.listing} />
@@ -337,11 +337,11 @@ export default function HomePage() {
       <section className="grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
         <Card className="market-panel">
           <CardHeader>
-            <CardTitle>MarketHub spotlight policy</CardTitle>
+            <CardTitle>Homepage spotlight policy</CardTitle>
             <CardDescription>Only curated placement categories belong on the landing page.</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-3 sm:grid-cols-3">
-            {marketHubRules.map((rule) => (
+            {spotlightRules.map((rule) => (
               <div key={rule.title} className="market-stat h-full bg-white/85">
                 <div className="text-sm font-semibold text-slate-950">{rule.title}</div>
                 <div className="mt-2 text-sm leading-6 text-slate-700">{rule.detail}</div>

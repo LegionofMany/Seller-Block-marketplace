@@ -31,7 +31,7 @@ export const metadata: Metadata = {
   category: "marketplace",
   openGraph: {
     title: "Seller Block Marketplace",
-    description: "Marketplace discovery with seller trust layers, wallet-based checkout, and public listing activity.",
+    description: "Marketplace discovery with seller trust layers, wallet-connected settlement, and public listing activity.",
     url: "/",
     siteName: "Seller Block Marketplace",
     type: "website",
@@ -39,7 +39,7 @@ export const metadata: Metadata = {
   twitter: {
     card: "summary_large_image",
     title: "Seller Block Marketplace",
-    description: "Marketplace discovery with seller trust layers, wallet-based checkout, and public listing activity.",
+    description: "Marketplace discovery with seller trust layers, wallet-connected settlement, and public listing activity.",
   },
   verification: googleSiteVerification
     ? {
@@ -66,7 +66,7 @@ export default function RootLayout({
                 <footer className="border-t border-border/70 bg-background/70 backdrop-blur">
                   <div className="mx-auto flex w-full max-w-screen-xl flex-col gap-2 px-4 py-6 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
                     <div>Seller Block Marketplace</div>
-                    <div>Classifieds-first discovery, public threads, wallet-based checkout.</div>
+                    <div>Classifieds-first discovery, public threads, wallet-connected settlement.</div>
                     <div className="flex flex-wrap items-center gap-3">
                       <a href={githubRepoUrl} target="_blank" rel="noreferrer" className="hover:text-foreground">
                         GitHub

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { type Address, type Hex, isAddress, parseAbiItem, zeroAddress } from "viem";
 import { useAccount, usePublicClient, useReadContract, useWriteContract } from "wagmi";
+import { useSignMessage } from "wagmi";
 import { toast } from "sonner";
 
 import { ListingCard } from "@/components/listing/ListingCard";
@@ -226,6 +227,7 @@ export default function DashboardPage() {
   const { address } = useAccount();
   const publicClient = usePublicClient();
   const { writeContractAsync } = useWriteContract();
+  const { signMessageAsync } = useSignMessage();
   const auth = useAuth();
   const router = useRouter();
   const pathname = usePathname();
@@ -241,6 +243,7 @@ export default function DashboardPage() {
   const [city, setCity] = React.useState("");
   const [region, setRegion] = React.useState("");
   const [postalCode, setPostalCode] = React.useState("");
+  const [isLinkingWallet, setIsLinkingWallet] = React.useState(false);
   const [followedSellers, setFollowedSellers] = React.useState<string[]>([]);
   const [followedError, setFollowedError] = React.useState<string | null>(null);
   const [favoriteListings, setFavoriteListings] = React.useState<ListingSummary[]>([]);
@@ -447,7 +450,7 @@ export default function DashboardPage() {
         setPromotionDraft((current) => current ?? emptyPromotionDraft(env.defaultChain.key));
       } catch (e: any) {
         if (!cancelled) {
-          toast.error(e?.message ?? "Failed to load MarketHub placements");
+          toast.error(e?.message ?? "Failed to load spotlight placements");
         }
       } finally {
         if (!cancelled) setIsLoadingPromotions(false);
@@ -760,7 +763,86 @@ export default function DashboardPage() {
                         {auth.user?.email?.trim() ? <span className="market-chip">Email account</span> : null}
                         {auth.user?.postalCode?.trim() ? <span className="market-chip">Local zone {auth.user.postalCode.trim()}</span> : null}
                         {address ? <span className="market-chip">Wallet {shortenHex(address)}</span> : null}
+                        {auth.user?.linkedWalletAddress ? <span className="market-chip">Linked wallet {shortenHex(auth.user.linkedWalletAddress)}</span> : null}
                       </div>
+                      {auth.user?.authMethod === "email" ? (
+                        <div className="rounded-2xl border border-slate-200/80 bg-slate-50/90 p-4">
+                          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                            <div className="space-y-1">
+                              <div className="text-sm font-semibold text-slate-950">Wallet link</div>
+                              <div className="text-sm text-muted-foreground">
+                                Link a wallet to this email account for seller actions and chain settlement while keeping subscription billing separate from the product.
+                              </div>
+                              <div className="text-xs text-muted-foreground">
+                                {auth.user?.linkedWalletAddress
+                                  ? `Linked wallet: ${auth.user.linkedWalletAddress}`
+                                  : address
+                                    ? `Connected wallet ready to link: ${address}`
+                                    : "Connect the wallet you want to use for seller actions, then link it here."}
+                              </div>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                disabled={isLinkingWallet || !address || auth.user?.linkedWalletAddress?.toLowerCase() === address.toLowerCase()}
+                                onClick={async () => {
+                                  if (!address) {
+                                    toast.error("Connect a wallet first");
+                                    return;
+                                  }
+
+                                  try {
+                                    setIsLinkingWallet(true);
+                                    const nonce = await fetchJson<{ walletAddress: string; nonce: string; message: string }>("/auth/link-wallet/nonce", {
+                                      method: "POST",
+                                      headers: { "Content-Type": "application/json" },
+                                      body: JSON.stringify({ walletAddress: address }),
+                                    });
+                                    const signature = await signMessageAsync({ message: nonce.message });
+                                    const res = await fetchJson<{ user: UserProfile }>("/auth/link-wallet/verify", {
+                                      method: "POST",
+                                      headers: { "Content-Type": "application/json" },
+                                      body: JSON.stringify({ walletAddress: address, nonce: nonce.nonce, signature }),
+                                    });
+                                    auth.setUser(res.user);
+                                    await auth.refresh();
+                                    toast.success("Wallet linked");
+                                  } catch (e: any) {
+                                    toast.error(e?.message ?? "Failed to link wallet");
+                                  } finally {
+                                    setIsLinkingWallet(false);
+                                  }
+                                }}
+                              >
+                                {auth.user?.linkedWalletAddress?.toLowerCase() === address?.toLowerCase() ? "Wallet linked" : isLinkingWallet ? "Linking..." : "Link connected wallet"}
+                              </Button>
+                              {auth.user?.linkedWalletAddress ? (
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  disabled={isLinkingWallet}
+                                  onClick={async () => {
+                                    try {
+                                      setIsLinkingWallet(true);
+                                      const res = await fetchJson<{ user: UserProfile }>("/auth/link-wallet/unlink", { method: "POST" });
+                                      auth.setUser(res.user);
+                                      await auth.refresh();
+                                      toast.success("Wallet unlinked");
+                                    } catch (e: any) {
+                                      toast.error(e?.message ?? "Failed to unlink wallet");
+                                    } finally {
+                                      setIsLinkingWallet(false);
+                                    }
+                                  }}
+                                >
+                                  Unlink wallet
+                                </Button>
+                              ) : null}
+                            </div>
+                          </div>
+                        </div>
+                      ) : null}
                       <div className="grid gap-4 sm:grid-cols-2">
                         <div className="space-y-2">
                           <Label>Full name</Label>
@@ -847,9 +929,9 @@ export default function DashboardPage() {
               {auth.isAdmin ? (
         <Card className="market-panel border-amber-300/60 bg-[linear-gradient(180deg,rgba(255,252,244,0.92),rgba(255,255,255,0.98))]">
           <CardHeader>
-            <div className="market-section-title">MarketHub admin</div>
-            <CardTitle>Sponsored homepage placements</CardTitle>
-            <CardDescription>Manage the inventory that appears in the sponsored layer on the landing page. Changes here write directly to the backend placement model.</CardDescription>
+            <div className="market-section-title">Homepage admin</div>
+            <CardTitle>Spotlight placements</CardTitle>
+            <CardDescription>Manage the curated inventory that appears in the spotlight layer on the landing page. Changes here write directly to the backend placement model.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-5 p-4 pt-0 sm:p-6 sm:pt-0">
             <div className="grid gap-3 sm:grid-cols-3">
@@ -872,7 +954,7 @@ export default function DashboardPage() {
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <div className="text-sm font-semibold">Current placement inventory</div>
-                    <div className="text-sm text-muted-foreground">Review priority, timing, and sponsorship labels before they surface on the landing page.</div>
+                    <div className="text-sm text-muted-foreground">Review priority, timing, and labels before they surface on the landing page.</div>
                   </div>
                   <Button
                     type="button"
@@ -893,7 +975,7 @@ export default function DashboardPage() {
                     <Skeleton className="h-16 w-full" />
                   </div>
                 ) : promotions.length === 0 ? (
-                  <div className="rounded-2xl border border-dashed bg-white/70 p-4 text-sm text-muted-foreground">No sponsored placements exist yet. Create the first campaign from the form on the right.</div>
+                  <div className="rounded-2xl border border-dashed bg-white/70 p-4 text-sm text-muted-foreground">No spotlight placements exist yet. Create the first campaign from the form on the right.</div>
                 ) : (
                   promotions.map((item) => (
                     <div key={item.id} className="rounded-2xl border bg-white/80 p-4">
@@ -1008,7 +1090,7 @@ export default function DashboardPage() {
                         <Input
                           value={promotionDraft.sponsorLabel}
                           onChange={(e) => setPromotionDraft((current) => current ? { ...current, sponsorLabel: e.target.value } : current)}
-                          placeholder="Zonycs MarketHub"
+                          placeholder="Zonycs Spotlight"
                         />
                       </div>
                     </div>
@@ -1578,12 +1660,12 @@ export default function DashboardPage() {
       <Card className="market-panel">
         <CardHeader>
           <div className="market-section-title">Scope</div>
-          <CardTitle>Payments</CardTitle>
-          <CardDescription>Stripe and off-chain promotion checkout are no longer part of the active product.</CardDescription>
+          <CardTitle>Settlement scope</CardTitle>
+          <CardDescription>Account tools stay aligned to wallet connection and on-chain settlement only.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4 p-4 pt-0 sm:p-6 sm:pt-0">
           <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
-            Wallet connection and on-chain settlement remain in scope. Private inboxes and Stripe-backed placement purchases do not.
+            Wallet connection, escrow, and chain settlement remain in scope. Subscription billing and off-chain placement checkout are intentionally out of the product until they are fully implemented.
           </div>
         </CardContent>
       </Card>

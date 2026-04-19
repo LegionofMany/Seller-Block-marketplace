@@ -28,7 +28,7 @@ import { isNativeToken, saleTypeLabel, statusLabel } from "@/lib/contracts/types
 import { formatPrice, shortenHex } from "@/lib/format";
 import { useToastTx } from "@/lib/hooks/useToastTx";
 import { buildListingHref } from "@/lib/listings";
-import { fetchMetadataById, fetchMetadataByUri, getRenderableListingImage, isSmokeMetadataUri, LISTING_FALLBACK_IMAGE, metadataIdFromUri, type MarketplaceMetadata } from "@/lib/metadata";
+import { fetchMetadataById, fetchMetadataByUri, getRenderableListingImage, hasCompleteMarketplaceMetadata, isSmokeMetadataUri, LISTING_FALLBACK_IMAGE, metadataIdFromUri, type MarketplaceMetadata } from "@/lib/metadata";
 import { fetchJson } from "@/lib/api";
 import { addBlockedSeller } from "@/lib/blocks";
 import { describeToken } from "@/lib/tokens";
@@ -851,11 +851,29 @@ export default function ListingDetailPage() {
     );
   }
 
+  const hasCompleteMetadata = hasCompleteMarketplaceMetadata(metadata);
+
+  if (!loadingListing && listing && !hasCompleteMetadata && !isSeller) {
+    return (
+      <Card>
+        <CardContent className="p-6 space-y-3">
+          <div className="text-sm font-semibold">Listing details unavailable</div>
+          <div className="text-sm text-muted-foreground break-words">
+            This listing has not finished metadata validation yet, so it is hidden from the public marketplace detail view until the seller restores complete title, description, and image data.
+          </div>
+          <Button asChild variant="outline" size="sm">
+            <Link href="/marketplace">Back to marketplace</Link>
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
   const pageTitle = metadata?.title ?? (listing ? `${saleTypeLabel(listing.saleType)} listing` : "Loading…");
   const priceLabel = listing ? formatPrice(listing.price, native, activeChain.nativeCurrencySymbol) : "—";
   const locationLabel = [metadata?.city, metadata?.region, metadata?.postalCode].filter(Boolean).join(", ");
   const pageDescription = listing
-    ? metadata?.description ?? "Price, seller, and checkout status are available. Photos and full description are still syncing for this listing."
+    ? metadata?.description ?? (isSeller ? "Your listing is missing complete metadata. Restore title, description, and at least one image before sharing it publicly." : "Listing details unavailable.")
     : "Loading listing details...";
 
   return (

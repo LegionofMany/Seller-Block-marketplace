@@ -90,7 +90,7 @@ export function SiteHeader() {
         </div>
 
         <div className="hidden items-center gap-2 sm:flex">
-          <div className="market-chip">Public replies, local discovery, wallet checkout</div>
+          <div className="market-chip">Public replies, local discovery, wallet settlement</div>
           <ConnectButton showBalance={false} chainStatus="icon" />
           {!address && !auth.isAuthenticated ? (
             <Button asChild type="button" variant="outline" size="sm">
@@ -189,7 +189,7 @@ export function SiteHeader() {
           </div>
 
           <div className="space-y-2 p-4">
-            <div className="market-note text-xs">Public replies, local discovery, and wallet checkout are all available from the main marketplace flow.</div>
+            <div className="market-note text-xs">Public replies, local discovery, and wallet settlement are all available from the main marketplace flow.</div>
             <Button asChild variant="ghost" className="h-10 w-full justify-start rounded-xl" onClick={() => setOpen(false)}>
               <Link href="/marketplace">Listings</Link>
             </Button>

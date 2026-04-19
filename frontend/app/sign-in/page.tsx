@@ -228,7 +228,7 @@ export default function SignInPage() {
 
           <div className="space-y-2 text-sm text-slate-700">
             <div>Email accounts now create a real backend session and keep homepage favorites, followed-seller ordering, alerts, and garage activity tied to that account.</div>
-            <div>Wallet checkout and on-chain seller actions still require a connected wallet. This page keeps both paths available side by side.</div>
+            <div>Wallet settlement and on-chain seller actions still require a connected wallet. This page keeps both identity paths available side by side.</div>
             <div>Profile editing, local discovery, and account tabs now use the same identity model instead of a separate onboarding placeholder.</div>
           </div>
 

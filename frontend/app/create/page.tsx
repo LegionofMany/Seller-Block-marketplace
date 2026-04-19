@@ -85,6 +85,35 @@ const createListingAbi = [
 
 type SaleType = 0 | 1 | 2;
 
+type CreateListingDraft = {
+  saleType: SaleType;
+  title: string;
+  description: string;
+  tokenAddress: string;
+  category: string;
+  subcategory: string;
+  city: string;
+  region: string;
+  postalCode: string;
+  contactEmail: string;
+  contactPhone: string;
+  fixedPrice: string;
+  auctionStart: string;
+  auctionEnd: string;
+  reservePrice: string;
+  minBidIncrement: string;
+  extensionWindow: string;
+  extensionSeconds: string;
+  raffleStart: string;
+  raffleEnd: string;
+  ticketPrice: string;
+  targetAmount: string;
+  minParticipants: string;
+  reveal: Hex;
+};
+
+const CREATE_DRAFT_KEY = "seller-block.create-listing-draft.v1";
+
 function nowPlus(minutes: number) {
   return new Date(Date.now() + minutes * 60_000);
 }
@@ -103,6 +132,41 @@ function toUnixSeconds(value: string): bigint {
 function parseBytes32(value: string): Hex {
   if (!value?.startsWith("0x") || value.length !== 66) throw new Error("Reveal must be bytes32 (0x + 64 hex chars)");
   return value as Hex;
+}
+
+async function uploadImagesWithProgress(
+  backendUrl: string,
+  files: File[],
+  onProgress: (percent: number) => void
+): Promise<{ items: Array<{ ipfsUri: string; url: string }> }> {
+  const request = new XMLHttpRequest();
+  return new Promise((resolve, reject) => {
+    const form = new FormData();
+    for (const file of files.slice(0, 12)) form.append("files", file);
+
+    request.open("POST", `${backendUrl.replace(/\/$/, "")}/uploads/images`);
+    request.responseType = "json";
+    request.upload.onprogress = (event) => {
+      if (!event.lengthComputable) return;
+      onProgress(Math.max(1, Math.min(100, Math.round((event.loaded / event.total) * 100))));
+    };
+    request.onerror = () => reject(new Error("Image upload failed"));
+    request.onload = () => {
+      if (request.status >= 200 && request.status < 300) {
+        resolve(request.response as { items: Array<{ ipfsUri: string; url: string }> });
+        return;
+      }
+
+      const message =
+        typeof request.response?.message === "string"
+          ? request.response.message
+          : typeof request.responseText === "string" && request.responseText.trim()
+            ? request.responseText.trim()
+            : `Upload failed (${request.status})`;
+      reject(new Error(message));
+    };
+    request.send(form);
+  });
 }
 
 export default function CreateListingPage() {
@@ -143,6 +207,13 @@ export default function CreateListingPage() {
   const ZERO_BYTES32 = ("0x" + "00".repeat(32)) as Hex;
   const [reveal, setReveal] = React.useState<Hex>(ZERO_BYTES32);
   const [previewUrls, setPreviewUrls] = React.useState<string[]>([]);
+  const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [uploadProgress, setUploadProgress] = React.useState<number>(0);
+  const [uploadStage, setUploadStage] = React.useState<"idle" | "uploading" | "publishing">("idle");
+  const [lastUploadError, setLastUploadError] = React.useState<string | null>(null);
+  const [draftLoaded, setDraftLoaded] = React.useState(false);
+  const [draftRestored, setDraftRestored] = React.useState(false);
+  const [lastDraftSavedAt, setLastDraftSavedAt] = React.useState<number | null>(null);
 
   let env: ClientEnv;
   try {
@@ -188,9 +259,120 @@ export default function CreateListingPage() {
     };
   }, [files]);
 
-  async function onSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+    const raw = window.localStorage.getItem(CREATE_DRAFT_KEY);
+    if (!raw) {
+      setDraftLoaded(true);
+      return;
+    }
 
+    try {
+      const draft = JSON.parse(raw) as Partial<CreateListingDraft>;
+      if (draft.saleType === 0 || draft.saleType === 1 || draft.saleType === 2) setSaleType(draft.saleType);
+      if (typeof draft.title === "string") setTitle(draft.title);
+      if (typeof draft.description === "string") setDescription(draft.description);
+      if (typeof draft.tokenAddress === "string") setTokenAddress(draft.tokenAddress);
+      if (typeof draft.category === "string") setCategory(draft.category);
+      if (typeof draft.subcategory === "string") setSubcategory(draft.subcategory);
+      if (typeof draft.city === "string") setCity(draft.city);
+      if (typeof draft.region === "string") setRegion(draft.region);
+      if (typeof draft.postalCode === "string") setPostalCode(draft.postalCode);
+      if (typeof draft.contactEmail === "string") setContactEmail(draft.contactEmail);
+      if (typeof draft.contactPhone === "string") setContactPhone(draft.contactPhone);
+      if (typeof draft.fixedPrice === "string") setFixedPrice(draft.fixedPrice);
+      if (typeof draft.auctionStart === "string") setAuctionStart(draft.auctionStart);
+      if (typeof draft.auctionEnd === "string") setAuctionEnd(draft.auctionEnd);
+      if (typeof draft.reservePrice === "string") setReservePrice(draft.reservePrice);
+      if (typeof draft.minBidIncrement === "string") setMinBidIncrement(draft.minBidIncrement);
+      if (typeof draft.extensionWindow === "string") setExtensionWindow(draft.extensionWindow);
+      if (typeof draft.extensionSeconds === "string") setExtensionSeconds(draft.extensionSeconds);
+      if (typeof draft.raffleStart === "string") setRaffleStart(draft.raffleStart);
+      if (typeof draft.raffleEnd === "string") setRaffleEnd(draft.raffleEnd);
+      if (typeof draft.ticketPrice === "string") setTicketPrice(draft.ticketPrice);
+      if (typeof draft.targetAmount === "string") setTargetAmount(draft.targetAmount);
+      if (typeof draft.minParticipants === "string") setMinParticipants(draft.minParticipants);
+      if (typeof draft.reveal === "string" && draft.reveal.startsWith("0x") && draft.reveal.length === 66) setReveal(draft.reveal as Hex);
+      setDraftRestored(true);
+    } catch {
+      window.localStorage.removeItem(CREATE_DRAFT_KEY);
+    } finally {
+      setDraftLoaded(true);
+    }
+  }, []);
+
+  const draftSnapshot = React.useMemo<CreateListingDraft>(
+    () => ({
+      saleType,
+      title,
+      description,
+      tokenAddress,
+      category,
+      subcategory,
+      city,
+      region,
+      postalCode,
+      contactEmail,
+      contactPhone,
+      fixedPrice,
+      auctionStart,
+      auctionEnd,
+      reservePrice,
+      minBidIncrement,
+      extensionWindow,
+      extensionSeconds,
+      raffleStart,
+      raffleEnd,
+      ticketPrice,
+      targetAmount,
+      minParticipants,
+      reveal,
+    }),
+    [
+      saleType,
+      title,
+      description,
+      tokenAddress,
+      category,
+      subcategory,
+      city,
+      region,
+      postalCode,
+      contactEmail,
+      contactPhone,
+      fixedPrice,
+      auctionStart,
+      auctionEnd,
+      reservePrice,
+      minBidIncrement,
+      extensionWindow,
+      extensionSeconds,
+      raffleStart,
+      raffleEnd,
+      ticketPrice,
+      targetAmount,
+      minParticipants,
+      reveal,
+    ]
+  );
+
+  React.useEffect(() => {
+    if (!draftLoaded || typeof window === "undefined") return;
+    const handle = window.setTimeout(() => {
+      window.localStorage.setItem(CREATE_DRAFT_KEY, JSON.stringify(draftSnapshot));
+      setLastDraftSavedAt(Date.now());
+    }, 400);
+
+    return () => window.clearTimeout(handle);
+  }, [draftLoaded, draftSnapshot]);
+
+  function clearDraft() {
+    if (typeof window !== "undefined") window.localStorage.removeItem(CREATE_DRAFT_KEY);
+    setLastDraftSavedAt(null);
+    setDraftRestored(false);
+  }
+
+  async function submitListing() {
     if (!title.trim() || !description.trim()) {
       toast.error("Title and description are required");
       return;
@@ -203,23 +385,16 @@ export default function CreateListingPage() {
 
     let metadataURI: string;
     try {
-      const form = new FormData();
-      for (const file of files.slice(0, 12)) form.append("files", file);
-
-      const uploadRes = await fetch(`${(env.backendUrl ?? "http://localhost:4000").replace(/\/$/, "")}/uploads/images`, {
-        method: "POST",
-        body: form,
-      });
-
-      if (!uploadRes.ok) {
-        const text = await uploadRes.text().catch(() => "");
-        throw new Error(text || `Upload failed (${uploadRes.status})`);
-      }
-
-      const uploadJson = (await uploadRes.json()) as { items: Array<{ ipfsUri: string; url: string }> };
+      setIsSubmitting(true);
+      setLastUploadError(null);
+      setUploadStage("uploading");
+      setUploadProgress(0);
+      const uploadJson = await uploadImagesWithProgress(env.backendUrl ?? "http://localhost:4000", files, setUploadProgress);
       const images = uploadJson.items.map((item) => item.ipfsUri).filter(Boolean);
       if (!images.length) throw new Error("Image upload returned no IPFS URIs");
 
+      setUploadStage("publishing");
+      setUploadProgress(100);
       const res = await fetchJson<{ metadataURI: string; cid: string; id: string }>("/metadata/ipfs", {
         method: "POST",
         headers: {
@@ -244,6 +419,9 @@ export default function CreateListingPage() {
       metadataURI = res.metadataURI;
       setGeneratedMetadataURI(res.metadataURI);
     } catch (err: any) {
+      setLastUploadError(err?.message ?? "Failed to upload metadata");
+      setUploadStage("idle");
+      setIsSubmitting(false);
       toast.error(err?.message ?? "Failed to upload metadata");
       return;
     }
@@ -335,10 +513,19 @@ export default function CreateListingPage() {
         toast.success("Raffle opened", { id: toast2 });
       }
 
+      clearDraft();
       router.push(buildListingHref(listingId, activeChain.key));
     } catch (err: any) {
       toast.error(err?.shortMessage ?? err?.message ?? "Transaction failed");
+    } finally {
+      setIsSubmitting(false);
+      setUploadStage("idle");
     }
+  }
+
+  async function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    await submitListing();
   }
 
   const saleTypeDescription =
@@ -391,6 +578,12 @@ export default function CreateListingPage() {
           </CardHeader>
           <CardContent className="p-4 pt-0 sm:p-6 sm:pt-0">
             <form onSubmit={onSubmit} className="space-y-6">
+              {draftRestored ? (
+                <div className="rounded-2xl border border-amber-200/80 bg-amber-50/80 px-4 py-3 text-sm text-slate-700">
+                  Draft restored. Text, pricing, and schedule details came back from local storage. Photos are not persisted, so reselect images before publishing.
+                </div>
+              ) : null}
+
               <div className="space-y-3 rounded-2xl border bg-accent/30 p-3 sm:p-4">
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
                   <div>
@@ -423,7 +616,12 @@ export default function CreateListingPage() {
                 </div>
                 <div className="space-y-2 sm:col-span-2">
                   <Label>Images (required, up to 12)</Label>
-                  <Input type="file" accept="image/*" multiple onChange={(e) => setFiles(Array.from(e.target.files ?? []))} />
+                  <Input type="file" accept="image/*" multiple onChange={(e) => {
+                    setFiles(Array.from(e.target.files ?? []));
+                    setLastUploadError(null);
+                    setGeneratedMetadataURI("");
+                  }} />
+                  <div className="text-xs text-muted-foreground">Photos are selected per device session and are not stored in the local draft.</div>
                   {files.length ? (
                     <>
                       <div className="text-xs text-muted-foreground">Selected: {files.map((file) => file.name).join(", ")}</div>
@@ -440,6 +638,27 @@ export default function CreateListingPage() {
                         ))}
                       </div>
                     </>
+                  ) : null}
+                  {isSubmitting || uploadProgress > 0 ? (
+                    <div className="space-y-2 rounded-xl border bg-background/80 p-3">
+                      <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
+                        <span>{uploadStage === "uploading" ? "Uploading images" : uploadStage === "publishing" ? "Publishing metadata" : "Preparing upload"}</span>
+                        <span>{uploadProgress}%</span>
+                      </div>
+                      <div className="h-2 overflow-hidden rounded-full bg-slate-200">
+                        <div className="h-full rounded-full bg-slate-900 transition-[width] duration-200" style={{ width: `${uploadProgress}%` }} />
+                      </div>
+                    </div>
+                  ) : null}
+                  {lastUploadError ? (
+                    <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+                      <div>{lastUploadError}</div>
+                      <div className="mt-3">
+                        <Button type="button" size="sm" variant="outline" disabled={isSubmitting} onClick={() => void submitListing()}>
+                          Retry upload and publish
+                        </Button>
+                      </div>
+                    </div>
                   ) : null}
                 </div>
 
@@ -576,9 +795,39 @@ export default function CreateListingPage() {
                 </div>
               ) : null}
 
-              <Button type="submit" size="lg" className="w-full sm:w-auto">
-                Publish listing
-              </Button>
+              <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+                <Button type="submit" size="lg" className="w-full sm:w-auto" disabled={isSubmitting}>
+                  {isSubmitting ? "Publishing..." : "Publish listing"}
+                </Button>
+                <Button
+                  type="button"
+                  size="lg"
+                  variant="outline"
+                  className="w-full sm:w-auto"
+                  onClick={() => {
+                    if (typeof window !== "undefined") {
+                      window.localStorage.setItem(CREATE_DRAFT_KEY, JSON.stringify(draftSnapshot));
+                      setLastDraftSavedAt(Date.now());
+                    }
+                    toast.success("Draft saved on this device");
+                  }}
+                >
+                  Save draft
+                </Button>
+                <Button
+                  type="button"
+                  size="lg"
+                  variant="ghost"
+                  className="w-full sm:w-auto"
+                  onClick={() => {
+                    clearDraft();
+                    toast.success("Draft cleared from this device");
+                  }}
+                >
+                  Clear draft
+                </Button>
+                {lastDraftSavedAt ? <div className="text-xs text-muted-foreground">Draft saved {new Date(lastDraftSavedAt).toLocaleTimeString()}</div> : null}
+              </div>
             </form>
           </CardContent>
         </Card>
@@ -590,6 +839,10 @@ export default function CreateListingPage() {
               <CardTitle>Publishing checklist</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3 p-4 pt-0 text-sm text-muted-foreground sm:p-6 sm:pt-0">
+              <div className="rounded-xl border p-4">
+                <div className="font-medium text-foreground">Draft handling</div>
+                <div className="mt-1">Listing details auto-save on this device after edits. Photos stay local to the current session and must be reselected after a refresh.</div>
+              </div>
               <div className="market-note">Lead with plain-language title, real photos, city/region, and one direct price.</div>
               <div className="rounded-xl border p-4">
                 <div className="font-medium text-foreground">Recommended for classifieds</div>

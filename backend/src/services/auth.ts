@@ -18,6 +18,16 @@ export function buildAuthMessage(address: string, nonce: string, env: Env): stri
   ].join("\n");
 }
 
+export function buildWalletLinkMessage(address: string, nonce: string, env: Env): string {
+  return [
+    "Seller-Block Marketplace",
+    "Action: Link wallet",
+    `Address: ${address}`,
+    `Nonce: ${nonce}`,
+    `ChainId: ${env.chainId}`,
+  ].join("\n");
+}
+
 const EMAIL_SUBJECT_PREFIX = "email:";
 
 export function buildEmailSubject(email: string): string {

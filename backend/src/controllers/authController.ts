@@ -5,8 +5,8 @@ import { verifyMessage } from "ethers";
 import { HttpError } from "../middlewares/errors";
 import { requireAuthAddress } from "../middlewares/auth";
 import { getContext } from "../services/context";
-import { buildAuthMessage, buildEmailSubject, generateNonce, hashPassword, isAdminSubject, issueAuthToken, verifyPassword } from "../services/auth";
-import { createAuthNonce, consumeAuthNonce, createEmailUser, ensureUser, findAuthNonce, findUserByEmail, getUser, getUserPasswordHash, updateUserLastLogin } from "../services/db";
+import { buildAuthMessage, buildEmailSubject, buildWalletLinkMessage, generateNonce, hashPassword, isAdminSubject, issueAuthToken, verifyPassword } from "../services/auth";
+import { createAuthNonce, consumeAuthNonce, createEmailUser, ensureUser, findAuthNonce, findUserByEmail, findUserByLinkedWallet, getUser, getUserPasswordHash, updateUserLastLogin, updateUserLinkedWallet } from "../services/db";
 import { normalizeEmail, requireAddress } from "../utils/validation";
 
 export async function issueNonce(req: Request, res: Response) {
@@ -163,4 +163,97 @@ export async function getMe(req: Request, res: Response) {
   await ensureUser(db, address, Date.now());
   const user = await getUser(db, address);
   return res.json({ address, user, isAdmin: isAdminSubject(address, env) });
+}
+
+export async function issueWalletLinkNonce(req: Request, res: Response) {
+  const parsed = z.object({ walletAddress: z.string().min(1) }).safeParse(req.body);
+  if (!parsed.success) throw new HttpError(400, "Invalid wallet link payload", "INVALID_WALLET_LINK");
+
+  const { db, env } = getContext();
+  const subject = requireAuthAddress(req);
+  const user = await getUser(db, subject);
+  if (!user || user.authMethod !== "email") {
+    throw new HttpError(403, "Only email accounts can link a wallet", "EMAIL_AUTH_REQUIRED");
+  }
+
+  const walletAddress = requireAddress(parsed.data.walletAddress, "walletAddress");
+  const existingLinkedUser = await findUserByLinkedWallet(db, walletAddress);
+  if (existingLinkedUser && existingLinkedUser.address !== subject) {
+    throw new HttpError(409, "This wallet is already linked to another account", "WALLET_ALREADY_LINKED");
+  }
+
+  const nonce = generateNonce();
+  const createdAt = Date.now();
+  const expiresAt = createdAt + env.authNonceTtlSeconds * 1000;
+
+  await createAuthNonce(db, walletAddress, nonce, expiresAt, createdAt);
+
+  return res.status(201).json({
+    walletAddress,
+    nonce,
+    message: buildWalletLinkMessage(walletAddress, nonce, env),
+    expiresAt,
+  });
+}
+
+export async function verifyWalletLink(req: Request, res: Response) {
+  const parsed = z.object({
+    walletAddress: z.string().min(1),
+    nonce: z.string().min(1).max(256),
+    signature: z.string().min(1).max(2048),
+  }).safeParse(req.body);
+  if (!parsed.success) throw new HttpError(400, "Invalid wallet link verification payload", "INVALID_WALLET_LINK");
+
+  const { db, env } = getContext();
+  const subject = requireAuthAddress(req);
+  const user = await getUser(db, subject);
+  if (!user || user.authMethod !== "email") {
+    throw new HttpError(403, "Only email accounts can link a wallet", "EMAIL_AUTH_REQUIRED");
+  }
+
+  const walletAddress = requireAddress(parsed.data.walletAddress, "walletAddress");
+  const nonce = parsed.data.nonce.trim();
+  const row = await findAuthNonce(db, walletAddress, nonce);
+  if (!row || row.consumedAt) {
+    throw new HttpError(401, "Nonce is invalid or already used", "INVALID_AUTH_NONCE");
+  }
+  if (row.expiresAt < Date.now()) {
+    throw new HttpError(401, "Nonce has expired", "EXPIRED_AUTH_NONCE");
+  }
+
+  const existingLinkedUser = await findUserByLinkedWallet(db, walletAddress);
+  if (existingLinkedUser && existingLinkedUser.address !== subject) {
+    throw new HttpError(409, "This wallet is already linked to another account", "WALLET_ALREADY_LINKED");
+  }
+
+  const message = buildWalletLinkMessage(walletAddress, nonce, env);
+  let recovered: string;
+  try {
+    recovered = requireAddress(verifyMessage(message, parsed.data.signature), "signature");
+  } catch {
+    throw new HttpError(401, "Invalid signature", "INVALID_SIGNATURE");
+  }
+
+  if (recovered.toLowerCase() !== walletAddress.toLowerCase()) {
+    throw new HttpError(401, "Signature does not match address", "INVALID_SIGNATURE");
+  }
+
+  await consumeAuthNonce(db, walletAddress, nonce, Date.now());
+  await updateUserLinkedWallet(db, subject, walletAddress, Date.now());
+  const refreshedUser = await getUser(db, subject);
+
+  return res.json({ user: refreshedUser });
+}
+
+export async function unlinkWallet(req: Request, res: Response) {
+  const { db } = getContext();
+  const subject = requireAuthAddress(req);
+  const user = await getUser(db, subject);
+  if (!user || user.authMethod !== "email") {
+    throw new HttpError(403, "Only email accounts can unlink a wallet", "EMAIL_AUTH_REQUIRED");
+  }
+
+  await updateUserLinkedWallet(db, subject, null, Date.now());
+  const refreshedUser = await getUser(db, subject);
+  return res.json({ user: refreshedUser });
 }

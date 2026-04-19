@@ -886,6 +886,15 @@ export async function findUserByEmail(_db: Pool | any, email: string): Promise<U
   return res.rows[0] ? toUserRow(res.rows[0]) : null;
 }
 
+export async function findUserByLinkedWallet(_db: Pool | any, walletAddress: string): Promise<UserRow | null> {
+  const p = ensurePool(_db);
+  const res = await p.query(
+    'SELECT address, fullname AS "fullName", displayname AS "displayName", bio, avatarcid AS "avatarCid", email, emailverifiedat AS "emailVerifiedAt", authmethod AS "authMethod", linkedwalletaddress AS "linkedWalletAddress", streetaddress1 AS "streetAddress1", streetaddress2 AS "streetAddress2", city, region, postalcode AS "postalCode", lastloginat AS "lastLoginAt", createdat AS "createdAt", updatedat AS "updatedAt" FROM users WHERE LOWER(linkedwalletaddress) = LOWER($1) LIMIT 1',
+    [walletAddress]
+  );
+  return res.rows[0] ? toUserRow(res.rows[0]) : null;
+}
+
 export async function getUserPasswordHash(_db: Pool | any, address: string): Promise<string | null> {
   const p = ensurePool(_db);
   const res = await p.query('SELECT passwordhash FROM users WHERE address = $1 LIMIT 1', [address]);
@@ -931,6 +940,11 @@ export async function createEmailUser(
 export async function updateUserLastLogin(_db: Pool | any, address: string, lastLoginAt: number) {
   const p = ensurePool(_db);
   await p.query('UPDATE users SET lastloginat = $2, updatedat = GREATEST(updatedat, $2) WHERE address = $1', [address, lastLoginAt]);
+}
+
+export async function updateUserLinkedWallet(_db: Pool | any, address: string, linkedWalletAddress: string | null, updatedAt: number) {
+  const p = ensurePool(_db);
+  await p.query('UPDATE users SET linkedwalletaddress = $2, updatedat = GREATEST(updatedat, $3) WHERE address = $1', [address, linkedWalletAddress, updatedAt]);
 }
 
 export async function getUser(_db: Pool | any, address: string): Promise<UserRow | null> {
