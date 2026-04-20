@@ -6,6 +6,9 @@ export type UserProfile = {
   avatarCid?: string | null;
   email?: string | null;
   emailVerifiedAt?: number | null;
+  sellerVerifiedAt?: number | null;
+  sellerVerifiedBy?: string | null;
+  sellerTrustNote?: string | null;
   authMethod?: "wallet" | "email";
   linkedWalletAddress?: string | null;
   streetAddress1?: string | null;

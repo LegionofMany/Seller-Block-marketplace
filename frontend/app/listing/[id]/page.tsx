@@ -9,6 +9,7 @@ import { useAccount, useReadContract, useWaitForTransactionReceipt, useWalletCli
 import { toast } from "sonner";
 
 import { useAuth } from "@/components/providers/AuthProvider";
+import { SellerTrustSummary } from "@/components/site/SellerTrustSummary";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -26,6 +27,7 @@ import { raffleModuleAbi } from "@/lib/contracts/abi/RaffleModule";
 import { parseListing } from "@/lib/contracts/parse";
 import { isNativeToken, saleTypeLabel, statusLabel } from "@/lib/contracts/types";
 import { formatPrice, shortenHex } from "@/lib/format";
+import { useSellerProfile } from "@/lib/hooks/useSellerProfile";
 import { useToastTx } from "@/lib/hooks/useToastTx";
 import { buildListingHref } from "@/lib/listings";
 import { fetchMetadataById, fetchMetadataByUri, getRenderableListingImage, hasCompleteMarketplaceMetadata, isSmokeMetadataUri, LISTING_FALLBACK_IMAGE, metadataIdFromUri, type MarketplaceMetadata } from "@/lib/metadata";
@@ -72,6 +74,42 @@ const erc20PermitNonceAbi = [
   },
 ] as const;
 
+type SettlementEscrowReadShape = {
+  orderHash?: Hex;
+  listingId?: Hex;
+  seller?: Address;
+  buyer?: Address;
+  token?: Address;
+  amount?: bigint;
+  status?: number | bigint;
+  0?: Hex;
+  1?: Hex;
+  2?: Address;
+  3?: Address;
+  4?: Address;
+  5?: bigint;
+  6?: number | bigint;
+};
+
+function getErrorMessage(error: unknown, fallback: string) {
+  const candidate = error as { shortMessage?: unknown; message?: unknown } | null;
+  const message = candidate?.shortMessage ?? candidate?.message;
+  return typeof message === "string" && message.trim() ? message : fallback;
+}
+
+function decodeSettlementEscrow(value: unknown) {
+  const candidate = (value ?? {}) as SettlementEscrowReadShape;
+  return {
+    orderHash: (candidate.orderHash ?? candidate[0] ?? ZERO_BYTES32) as Hex,
+    listingId: (candidate.listingId ?? candidate[1] ?? ZERO_BYTES32) as Hex,
+    seller: (candidate.seller ?? candidate[2] ?? zeroAddress) as Address,
+    buyer: (candidate.buyer ?? candidate[3] ?? zeroAddress) as Address,
+    token: (candidate.token ?? candidate[4] ?? zeroAddress) as Address,
+    amount: (candidate.amount ?? candidate[5] ?? 0n) as bigint,
+    status: Number(candidate.status ?? candidate[6] ?? 0),
+  };
+}
+
 function settlementEscrowStatusLabel(status: number) {
   switch (status) {
     case 1:
@@ -87,26 +125,23 @@ function settlementEscrowStatusLabel(status: number) {
 
 export default function ListingDetailPage() {
   const searchParams = useSearchParams();
-  let env: ReturnType<typeof getEnv>;
-  try {
-    env = getEnv();
-  } catch (e: any) {
-    return (
-      <Card>
-        <CardContent className="p-6 text-sm text-destructive">{e?.message ?? "Missing env vars"}</CardContent>
-      </Card>
-    );
-  }
+  const envState = React.useMemo(() => {
+    try {
+      return { env: getEnv(), error: null as string | null };
+    } catch (error: unknown) {
+      return { env: null, error: getErrorMessage(error, "Missing env vars") };
+    }
+  }, []);
 
   const params = useParams<{ id: string }>();
   const id = params?.id;
   const listingId = asBytes32(id);
-  const chainKey = searchParams.get("chain") ?? env.defaultChain.key;
-  const activeChain = getChainConfigByKey(env, chainKey);
-  const registryAddress = activeChain.marketplaceRegistryAddress;
-  const settlementAddress = activeChain.marketplaceSettlementV2Address;
-  const auctionModuleAddress = activeChain.auctionModuleAddress;
-  const raffleModuleAddress = activeChain.raffleModuleAddress;
+  const chainKey = searchParams.get("chain") ?? envState.env?.defaultChain.key ?? "sepolia";
+  const activeChain = envState.env ? getChainConfigByKey(envState.env, chainKey) : null;
+  const registryAddress = activeChain?.marketplaceRegistryAddress ?? zeroAddress;
+  const settlementAddress = activeChain?.marketplaceSettlementV2Address ?? zeroAddress;
+  const auctionModuleAddress = activeChain?.auctionModuleAddress ?? zeroAddress;
+  const raffleModuleAddress = activeChain?.raffleModuleAddress ?? zeroAddress;
 
   const { address } = useAccount();
   const { data: walletClient } = useWalletClient();
@@ -128,10 +163,11 @@ export default function ListingDetailPage() {
 
   const loadingListing = isLoading;
 
-  const listingReadError: any = isError ? (error as any) : null;
+  const listingReadError = isError ? error : null;
   const listing = raw ? parseListing(raw) : null;
   const hiddenSmokeListing = Boolean(listing && isSmokeMetadataUri(listing.metadataURI));
   const native = listing ? isNativeToken(listing.token as Address) : true;
+  const { profile: sellerProfile } = useSellerProfile(listing?.seller ?? null);
 
   const { data: arbiterAddress } = useReadContract({
     address: registryAddress,
@@ -157,8 +193,8 @@ export default function ListingDetailPage() {
   const [isRelayingSettlementAction, setIsRelayingSettlementAction] = React.useState(false);
 
   const settlementToken = React.useMemo(
-    () => (listing ? describeToken(env, activeChain.chainId, listing.token as Address) : null),
-    [activeChain.chainId, env, listing]
+    () => (listing && envState.env && activeChain ? describeToken(envState.env, activeChain.chainId, listing.token as Address) : null),
+    [activeChain, envState.env, listing]
   );
 
   const galleryImages = React.useMemo(() => {
@@ -187,8 +223,8 @@ export default function ListingDetailPage() {
           { timeoutMs: 10_000 }
         );
         setComments(res.items ?? []);
-      } catch (e: any) {
-        setCommentsError(e?.message ?? "Failed to load comments");
+      } catch (error: unknown) {
+        setCommentsError(getErrorMessage(error, "Failed to load comments"));
       } finally {
         setIsLoadingComments(false);
       }
@@ -237,9 +273,9 @@ export default function ListingDetailPage() {
       setSellerOrderError(null);
       const res = await fetchLatestSellerOrder(listingId, activeChain.key);
       setSellerOrder(res.item);
-    } catch (e: any) {
+    } catch (error: unknown) {
       setSellerOrder(null);
-      setSellerOrderError(e?.message ?? "Failed to load seller order");
+      setSellerOrderError(getErrorMessage(error, "Failed to load seller order"));
     } finally {
       setIsLoadingSellerOrder(false);
     }
@@ -299,16 +335,7 @@ export default function ListingDetailPage() {
 
   const settlementEscrow = React.useMemo(() => {
     if (!settlementEscrowRaw) return null;
-    const tuple = settlementEscrowRaw as any;
-    return {
-      orderHash: (tuple.orderHash ?? tuple[0]) as Hex,
-      listingId: (tuple.listingId ?? tuple[1]) as Hex,
-      seller: (tuple.seller ?? tuple[2]) as Address,
-      buyer: (tuple.buyer ?? tuple[3]) as Address,
-      token: (tuple.token ?? tuple[4]) as Address,
-      amount: (tuple.amount ?? tuple[5]) as bigint,
-      status: Number(tuple.status ?? tuple[6]),
-    };
+    return decodeSettlementEscrow(settlementEscrowRaw);
   }, [settlementEscrowRaw]);
 
   React.useEffect(() => {
@@ -361,9 +388,9 @@ export default function ListingDetailPage() {
         body: JSON.stringify({ blocker, blocked, signature, issuedAt }),
         timeoutMs: 7_000,
       });
-    } catch (e: any) {
+    } catch (error: unknown) {
       // If backend is down, we still want local blocking to work.
-      toast.error(e?.message ?? "Failed to save block on backend");
+      toast.error(getErrorMessage(error, "Failed to save block on backend"));
     }
 
     addBlockedSeller(blocker, blocked);
@@ -430,8 +457,8 @@ export default function ListingDetailPage() {
       }
 
       toast.success("Report submitted");
-    } catch (e: any) {
-      toast.error(e?.message ?? "Failed to submit report");
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error, "Failed to submit report"));
     }
   }
 
@@ -456,8 +483,8 @@ export default function ListingDetailPage() {
       );
       setCommentDraft("");
       setComments((current) => [...current, res.item]);
-    } catch (e: any) {
-      toast.error(e?.message ?? "Failed to post comment");
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error, "Failed to post comment"));
     } finally {
       setIsSubmittingComment(false);
     }
@@ -485,8 +512,8 @@ export default function ListingDetailPage() {
         setIsFavorite(true);
         toast.success("Saved to favorites");
       }
-    } catch (e: any) {
-      toast.error(e?.message ?? "Failed to update favorites");
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error, "Failed to update favorites"));
     } finally {
       setIsFavoriteLoading(false);
     }
@@ -530,8 +557,8 @@ export default function ListingDetailPage() {
       const md = await fetchMetadataById(metadataId);
       setMetadata(md);
       window.alert("Metadata uploaded and linked successfully.");
-    } catch (e: any) {
-      window.alert(e?.message ?? "Failed to upload metadata");
+    } catch (error: unknown) {
+      window.alert(getErrorMessage(error, "Failed to upload metadata"));
     } finally {
       setIsReuploadingMetadata(false);
     }
@@ -777,9 +804,17 @@ export default function ListingDetailPage() {
     try {
       const hash = await tx;
       setPendingHash(hash);
-    } catch (e: any) {
-      toastTx.fail(e?.shortMessage ?? e?.message ?? "Transaction failed");
+    } catch (error: unknown) {
+      toastTx.fail(getErrorMessage(error, "Transaction failed"));
     }
+  }
+
+  if (envState.error || !activeChain) {
+    return (
+      <Card>
+        <CardContent className="p-6 text-sm text-destructive">{envState.error ?? "Missing env vars"}</CardContent>
+      </Card>
+    );
   }
 
   // IMPORTANT: do not return early before hooks above run.
@@ -898,7 +933,10 @@ export default function ListingDetailPage() {
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 sm:gap-3 lg:grid-cols-1">
             <div className="market-stat">
               <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Seller</div>
-              <div className="mt-2 text-lg font-semibold text-slate-950">{listing ? shortenHex(listing.seller) : "—"}</div>
+              <div className="mt-2 text-lg font-semibold text-slate-950">{sellerProfile?.user.displayName?.trim() || (listing ? shortenHex(listing.seller) : "—")}</div>
+              <div className="mt-2">
+                <SellerTrustSummary profile={sellerProfile} variant="compact" />
+              </div>
             </div>
             <div className="market-stat">
               <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Checkout</div>
@@ -1003,10 +1041,11 @@ export default function ListingDetailPage() {
                     </div>
                     <div className="text-sm">
                       <div className="text-muted-foreground">Seller</div>
-                      <div className="font-medium">
+                      <div className="space-y-2 font-medium">
                         <Link className="underline" href={`/seller/${listing.seller}`}>
-                          {shortenHex(listing.seller)}
+                          {sellerProfile?.user.displayName?.trim() || shortenHex(listing.seller)}
                         </Link>
+                        <SellerTrustSummary profile={sellerProfile} variant="detail" />
                       </div>
                     </div>
                     <div className="text-sm">

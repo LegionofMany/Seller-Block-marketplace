@@ -57,6 +57,9 @@ export type UserRow = {
   avatarCid?: string | null;
   email?: string | null;
   emailVerifiedAt?: number | null;
+  sellerVerifiedAt?: number | null;
+  sellerVerifiedBy?: string | null;
+  sellerTrustNote?: string | null;
   authMethod: "wallet" | "email";
   linkedWalletAddress?: string | null;
   streetAddress1?: string | null;
@@ -100,6 +103,8 @@ export type PublicUserProfileRow = {
   user: UserRow;
   listingCount: number;
   followerCount: number;
+  responseRate: number | null;
+  reputation: number | null;
   location?: {
     city?: string | null;
     region?: string | null;
@@ -766,6 +771,9 @@ function toUserRow(r: any): UserRow {
     avatarCid: r.avatarCid ?? r.avatarcid ?? null,
     email: r.email ?? null,
     emailVerifiedAt: r.emailVerifiedAt ?? r.emailverifiedat ?? null,
+    sellerVerifiedAt: r.sellerVerifiedAt ?? r.sellerverifiedat ?? null,
+    sellerVerifiedBy: r.sellerVerifiedBy ?? r.sellerverifiedby ?? null,
+    sellerTrustNote: r.sellerTrustNote ?? r.sellertrustnote ?? null,
     authMethod: String(r.authMethod ?? r.authmethod ?? "wallet") === "email" ? "email" : "wallet",
     linkedWalletAddress: r.linkedWalletAddress ?? r.linkedwalletaddress ?? null,
     streetAddress1: r.streetAddress1 ?? r.streetaddress1 ?? null,
@@ -904,7 +912,7 @@ export async function ensureUser(_db: Pool | any, address: string, createdAt: nu
 export async function findUserByEmail(_db: Pool | any, email: string): Promise<UserRow | null> {
   const p = ensurePool(_db);
   const res = await p.query(
-    'SELECT address, fullname AS "fullName", displayname AS "displayName", bio, avatarcid AS "avatarCid", email, emailverifiedat AS "emailVerifiedAt", authmethod AS "authMethod", linkedwalletaddress AS "linkedWalletAddress", streetaddress1 AS "streetAddress1", streetaddress2 AS "streetAddress2", city, region, postalcode AS "postalCode", lastloginat AS "lastLoginAt", createdat AS "createdAt", updatedat AS "updatedAt" FROM users WHERE emailnormalized = $1 LIMIT 1',
+    'SELECT address, fullname AS "fullName", displayname AS "displayName", bio, avatarcid AS "avatarCid", email, emailverifiedat AS "emailVerifiedAt", sellerverifiedat AS "sellerVerifiedAt", sellerverifiedby AS "sellerVerifiedBy", sellertrustnote AS "sellerTrustNote", authmethod AS "authMethod", linkedwalletaddress AS "linkedWalletAddress", streetaddress1 AS "streetAddress1", streetaddress2 AS "streetAddress2", city, region, postalcode AS "postalCode", lastloginat AS "lastLoginAt", createdat AS "createdAt", updatedat AS "updatedAt" FROM users WHERE emailnormalized = $1 LIMIT 1',
     [email]
   );
   return res.rows[0] ? toUserRow(res.rows[0]) : null;
@@ -913,7 +921,7 @@ export async function findUserByEmail(_db: Pool | any, email: string): Promise<U
 export async function findUserByLinkedWallet(_db: Pool | any, walletAddress: string): Promise<UserRow | null> {
   const p = ensurePool(_db);
   const res = await p.query(
-    'SELECT address, fullname AS "fullName", displayname AS "displayName", bio, avatarcid AS "avatarCid", email, emailverifiedat AS "emailVerifiedAt", authmethod AS "authMethod", linkedwalletaddress AS "linkedWalletAddress", streetaddress1 AS "streetAddress1", streetaddress2 AS "streetAddress2", city, region, postalcode AS "postalCode", lastloginat AS "lastLoginAt", createdat AS "createdAt", updatedat AS "updatedAt" FROM users WHERE LOWER(linkedwalletaddress) = LOWER($1) LIMIT 1',
+    'SELECT address, fullname AS "fullName", displayname AS "displayName", bio, avatarcid AS "avatarCid", email, emailverifiedat AS "emailVerifiedAt", sellerverifiedat AS "sellerVerifiedAt", sellerverifiedby AS "sellerVerifiedBy", sellertrustnote AS "sellerTrustNote", authmethod AS "authMethod", linkedwalletaddress AS "linkedWalletAddress", streetaddress1 AS "streetAddress1", streetaddress2 AS "streetAddress2", city, region, postalcode AS "postalCode", lastloginat AS "lastLoginAt", createdat AS "createdAt", updatedat AS "updatedAt" FROM users WHERE LOWER(linkedwalletaddress) = LOWER($1) LIMIT 1',
     [walletAddress]
   );
   return res.rows[0] ? toUserRow(res.rows[0]) : null;
@@ -1013,10 +1021,32 @@ export async function consumeEmailAuthToken(_db: Pool | any, tokenHash: string, 
 export async function getUser(_db: Pool | any, address: string): Promise<UserRow | null> {
   const p = ensurePool(_db);
   const res = await p.query(
-    'SELECT address, fullname AS "fullName", displayname AS "displayName", bio, avatarcid AS "avatarCid", email, emailverifiedat AS "emailVerifiedAt", authmethod AS "authMethod", linkedwalletaddress AS "linkedWalletAddress", streetaddress1 AS "streetAddress1", streetaddress2 AS "streetAddress2", city, region, postalcode AS "postalCode", lastloginat AS "lastLoginAt", createdat AS "createdAt", updatedat AS "updatedAt" FROM users WHERE address = $1',
+    'SELECT address, fullname AS "fullName", displayname AS "displayName", bio, avatarcid AS "avatarCid", email, emailverifiedat AS "emailVerifiedAt", sellerverifiedat AS "sellerVerifiedAt", sellerverifiedby AS "sellerVerifiedBy", sellertrustnote AS "sellerTrustNote", authmethod AS "authMethod", linkedwalletaddress AS "linkedWalletAddress", streetaddress1 AS "streetAddress1", streetaddress2 AS "streetAddress2", city, region, postalcode AS "postalCode", lastloginat AS "lastLoginAt", createdat AS "createdAt", updatedat AS "updatedAt" FROM users WHERE address = $1',
     [address]
   );
   return res.rows[0] ? toUserRow(res.rows[0]) : null;
+}
+
+export async function updateUserTrust(
+  _db: Pool | any,
+  input: {
+    address: string;
+    sellerVerifiedAt: number | null;
+    sellerVerifiedBy: string | null;
+    sellerTrustNote: string | null;
+    updatedAt: number;
+  }
+) {
+  const p = ensurePool(_db);
+  await p.query(
+    `UPDATE users
+     SET sellerverifiedat = $2,
+         sellerverifiedby = $3,
+         sellertrustnote = $4,
+         updatedat = GREATEST(updatedat, $5)
+     WHERE address = $1`,
+    [input.address, input.sellerVerifiedAt, input.sellerVerifiedBy, input.sellerTrustNote, input.updatedAt]
+  );
 }
 
 export async function updateUserProfile(
@@ -1080,6 +1110,57 @@ export async function getPublicUserProfile(_db: Pool | any, address: string): Pr
   const followerCountRes = await p.query('SELECT COUNT(1) AS count FROM user_follows WHERE followed = $1', [address]);
   const followerCount = Number(followerCountRes.rows?.[0]?.count ?? 0);
 
+  const responseStatsRes = await p.query(
+    `WITH seller_listings AS (
+       SELECT chainkey, id, seller
+       FROM listings
+       WHERE seller = $1
+     ),
+     inbound_threads AS (
+       SELECT DISTINCT c.listingchainkey, c.listingid
+       FROM listing_comments c
+       INNER JOIN seller_listings sl ON sl.chainkey = c.listingchainkey AND sl.id = c.listingid
+       WHERE c.authoraddress <> sl.seller
+     ),
+     replied_threads AS (
+       SELECT DISTINCT inbound.listingchainkey, inbound.listingid
+       FROM inbound_threads inbound
+       INNER JOIN seller_listings sl ON sl.chainkey = inbound.listingchainkey AND sl.id = inbound.listingid
+       INNER JOIN listing_comments seller_reply
+         ON seller_reply.listingchainkey = inbound.listingchainkey
+        AND seller_reply.listingid = inbound.listingid
+        AND seller_reply.authoraddress = sl.seller
+     )
+     SELECT
+       (SELECT COUNT(1) FROM inbound_threads) AS "inboundCount",
+       (SELECT COUNT(1) FROM replied_threads) AS "repliedCount"`,
+    [address]
+  );
+  const inboundCount = Number(responseStatsRes.rows?.[0]?.inboundCount ?? 0);
+  const repliedCount = Number(responseStatsRes.rows?.[0]?.repliedCount ?? 0);
+  const responseRate = inboundCount > 0 ? Math.max(0, Math.min(100, Math.round((repliedCount / inboundCount) * 100))) : null;
+
+  const listingReportCountRes = await p.query(
+    `SELECT COUNT(1) AS count
+     FROM reports r
+     INNER JOIN listings l ON r.targettype = 'listing' AND r.targetid = CONCAT(l.chainkey, ':', l.id)
+     WHERE l.seller = $1`,
+    [address]
+  );
+  const listingReportCount = Number(listingReportCountRes.rows?.[0]?.count ?? 0);
+
+  // Reputation is a bounded marketplace trust signal derived from visible activity,
+  // responsiveness, and report pressure rather than an off-chain paid badge.
+  const reputationSignal =
+    35 +
+    Math.min(listingCount, 10) * 2 +
+    Math.min(followerCount, 10) * 3 +
+    Math.round((responseRate ?? 0) * 0.2) -
+    Math.min(listingReportCount, 8) * 10;
+  const reputation = listingCount > 0 || followerCount > 0 || inboundCount > 0 || listingReportCount > 0
+    ? Math.max(0, Math.min(100, reputationSignal))
+    : null;
+
   if (!user && listingCount === 0) return null;
 
   const locationRes = await p.query(
@@ -1100,6 +1181,9 @@ export async function getPublicUserProfile(_db: Pool | any, address: string): Pr
     avatarCid: null,
     email: null,
     emailVerifiedAt: null,
+    sellerVerifiedAt: null,
+    sellerVerifiedBy: null,
+    sellerTrustNote: null,
     authMethod: "wallet",
     linkedWalletAddress: null,
     streetAddress1: null,
@@ -1116,6 +1200,8 @@ export async function getPublicUserProfile(_db: Pool | any, address: string): Pr
     user: fallbackUser,
     listingCount,
     followerCount,
+    responseRate,
+    reputation,
     ...(locationRes.rows[0]
       ? {
           location: {

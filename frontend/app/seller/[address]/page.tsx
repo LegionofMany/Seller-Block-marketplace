@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/components/providers/AuthProvider";
+import { SellerTrustSummary } from "@/components/site/SellerTrustSummary";
 
 import { fetchJson } from "@/lib/api";
 import { type PublicUserProfileResponse } from "@/lib/auth";
@@ -42,10 +43,36 @@ const listingCreatedEvent = parseAbiItem(
 
 const SAFE_LOG_SCAN_BLOCKS = 25_000n;
 
+type LogArgsLike = {
+  seller?: Address;
+  id?: Hex;
+};
+
+function formatPercent(value: number | null | undefined) {
+  return typeof value === "number" ? `${value}%` : "Building signal";
+}
+
+function formatReputation(value: number | null | undefined) {
+  return typeof value === "number" ? `${value}/100` : "Building signal";
+}
+
+function getErrorMessage(error: unknown, fallback: string) {
+  return error instanceof Error && error.message.trim() ? error.message : fallback;
+}
+
+function getListingEventArgs(args: unknown): LogArgsLike {
+  if (!args || typeof args !== "object") return {};
+  const candidate = args as Record<string, unknown>;
+  return {
+    seller: typeof candidate.seller === "string" && isAddress(candidate.seller) ? (candidate.seller as Address) : undefined,
+    id: typeof candidate.id === "string" ? (candidate.id as Hex) : undefined,
+  };
+}
+
 function isRateLimitError(err: unknown): boolean {
-  const anyErr = err as any;
-  const message = String(anyErr?.shortMessage ?? anyErr?.message ?? "");
-  const details = String(anyErr?.details ?? "");
+  const candidate = err as { shortMessage?: unknown; message?: unknown; details?: unknown } | null;
+  const message = String(candidate?.shortMessage ?? candidate?.message ?? "");
+  const details = String(candidate?.details ?? "");
   return /\b429\b/.test(message) ||
     /too many requests/i.test(message) ||
     /rate limit/i.test(message) ||
@@ -69,20 +96,20 @@ export default function SellerListingsPage({ params }: { params: Promise<{ addre
   const [isFollowing, setIsFollowing] = React.useState(false);
   const [isFollowLoading, setIsFollowLoading] = React.useState(false);
 
-  let env: ReturnType<typeof getEnv>;
-  try {
-    env = getEnv();
-  } catch (e: any) {
-    return (
-      <Card>
-        <CardContent className="p-6 text-sm text-destructive">{e?.message ?? "Missing env vars"}</CardContent>
-      </Card>
-    );
-  }
+  const envState = React.useMemo(() => {
+    try {
+      return { env: getEnv(), error: null as string | null };
+    } catch (error: unknown) {
+      return { env: null, error: getErrorMessage(error, "Missing env vars") };
+    }
+  }, []);
 
   const address = resolvedParams?.address;
   const seller = isAddress(address) ? (address as Address) : null;
   const canFollow = Boolean(seller && auth.address && seller.toLowerCase() !== auth.address.toLowerCase());
+  const defaultChainKey = envState.env?.defaultChain.key ?? "sepolia";
+  const marketplaceRegistryAddress = envState.env?.marketplaceRegistryAddress;
+  const fromBlock = envState.env?.fromBlock ?? 0n;
 
   React.useEffect(() => {
     let cancelled = false;
@@ -133,18 +160,18 @@ export default function SellerListingsPage({ params }: { params: Promise<{ addre
           // fall back to on-chain
         }
 
-        if (!publicClient) throw new Error("No public client");
+        if (!publicClient || !marketplaceRegistryAddress) throw new Error("No public client");
 
         const latest = await publicClient.getBlockNumber();
         const safeFromBlock = latest > SAFE_LOG_SCAN_BLOCKS ? latest - SAFE_LOG_SCAN_BLOCKS : 0n;
 
         const primaryFromBlock =
-          env.fromBlock !== 0n ? (env.fromBlock > latest ? safeFromBlock : env.fromBlock) : safeFromBlock;
+          fromBlock !== 0n ? (fromBlock > latest ? safeFromBlock : fromBlock) : safeFromBlock;
 
         let logs;
         try {
           logs = await publicClient.getLogs({
-            address: env.marketplaceRegistryAddress,
+            address: marketplaceRegistryAddress,
             event: listingCreatedEvent,
             fromBlock: primaryFromBlock,
             toBlock: "latest",
@@ -159,16 +186,18 @@ export default function SellerListingsPage({ params }: { params: Promise<{ addre
         }
 
         const ids = logs
-          .filter((l) => (l.args as any).seller?.toLowerCase?.() === seller.toLowerCase())
-          .map((l) => (l.args as any).id as Hex)
+          .map((log) => getListingEventArgs(log.args))
+          .filter((log) => log.seller?.toLowerCase() === seller.toLowerCase())
+          .map((log) => log.id)
           .filter(Boolean)
+          .map((id) => id as Hex)
           .reverse();
         const uniqueIds = Array.from(new Set(ids)).slice(0, 50);
 
         const results = await publicClient.multicall({
           allowFailure: true,
           contracts: uniqueIds.map((id) => ({
-            address: env.marketplaceRegistryAddress,
+            address: marketplaceRegistryAddress,
             abi: marketplaceRegistryAbi,
             functionName: "listings",
             args: [id],
@@ -182,7 +211,7 @@ export default function SellerListingsPage({ params }: { params: Promise<{ addre
           if (!r || r.status !== "success") continue;
           const parsed = parseListing(r.result);
           const candidate = {
-            chainKey: env.defaultChain.key,
+            chainKey: defaultChainKey,
             id,
             seller: parsed.seller,
             buyer: parsed.buyer,
@@ -199,8 +228,8 @@ export default function SellerListingsPage({ params }: { params: Promise<{ addre
 
         const filtered = rows.filter((r) => r.seller.toLowerCase() === seller.toLowerCase());
         if (!cancelled) setListings(filtered);
-      } catch (e: any) {
-        if (!cancelled) setError(e?.message ?? "Failed to load seller listings");
+      } catch (error: unknown) {
+        if (!cancelled) setError(getErrorMessage(error, "Failed to load seller listings"));
       } finally {
         if (!cancelled) setIsLoading(false);
       }
@@ -211,7 +240,7 @@ export default function SellerListingsPage({ params }: { params: Promise<{ addre
     return () => {
       cancelled = true;
     };
-  }, [env.fromBlock, env.marketplaceRegistryAddress, publicClient, seller]);
+  }, [defaultChainKey, fromBlock, marketplaceRegistryAddress, publicClient, seller]);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -257,11 +286,13 @@ export default function SellerListingsPage({ params }: { params: Promise<{ addre
         );
 
         if (cancelled) return;
-        const next = { ...metadataById };
-        for (const md of results) {
-          if (md?.id) next[md.id] = md;
-        }
-        setMetadataById(next);
+        setMetadataById((current) => {
+          const next = { ...current };
+          for (const md of results) {
+            if (md?.id) next[md.id] = md;
+          }
+          return next;
+        });
       } catch {
         // ignore
       }
@@ -270,7 +301,7 @@ export default function SellerListingsPage({ params }: { params: Promise<{ addre
     return () => {
       cancelled = true;
     };
-  }, [listings]);
+  }, [listings, metadataById]);
 
   async function toggleFollow() {
     if (!seller || !canFollow) return;
@@ -302,11 +333,19 @@ export default function SellerListingsPage({ params }: { params: Promise<{ addre
         });
         return next;
       });
-    } catch (e: any) {
-      setError(e?.message ?? "Failed to update follow state");
+    } catch (error: unknown) {
+      setError(getErrorMessage(error, "Failed to update follow state"));
     } finally {
       setIsFollowLoading(false);
     }
+  }
+
+  if (envState.error) {
+    return (
+      <Card>
+        <CardContent className="p-6 text-sm text-destructive">{envState.error}</CardContent>
+      </Card>
+    );
   }
 
   return (
@@ -334,6 +373,7 @@ export default function SellerListingsPage({ params }: { params: Promise<{ addre
               <div className="space-y-2">
                 <CardTitle>{profile.user.displayName?.trim() || shortenHex(profile.user.address)}</CardTitle>
                 <CardDescription>{profile.user.bio?.trim() || "No seller bio yet."}</CardDescription>
+                <SellerTrustSummary profile={profile} variant="detail" />
                 {canFollow ? (
                   <div className="pt-1">
                     <Button type="button" variant={isFollowing ? "outline" : "default"} size="sm" onClick={() => void toggleFollow()} disabled={isFollowLoading}>
@@ -363,11 +403,11 @@ export default function SellerListingsPage({ params }: { params: Promise<{ addre
             </div>
             <div>
               <div className="text-muted-foreground">Response rate</div>
-              <div className="font-medium">Later</div>
+              <div className="font-medium">{formatPercent(profile.stats.responseRate)}</div>
             </div>
             <div>
               <div className="text-muted-foreground">Reputation</div>
-              <div className="font-medium">Later</div>
+              <div className="font-medium">{formatReputation(profile.stats.reputation)}</div>
             </div>
           </CardContent>
         </Card>
@@ -421,7 +461,7 @@ export default function SellerListingsPage({ params }: { params: Promise<{ addre
                         </div>
                       </div>
                       {!md ? <div className="rounded-md border border-dashed bg-accent/20 px-3 py-2 text-xs text-muted-foreground">Listing details are still syncing.</div> : null}
-                      <CardTitle className="text-base">{md?.title ?? `${saleTypeLabel(l.saleType as any)} listing`}</CardTitle>
+                      <CardTitle className="text-base">{md?.title ?? `${saleTypeLabel(l.saleType)} listing`}</CardTitle>
                       <CardDescription className="text-sm">
                         {md?.description ? md.description : "Price and seller data are available now. Photos and description will appear once metadata is available."}
                       </CardDescription>
@@ -434,7 +474,7 @@ export default function SellerListingsPage({ params }: { params: Promise<{ addre
                           <div className="text-xs text-muted-foreground">Buyer: {shortenHex(l.buyer)}</div>
                         ) : null}
                       </div>
-                      <Badge variant="outline">{statusLabel(l.status as any)}</Badge>
+                      <Badge variant="outline">{statusLabel(l.status)}</Badge>
                     </CardContent>
                   </Card>
                 </Link>

@@ -3,9 +3,11 @@
 import Image from "next/image";
 import Link from "next/link";
 
+import { SellerTrustSummary } from "@/components/site/SellerTrustSummary";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { type ListingSummary } from "@/lib/hooks/useListings";
+import { useSellerProfile } from "@/lib/hooks/useSellerProfile";
 import { buildListingHref } from "@/lib/listings";
 import { saleTypeLabel, statusLabel } from "@/lib/contracts/types";
 import { formatPrice, shortAddress } from "@/lib/format";
@@ -16,6 +18,7 @@ export function ListingCard({ row }: { row: ListingSummary }) {
   const status = statusLabel(row.status);
   const isNative = row.token === zeroAddress;
   const { metadata } = useMarketplaceMetadata(row.metadataURI);
+  const { profile: sellerProfile } = useSellerProfile(row.seller);
   const metadataMissing = !metadata;
 
   const title = metadata?.title?.trim() || `${saleTypeLabel(row.saleType)} listing`;
@@ -61,7 +64,10 @@ export function ListingCard({ row }: { row: ListingSummary }) {
 
           <div className="flex items-center justify-between text-sm">
             <div className="text-muted-foreground">Seller</div>
-            <div>{shortAddress(row.seller)}</div>
+            <div>{sellerProfile?.user.displayName?.trim() || shortAddress(row.seller)}</div>
+          </div>
+          <div className="mt-2">
+            <SellerTrustSummary profile={sellerProfile} variant="compact" />
           </div>
           <div className="mt-2 flex items-center justify-between text-sm">
             <div className="text-muted-foreground">Price</div>

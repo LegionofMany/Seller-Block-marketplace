@@ -2,9 +2,9 @@ import type { Request, Response } from "express";
 import { z } from "zod";
 
 import { HttpError } from "../middlewares/errors";
-import { requireAuthAddress } from "../middlewares/auth";
+import { requireAdmin, requireAuthAddress } from "../middlewares/auth";
 import { getContext } from "../services/context";
-import { createUserFollow, deleteUserFollow, ensureUser, getPublicUserProfile, getUser, isUserFollowing, listFollowedUsers, updateUserProfile } from "../services/db";
+import { createUserFollow, deleteUserFollow, ensureUser, getPublicUserProfile, getUser, isUserFollowing, listFollowedUsers, updateUserProfile, updateUserTrust } from "../services/db";
 import { requireAddress } from "../utils/validation";
 
 function isAvatarValue(value: string): boolean {
@@ -29,8 +29,8 @@ export async function getUserProfile(req: Request, res: Response) {
       listingCount: profile.listingCount,
       location: profile.location ?? null,
       followerCount: profile.followerCount,
-      responseRate: null,
-      reputation: null,
+      responseRate: profile.responseRate,
+      reputation: profile.reputation,
     },
   });
 }
@@ -133,6 +133,30 @@ export async function updateMyProfile(req: Request, res: Response) {
     region,
     postalCode,
     updatedAt: Date.now(),
+  });
+
+  const user = await getUser(db, address);
+  return res.json({ user });
+}
+
+export async function updateUserTrustAction(req: Request, res: Response) {
+  const { db } = getContext();
+  const adminSubject = requireAdmin(req);
+  const address = requireAddress(String(req.params.address ?? ""), "address");
+  const parsed = z.object({
+    sellerVerified: z.boolean(),
+    sellerTrustNote: z.string().max(500).optional(),
+  }).safeParse(req.body ?? {});
+  if (!parsed.success) throw new HttpError(400, "Invalid trust payload", "INVALID_TRUST_PAYLOAD");
+
+  await ensureUser(db, address, Date.now());
+  const now = Date.now();
+  await updateUserTrust(db, {
+    address,
+    sellerVerifiedAt: parsed.data.sellerVerified ? now : null,
+    sellerVerifiedBy: parsed.data.sellerVerified ? adminSubject : null,
+    sellerTrustNote: parsed.data.sellerTrustNote?.trim() ? parsed.data.sellerTrustNote.trim() : null,
+    updatedAt: now,
   });
 
   const user = await getUser(db, address);

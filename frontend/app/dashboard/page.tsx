@@ -9,6 +9,7 @@ import { useSignMessage } from "wagmi";
 import { toast } from "sonner";
 
 import { ListingCard } from "@/components/listing/ListingCard";
+import { SellerTrustSummary } from "@/components/site/SellerTrustSummary";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -25,13 +26,32 @@ import { escrowVaultAbi } from "@/lib/contracts/abi/EscrowVault";
 import { parseListing } from "@/lib/contracts/parse";
 import { statusLabel } from "@/lib/contracts/types";
 import { shortenHex } from "@/lib/format";
-import { type UserProfile } from "@/lib/auth";
+import { type PublicUserProfileResponse, type UserProfile } from "@/lib/auth";
+import { invalidateSellerProfile, primeSellerProfile, useSellerProfile } from "@/lib/hooks/useSellerProfile";
 import { buildListingHref } from "@/lib/listings";
 import { type ListingSummary } from "@/lib/hooks/useListings";
 
 const listingCreatedEvent = parseAbiItem(
   "event ListingCreated(bytes32 indexed id, address seller, uint8 saleType, address token, uint256 price, string metadataURI)"
 );
+
+type ListingCreatedLogArgs = {
+  seller?: Address;
+  id?: Hex;
+};
+
+type EscrowReadShape = {
+  buyer?: Address;
+  seller?: Address;
+  token?: Address;
+  amount?: bigint;
+  status?: number | bigint;
+  0?: Address;
+  1?: Address;
+  2?: Address;
+  3?: bigint;
+  4?: number | bigint;
+};
 
 type SavedSearch = {
   id: number;
@@ -141,6 +161,32 @@ function formatDateTimeInput(value: number) {
 function parseDateTimeInput(value: string) {
   const parsed = Date.parse(value);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function getErrorMessage(error: unknown, fallback: string) {
+  const candidate = error as { shortMessage?: unknown; message?: unknown } | null;
+  const message = candidate?.shortMessage ?? candidate?.message;
+  return typeof message === "string" && message.trim() ? message : fallback;
+}
+
+function getListingCreatedLogArgs(args: unknown): ListingCreatedLogArgs {
+  if (!args || typeof args !== "object") return {};
+  const candidate = args as Record<string, unknown>;
+  return {
+    seller: typeof candidate.seller === "string" && isAddress(candidate.seller) ? (candidate.seller as Address) : undefined,
+    id: typeof candidate.id === "string" ? (candidate.id as Hex) : undefined,
+  };
+}
+
+function decodeEscrowReadResult(value: unknown) {
+  const candidate = (value ?? {}) as EscrowReadShape;
+  return {
+    buyer: (candidate.buyer ?? candidate[0] ?? zeroAddress) as Address,
+    seller: (candidate.seller ?? candidate[1] ?? zeroAddress) as Address,
+    token: (candidate.token ?? candidate[2] ?? zeroAddress) as Address,
+    amount: (candidate.amount ?? candidate[3] ?? 0n) as bigint,
+    status: Number(candidate.status ?? candidate[4] ?? 0),
+  };
 }
 
 function toListingSummary(row: BackendListingRow): ListingSummary {
@@ -284,17 +330,25 @@ export default function DashboardPage() {
   const [isSavingPromotion, setIsSavingPromotion] = React.useState(false);
   const [editingPromotionId, setEditingPromotionId] = React.useState<number | null>(null);
   const [promotionDraft, setPromotionDraft] = React.useState<PromotionDraft | null>(null);
+  const [adminTrustAddress, setAdminTrustAddress] = React.useState("");
+  const [adminTrustNote, setAdminTrustNote] = React.useState("");
+  const [isSavingTrust, setIsSavingTrust] = React.useState(false);
 
-  let env: ReturnType<typeof getEnv>;
-  try {
-    env = getEnv();
-  } catch (e: any) {
-    return (
-      <Card>
-        <CardContent className="p-6 text-sm text-destructive">{e?.message ?? "Missing env vars"}</CardContent>
-      </Card>
-    );
-  }
+  const envState = React.useMemo(() => {
+    try {
+      return { env: getEnv(), error: null as string | null };
+    } catch (error: unknown) {
+      return { env: null, error: getErrorMessage(error, "Missing env vars") };
+    }
+  }, []);
+  const envReady = Boolean(envState.env);
+  const defaultChainKey = envState.env?.defaultChain.key ?? "sepolia";
+  const defaultNativeCurrencySymbol = envState.env?.defaultChain.nativeCurrencySymbol ?? "ETH";
+  const marketplaceRegistryAddress = envState.env?.marketplaceRegistryAddress ?? zeroAddress;
+  const escrowVaultAddress = envState.env?.escrowVaultAddress ?? zeroAddress;
+  const fromBlock = envState.env?.fromBlock ?? 0n;
+  const trustTargetAddress = isAddress(adminTrustAddress) ? adminTrustAddress : null;
+  const { profile: adminTrustProfile, isLoading: isLoadingAdminTrustProfile } = useSellerProfile(trustTargetAddress);
 
   React.useEffect(() => {
     setFullName(auth.user?.fullName ?? "");
@@ -309,10 +363,50 @@ export default function DashboardPage() {
   }, [auth.user]);
 
   React.useEffect(() => {
+    if (!adminTrustProfile || !trustTargetAddress) return;
+    if (adminTrustProfile.user.address.toLowerCase() !== trustTargetAddress.toLowerCase()) return;
+    setAdminTrustNote(adminTrustProfile.user.sellerTrustNote ?? "");
+  }, [adminTrustProfile, trustTargetAddress]);
+
+  React.useEffect(() => {
     const requestedTab = searchParams.get("tab");
     const nextTab: AccountTab = requestedTab === "follows" || requestedTab === "garage" || requestedTab === "dealer-garage" ? requestedTab : "profile";
     setAccountTab((current) => (current === nextTab ? current : nextTab));
   }, [searchParams]);
+
+  async function updateSellerTrust(sellerVerified: boolean) {
+    if (!trustTargetAddress) {
+      toast.error("Enter a valid seller address first");
+      return;
+    }
+
+    try {
+      setIsSavingTrust(true);
+      await fetchJson<{ user: UserProfile | null }>(`/users/${trustTargetAddress}/trust`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sellerVerified,
+          sellerTrustNote: adminTrustNote,
+        }),
+      });
+
+      invalidateSellerProfile(trustTargetAddress);
+      const refreshed = await fetchJson<PublicUserProfileResponse>(`/users/${trustTargetAddress}`, { timeoutMs: 5_000 });
+      primeSellerProfile(refreshed);
+      setAdminTrustNote(refreshed.user.sellerTrustNote ?? "");
+
+      if (auth.user?.address?.toLowerCase() === trustTargetAddress.toLowerCase()) {
+        auth.setUser(refreshed.user);
+      }
+
+      toast.success(sellerVerified ? "Seller verification enabled" : "Seller verification cleared");
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error, "Failed to update seller trust"));
+    } finally {
+      setIsSavingTrust(false);
+    }
+  }
 
   const selectAccountTab = React.useCallback(
     (nextTab: AccountTab) => {
@@ -345,10 +439,10 @@ export default function DashboardPage() {
           setFollowedSellers((res.items ?? []).map((item) => String(item).toLowerCase()));
           setFollowedError(null);
         }
-      } catch (e: any) {
+      } catch (error: unknown) {
         if (!cancelled) {
           setFollowedSellers([]);
-          setFollowedError(e?.message ?? "Could not load followed sellers");
+          setFollowedError(getErrorMessage(error, "Could not load followed sellers"));
         }
       }
     }
@@ -384,10 +478,10 @@ export default function DashboardPage() {
           setFavoriteListings(listingResponses);
           setFavoriteError(null);
         }
-      } catch (e: any) {
+      } catch (error: unknown) {
         if (!cancelled) {
           setFavoriteListings([]);
-          setFavoriteError(e?.message ?? "Could not load favorite listings");
+          setFavoriteError(getErrorMessage(error, "Could not load favorite listings"));
         }
       }
     }
@@ -418,9 +512,9 @@ export default function DashboardPage() {
         setSavedSearches(savedSearchRes.items ?? []);
         setNotifications(notificationRes.items ?? []);
         setNotificationUnreadCount(notificationRes.unreadCount ?? 0);
-      } catch (e: any) {
+      } catch (error: unknown) {
         if (!cancelled) {
-          toast.error(e?.message ?? "Failed to load dashboard alerts");
+          toast.error(getErrorMessage(error, "Failed to load dashboard alerts"));
         }
       }
     }
@@ -447,10 +541,10 @@ export default function DashboardPage() {
         const res = await fetchJson<{ items: PromotionAdminItem[] }>("/promotions/admin?type=homepage_sponsored", { timeoutMs: 7_000 });
         if (cancelled) return;
         setPromotions(res.items ?? []);
-        setPromotionDraft((current) => current ?? emptyPromotionDraft(env.defaultChain.key));
-      } catch (e: any) {
+        setPromotionDraft((current) => current ?? emptyPromotionDraft(defaultChainKey));
+      } catch (error: unknown) {
         if (!cancelled) {
-          toast.error(e?.message ?? "Failed to load spotlight placements");
+          toast.error(getErrorMessage(error, "Failed to load spotlight placements"));
         }
       } finally {
         if (!cancelled) setIsLoadingPromotions(false);
@@ -461,7 +555,7 @@ export default function DashboardPage() {
     return () => {
       cancelled = true;
     };
-  }, [auth.isAuthenticated, auth.isAdmin, dashboardRefreshKey, env.defaultChain.key]);
+  }, [auth.isAuthenticated, auth.isAdmin, dashboardRefreshKey, defaultChainKey]);
 
   const activeSavedSearchSubcategories = React.useMemo(() => {
     if (!savedSearchDraft?.filters.category) return [];
@@ -481,53 +575,53 @@ export default function DashboardPage() {
   const activeTabMeta = accountTabs.find((tab) => tab.key === accountTab) ?? accountTabs[0];
 
   const { data: lastListingId } = useReadContract({
-    address: env.marketplaceRegistryAddress,
+    address: marketplaceRegistryAddress,
     abi: marketplaceRegistryAbi,
     functionName: "lastListingIdOf",
     args: address ? [address as Address] : undefined,
-    query: { enabled: Boolean(address) },
+    query: { enabled: envReady && Boolean(address) },
   });
 
   const { data: registryOwner } = useReadContract({
-    address: env.marketplaceRegistryAddress,
+    address: marketplaceRegistryAddress,
     abi: marketplaceRegistryAbi,
     functionName: "owner",
-    query: { retry: 1 },
+    query: { enabled: envReady, retry: 1 },
   });
 
   const { data: protocolFeeBps } = useReadContract({
-    address: env.marketplaceRegistryAddress,
+    address: marketplaceRegistryAddress,
     abi: marketplaceRegistryAbi,
     functionName: "protocolFeeBps",
-    query: { retry: 1 },
+    query: { enabled: envReady, retry: 1 },
   });
 
   const { data: feeRecipient } = useReadContract({
-    address: env.marketplaceRegistryAddress,
+    address: marketplaceRegistryAddress,
     abi: marketplaceRegistryAbi,
     functionName: "feeRecipient",
-    query: { retry: 1 },
+    query: { enabled: envReady, retry: 1 },
   });
 
   const { data: vaultOwner } = useReadContract({
-    address: env.escrowVaultAddress,
+    address: escrowVaultAddress,
     abi: escrowVaultAbi,
     functionName: "owner",
-    query: { enabled: env.escrowVaultAddress !== zeroAddress, retry: 1 },
+    query: { enabled: envReady && escrowVaultAddress !== zeroAddress, retry: 1 },
   });
 
   const { data: vaultControllerOnchain } = useReadContract({
-    address: env.escrowVaultAddress,
+    address: escrowVaultAddress,
     abi: escrowVaultAbi,
     functionName: "controller",
-    query: { enabled: env.escrowVaultAddress !== zeroAddress, retry: 1 },
+    query: { enabled: envReady && escrowVaultAddress !== zeroAddress, retry: 1 },
   });
 
   const { data: vaultArbiterOnchain } = useReadContract({
-    address: env.escrowVaultAddress,
+    address: escrowVaultAddress,
     abi: escrowVaultAbi,
     functionName: "arbiter",
-    query: { enabled: env.escrowVaultAddress !== zeroAddress, retry: 1 },
+    query: { enabled: envReady && escrowVaultAddress !== zeroAddress, retry: 1 },
   });
 
   const isRegistryOwner = Boolean(
@@ -571,18 +665,21 @@ export default function DashboardPage() {
         const safeFromBlock = latest > SAFE_LOG_SCAN_BLOCKS ? latest - SAFE_LOG_SCAN_BLOCKS : 0n;
 
         const primaryFromBlock =
-          env.fromBlock !== 0n ? (env.fromBlock > latest ? safeFromBlock : env.fromBlock) : safeFromBlock;
+          fromBlock !== 0n ? (fromBlock > latest ? safeFromBlock : fromBlock) : safeFromBlock;
 
         const logs = await publicClient.getLogs({
-          address: env.marketplaceRegistryAddress,
+          address: marketplaceRegistryAddress,
           event: listingCreatedEvent,
           fromBlock: primaryFromBlock,
           toBlock: "latest",
         });
 
         const ids = logs
-          .filter((l) => (l.args as any).seller?.toLowerCase?.() === address.toLowerCase())
-          .map((l) => (l.args as any).id as Hex)
+          .map((log) => getListingCreatedLogArgs(log.args))
+          .filter((log) => log.seller?.toLowerCase() === address.toLowerCase())
+          .map((log) => log.id)
+          .filter(Boolean)
+          .map((id) => id as Hex)
           .reverse();
         if (!cancelled) setMyListingIds(Array.from(new Set(ids)));
       } catch {
@@ -593,7 +690,7 @@ export default function DashboardPage() {
     return () => {
       cancelled = true;
     };
-  }, [address, publicClient]);
+  }, [address, fromBlock, marketplaceRegistryAddress, publicClient]);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -625,7 +722,7 @@ export default function DashboardPage() {
         const results = await publicClient.multicall({
           allowFailure: true,
           contracts: ids.map((id) => ({
-            address: env.marketplaceRegistryAddress,
+            address: marketplaceRegistryAddress,
             abi: marketplaceRegistryAbi,
             functionName: "listings",
             args: [id],
@@ -652,6 +749,16 @@ export default function DashboardPage() {
       cancelled = true;
     };
   }, [address, publicClient, myListingIds]);
+
+  if (envState.error || !envState.env) {
+    return (
+      <Card>
+        <CardContent className="p-6 text-sm text-destructive">{envState.error ?? "Missing env vars"}</CardContent>
+      </Card>
+    );
+  }
+
+  const env = envState.env;
 
   return (
     <div className="space-y-6">
@@ -831,8 +938,8 @@ export default function DashboardPage() {
                                     auth.setUser(res.user);
                                     await auth.refresh();
                                     toast.success("Wallet linked");
-                                  } catch (e: any) {
-                                    toast.error(e?.message ?? "Failed to link wallet");
+                                  } catch (error: unknown) {
+                                    toast.error(getErrorMessage(error, "Failed to link wallet"));
                                   } finally {
                                     setIsLinkingWallet(false);
                                   }
@@ -852,8 +959,8 @@ export default function DashboardPage() {
                                       auth.setUser(res.user);
                                       await auth.refresh();
                                       toast.success("Wallet unlinked");
-                                    } catch (e: any) {
-                                      toast.error(e?.message ?? "Failed to unlink wallet");
+                                    } catch (error: unknown) {
+                                      toast.error(getErrorMessage(error, "Failed to unlink wallet"));
                                     } finally {
                                       setIsLinkingWallet(false);
                                     }
@@ -937,8 +1044,8 @@ export default function DashboardPage() {
                             auth.setUser(res.user);
                             await auth.refresh();
                             toast.success("Profile updated");
-                          } catch (e: any) {
-                            toast.error(e?.message ?? "Failed to update profile");
+                          } catch (error: unknown) {
+                            toast.error(getErrorMessage(error, "Failed to update profile"));
                           }
                         }}
                       >
@@ -972,6 +1079,65 @@ export default function DashboardPage() {
               </div>
             </div>
 
+            <div className="rounded-2xl border bg-white/85 p-4 space-y-4">
+              <div className="space-y-1">
+                <div className="text-sm font-semibold">Seller trust controls</div>
+                <div className="text-sm text-muted-foreground">Promote trusted sellers with an admin-managed verification badge and a short internal trust note that appears publicly on the profile and listing surfaces.</div>
+              </div>
+              <div className="grid gap-4 xl:grid-cols-[minmax(280px,0.8fr)_minmax(0,1.2fr)]">
+                <div className="space-y-3">
+                  <div className="space-y-2">
+                    <Label>Seller address</Label>
+                    <Input
+                      value={adminTrustAddress}
+                      onChange={(event) => setAdminTrustAddress(event.target.value.trim())}
+                      placeholder="0x..."
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Public trust note</Label>
+                    <Textarea
+                      value={adminTrustNote}
+                      onChange={(event) => setAdminTrustNote(event.target.value)}
+                      placeholder="Why this seller is trusted for launch buyers"
+                      rows={3}
+                      maxLength={500}
+                      disabled={!trustTargetAddress}
+                    />
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button type="button" onClick={() => void updateSellerTrust(true)} disabled={!trustTargetAddress || isSavingTrust}>
+                      {isSavingTrust ? "Saving…" : "Mark verified seller"}
+                    </Button>
+                    <Button type="button" variant="outline" onClick={() => void updateSellerTrust(false)} disabled={!trustTargetAddress || isSavingTrust}>
+                      Clear verification
+                    </Button>
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-dashed bg-slate-50/80 p-4">
+                  {!trustTargetAddress ? (
+                    <div className="text-sm text-muted-foreground">Enter a valid seller address to preview current trust state.</div>
+                  ) : isLoadingAdminTrustProfile ? (
+                    <div className="space-y-2">
+                      <Skeleton className="h-5 w-40" />
+                      <Skeleton className="h-4 w-64" />
+                      <Skeleton className="h-8 w-full" />
+                    </div>
+                  ) : adminTrustProfile ? (
+                    <div className="space-y-3">
+                      <div>
+                        <div className="text-sm font-semibold">{adminTrustProfile.user.displayName?.trim() || shortenHex(adminTrustProfile.user.address)}</div>
+                        <div className="text-xs text-muted-foreground break-all">{adminTrustProfile.user.address}</div>
+                      </div>
+                      <SellerTrustSummary profile={adminTrustProfile} variant="detail" />
+                    </div>
+                  ) : (
+                    <div className="text-sm text-muted-foreground">No public seller profile was found for that address yet.</div>
+                  )}
+                </div>
+              </div>
+            </div>
+
             <div className="grid gap-5 xl:grid-cols-[minmax(0,1.1fr)_minmax(320px,0.9fr)]">
               <div className="space-y-3">
                 <div className="flex items-center justify-between gap-3">
@@ -984,7 +1150,7 @@ export default function DashboardPage() {
                     variant="outline"
                     onClick={() => {
                       setEditingPromotionId(null);
-                      setPromotionDraft(emptyPromotionDraft(env.defaultChain.key));
+                      setPromotionDraft(emptyPromotionDraft(defaultChainKey));
                     }}
                   >
                     New placement
@@ -1041,11 +1207,11 @@ export default function DashboardPage() {
                                 setPromotions((current) => current.filter((entry) => entry.id !== item.id));
                                 if (editingPromotionId === item.id) {
                                   setEditingPromotionId(null);
-                                  setPromotionDraft(emptyPromotionDraft(env.defaultChain.key));
+                                  setPromotionDraft(emptyPromotionDraft(defaultChainKey));
                                 }
                                 toast.success("Placement removed");
-                              } catch (e: any) {
-                                toast.error(e?.message ?? "Failed to remove placement");
+                              } catch (error: unknown) {
+                                toast.error(getErrorMessage(error, "Failed to remove placement"));
                               } finally {
                                 setIsSavingPromotion(false);
                               }
@@ -1082,7 +1248,7 @@ export default function DashboardPage() {
                         <Input
                           value={promotionDraft.listingChainKey}
                           onChange={(e) => setPromotionDraft((current) => current ? { ...current, listingChainKey: e.target.value } : current)}
-                          placeholder={env.defaultChain.key}
+                          placeholder={defaultChainKey}
                         />
                       </div>
                       <div className="space-y-2">
@@ -1221,10 +1387,10 @@ export default function DashboardPage() {
                               return [res.item, ...current];
                             });
                             setEditingPromotionId(null);
-                            setPromotionDraft(emptyPromotionDraft(env.defaultChain.key));
+                            setPromotionDraft(emptyPromotionDraft(defaultChainKey));
                             toast.success(editingPromotionId ? "Placement updated" : "Placement created");
-                          } catch (e: any) {
-                            toast.error(e?.message ?? "Failed to save placement");
+                          } catch (error: unknown) {
+                            toast.error(getErrorMessage(error, "Failed to save placement"));
                           } finally {
                             setIsSavingPromotion(false);
                           }
@@ -1238,7 +1404,7 @@ export default function DashboardPage() {
                         disabled={isSavingPromotion}
                         onClick={() => {
                           setEditingPromotionId(null);
-                          setPromotionDraft(emptyPromotionDraft(env.defaultChain.key));
+                          setPromotionDraft(emptyPromotionDraft(defaultChainKey));
                         }}
                       >
                         Reset
@@ -1298,8 +1464,8 @@ export default function DashboardPage() {
                               setSavedSearchDraft(null);
                             }
                             toast.success("Saved search removed");
-                          } catch (e: any) {
-                            toast.error(e?.message ?? "Failed to remove saved search");
+                          } catch (error: unknown) {
+                            toast.error(getErrorMessage(error, "Failed to remove saved search"));
                           }
                         }}
                       >
@@ -1459,8 +1625,8 @@ export default function DashboardPage() {
                               setEditingSavedSearchId(null);
                               setSavedSearchDraft(null);
                               toast.success("Saved search updated");
-                            } catch (e: any) {
-                              toast.error(e?.message ?? "Failed to update saved search");
+                            } catch (error: unknown) {
+                              toast.error(getErrorMessage(error, "Failed to update saved search"));
                             } finally {
                               setIsSavingSavedSearch(false);
                             }
@@ -1508,8 +1674,8 @@ export default function DashboardPage() {
                     await fetchJson("/notifications/read-all", { method: "POST" });
                     setNotifications((current) => current.map((item) => ({ ...item, readAt: item.readAt ?? Date.now() })));
                     setNotificationUnreadCount(0);
-                  } catch (e: any) {
-                    toast.error(e?.message ?? "Failed to mark notifications as read");
+                  } catch (error: unknown) {
+                    toast.error(getErrorMessage(error, "Failed to mark notifications as read"));
                   }
                 }}
               >
@@ -1545,8 +1711,8 @@ export default function DashboardPage() {
                             await fetchJson(`/notifications/${item.id}/read`, { method: "POST" });
                             setNotifications((current) => current.map((entry) => (entry.id === item.id ? { ...entry, readAt: Date.now() } : entry)));
                             setNotificationUnreadCount((current) => Math.max(0, current - 1));
-                          } catch (e: any) {
-                            toast.error(e?.message ?? "Failed to mark notification as read");
+                          } catch (error: unknown) {
+                            toast.error(getErrorMessage(error, "Failed to mark notification as read"));
                           }
                         }}
                       >
@@ -1662,7 +1828,7 @@ export default function DashboardPage() {
           ) : (
             <div className="space-y-2">
               {(myListings ?? []).map((row) => (
-                <Link key={row.id} href={buildListingHref(String(row.id), env.defaultChain.key)} className="block rounded-2xl border px-3 py-3 text-sm transition-colors hover:bg-accent/30 sm:px-4">
+                <Link key={row.id} href={buildListingHref(String(row.id), defaultChainKey)} className="block rounded-2xl border px-3 py-3 text-sm transition-colors hover:bg-accent/30 sm:px-4">
                   <div className="flex items-center justify-between gap-3">
                     <div className="break-all font-medium">{row.id}</div>
                     <div className="text-xs text-muted-foreground">{statusLabel(row.status as any)}</div>
@@ -1708,7 +1874,7 @@ export default function DashboardPage() {
             <div className="text-muted-foreground">Last listing</div>
             <div className="font-medium break-all sm:text-right">
               {lastListingId && lastListingId !== ("0x" + "00".repeat(32)) ? (
-                <Link className="underline" href={buildListingHref(String(lastListingId), env.defaultChain.key)}> {shortenHex(lastListingId)} </Link>
+                <Link className="underline" href={buildListingHref(String(lastListingId), defaultChainKey)}> {shortenHex(lastListingId)} </Link>
               ) : (
                 "—"
               )}
@@ -1734,7 +1900,7 @@ export default function DashboardPage() {
             </div>
             <div className="space-y-2">
               <Label>Token address (optional)</Label>
-              <Input value={token} onChange={(e) => setToken(e.target.value)} placeholder={`Leave empty for ${env.defaultChain.nativeCurrencySymbol}`} />
+              <Input value={token} onChange={(e) => setToken(e.target.value)} placeholder={`Leave empty for ${defaultNativeCurrencySymbol}`} />
             </div>
             <Button
               variant="outline"
@@ -1747,7 +1913,7 @@ export default function DashboardPage() {
                   const tokenArg = token.trim().length ? (token.trim() as Address) : zeroAddress;
                   const id = toast.loading("Withdrawing…");
                   const hash = await writeContractAsync({
-                    address: env.marketplaceRegistryAddress,
+                    address: marketplaceRegistryAddress,
                     abi: marketplaceRegistryAbi,
                     functionName: "withdrawPayout",
                     args: [tokenArg],
@@ -1807,7 +1973,7 @@ export default function DashboardPage() {
                     <Input value={vaultController} onChange={(e) => setVaultController(e.target.value)} placeholder="0x..." />
                     <Button
                       variant="outline"
-                      disabled={env.escrowVaultAddress === zeroAddress || !vaultController.trim().length}
+                      disabled={escrowVaultAddress === zeroAddress || !vaultController.trim().length}
                       onClick={async () => {
                         try {
                           if (!publicClient) throw new Error("No public client");
@@ -1816,7 +1982,7 @@ export default function DashboardPage() {
 
                           const id = toast.loading("Setting controller…");
                           const hash = await writeContractAsync({
-                            address: env.escrowVaultAddress,
+                            address: escrowVaultAddress,
                             abi: escrowVaultAbi,
                             functionName: "setController",
                             args: [next as Address],
@@ -1837,7 +2003,7 @@ export default function DashboardPage() {
                     <Input value={vaultArbiter} onChange={(e) => setVaultArbiter(e.target.value)} placeholder="0x..." />
                     <Button
                       variant="outline"
-                      disabled={env.escrowVaultAddress === zeroAddress || !vaultArbiter.trim().length}
+                      disabled={escrowVaultAddress === zeroAddress || !vaultArbiter.trim().length}
                       onClick={async () => {
                         try {
                           if (!publicClient) throw new Error("No public client");
@@ -1846,7 +2012,7 @@ export default function DashboardPage() {
 
                           const id = toast.loading("Setting vault arbiter…");
                           const hash = await writeContractAsync({
-                            address: env.escrowVaultAddress,
+                            address: escrowVaultAddress,
                             abi: escrowVaultAbi,
                             functionName: "setArbiter",
                             args: [next as Address],
@@ -1893,7 +2059,7 @@ export default function DashboardPage() {
 
                         const id = toast.loading("Setting registry arbiter…");
                         const hash = await writeContractAsync({
-                          address: env.marketplaceRegistryAddress,
+                          address: marketplaceRegistryAddress,
                           abi: marketplaceRegistryAbi,
                           functionName: "setArbiter",
                           args: [next as Address],
@@ -1911,7 +2077,7 @@ export default function DashboardPage() {
 
                 <div className="space-y-2">
                   <Label>Withdraw protocol fees (token optional)</Label>
-                  <Input value={feesToken} onChange={(e) => setFeesToken(e.target.value)} placeholder={`Leave empty for ${env.defaultChain.nativeCurrencySymbol}`} />
+                  <Input value={feesToken} onChange={(e) => setFeesToken(e.target.value)} placeholder={`Leave empty for ${defaultNativeCurrencySymbol}`} />
                   <Button
                     variant="outline"
                     onClick={async () => {
@@ -1924,7 +2090,7 @@ export default function DashboardPage() {
 
                         const id = toast.loading("Withdrawing fees…");
                         const hash = await writeContractAsync({
-                          address: env.marketplaceRegistryAddress,
+                          address: marketplaceRegistryAddress,
                           abi: marketplaceRegistryAbi,
                           functionName: "withdrawFees",
                           args: [(tokenArg as Address) ?? zeroAddress],
@@ -1955,7 +2121,7 @@ export default function DashboardPage() {
                 <Input value={inspectEscrowId} onChange={(e) => setInspectEscrowId(e.target.value)} placeholder="0x..." />
                 <Button
                   variant="outline"
-                  disabled={env.escrowVaultAddress === zeroAddress || !inspectEscrowId.trim().length}
+                  disabled={escrowVaultAddress === zeroAddress || !inspectEscrowId.trim().length}
                   onClick={async () => {
                     try {
                       if (!publicClient) throw new Error("No public client");
@@ -1963,23 +2129,16 @@ export default function DashboardPage() {
                       if (!id.startsWith("0x") || id.length !== 66) throw new Error("Escrow id must be bytes32 (0x + 64 hex chars)");
 
                       const res = await publicClient.readContract({
-                        address: env.escrowVaultAddress,
+                        address: escrowVaultAddress,
                         abi: escrowVaultAbi,
                         functionName: "getEscrow",
                         args: [id as Hex],
                       });
 
-                      const anyRes: any = res as any;
-                      const buyer = (anyRes?.buyer ?? anyRes?.[0]) as Address;
-                      const seller = (anyRes?.seller ?? anyRes?.[1]) as Address;
-                      const token = (anyRes?.token ?? anyRes?.[2]) as Address;
-                      const amount = (anyRes?.amount ?? anyRes?.[3]) as bigint;
-                      const status = Number(anyRes?.status ?? anyRes?.[4]);
-
-                      setEscrowInfo({ buyer, seller, token, amount, status });
-                    } catch (e: any) {
+                      setEscrowInfo(decodeEscrowReadResult(res));
+                    } catch (error: unknown) {
                       setEscrowInfo(null);
-                      toast.error(e?.shortMessage ?? e?.message ?? "Failed to read escrow");
+                      toast.error(getErrorMessage(error, "Failed to read escrow"));
                     }
                   }}
                 >
@@ -1990,10 +2149,10 @@ export default function DashboardPage() {
               <div className="space-y-2">
                 <Label>Check credits (recipient + token)</Label>
                 <Input value={creditRecipient} onChange={(e) => setCreditRecipient(e.target.value)} placeholder="Recipient 0x..." />
-                <Input value={creditToken} onChange={(e) => setCreditToken(e.target.value)} placeholder={`Token 0x... (empty = ${env.defaultChain.nativeCurrencySymbol})`} />
+                <Input value={creditToken} onChange={(e) => setCreditToken(e.target.value)} placeholder={`Token 0x... (empty = ${defaultNativeCurrencySymbol})`} />
                 <Button
                   variant="outline"
-                  disabled={env.escrowVaultAddress === zeroAddress || !creditRecipient.trim().length}
+                  disabled={escrowVaultAddress === zeroAddress || !creditRecipient.trim().length}
                   onClick={async () => {
                     try {
                       if (!publicClient) throw new Error("No public client");
@@ -2004,15 +2163,15 @@ export default function DashboardPage() {
                       if (tokenArg !== zeroAddress && !isAddress(tokenArg)) throw new Error("Invalid token address");
 
                       const amount = await publicClient.readContract({
-                        address: env.escrowVaultAddress,
+                        address: escrowVaultAddress,
                         abi: escrowVaultAbi,
                         functionName: "creditOf",
                         args: [recipient as Address, tokenArg as Address],
                       });
                       setCreditAmount(amount as bigint);
-                    } catch (e: any) {
+                    } catch (error: unknown) {
                       setCreditAmount(null);
-                      toast.error(e?.shortMessage ?? e?.message ?? "Failed to read credits");
+                      toast.error(getErrorMessage(error, "Failed to read credits"));
                     }
                   }}
                 >

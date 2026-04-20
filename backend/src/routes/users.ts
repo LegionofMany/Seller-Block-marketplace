@@ -2,7 +2,7 @@ import { Router } from "express";
 
 import { asyncHandler } from "../middlewares/async";
 import { authenticate } from "../middlewares/auth";
-import { followUser, getFollowState, getMyFollowedUsers, getUserProfile, unfollowUser, updateMyProfile } from "../controllers/usersController";
+import { followUser, getFollowState, getMyFollowedUsers, getUserProfile, unfollowUser, updateMyProfile, updateUserTrustAction } from "../controllers/usersController";
 
 export function usersRouter() {
   const router = Router();
@@ -13,6 +13,7 @@ export function usersRouter() {
   router.post("/users/:address/follow", authenticate, asyncHandler(followUser));
   router.delete("/users/:address/follow", authenticate, asyncHandler(unfollowUser));
   router.put("/users/me", authenticate, asyncHandler(updateMyProfile));
+  router.put("/users/:address/trust", authenticate, asyncHandler(updateUserTrustAction));
 
   return router;
 }
