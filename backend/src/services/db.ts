@@ -112,6 +112,17 @@ export type PublicUserProfileRow = {
   };
 };
 
+export type UserTrustReviewRow = {
+  id: number;
+  userAddress: string;
+  reviewer: string;
+  sellerVerified: boolean;
+  sellerTrustNote?: string | null;
+  previousSellerVerified?: boolean | null;
+  previousSellerTrustNote?: string | null;
+  createdAt: number;
+};
+
 export type AuthNonceRow = {
   address: string;
   nonce: string;
@@ -796,6 +807,19 @@ function toFavoriteListingRow(r: any): FavoriteListingRow {
   };
 }
 
+function toUserTrustReviewRow(r: any): UserTrustReviewRow {
+  return {
+    id: Number(r.id ?? 0),
+    userAddress: String(r.userAddress ?? r.useraddress),
+    reviewer: String(r.reviewer ?? ""),
+    sellerVerified: Boolean(r.sellerVerified ?? r.sellerverified),
+    sellerTrustNote: r.sellerTrustNote ?? r.sellertrustnote ?? null,
+    previousSellerVerified: r.previousSellerVerified ?? r.previoussellerverified ?? null,
+    previousSellerTrustNote: r.previousSellerTrustNote ?? r.previoussellertrustnote ?? null,
+    createdAt: Number(r.createdAt ?? r.createdat ?? 0),
+  };
+}
+
 function toPromotionRow(r: any): PromotionRow {
   return {
     id: Number(r.id),
@@ -1047,6 +1071,87 @@ export async function updateUserTrust(
      WHERE address = $1`,
     [input.address, input.sellerVerifiedAt, input.sellerVerifiedBy, input.sellerTrustNote, input.updatedAt]
   );
+}
+
+export async function createUserTrustReview(
+  _db: Pool | any,
+  input: {
+    userAddress: string;
+    reviewer: string;
+    sellerVerified: boolean;
+    sellerTrustNote: string | null;
+    previousSellerVerified: boolean | null;
+    previousSellerTrustNote: string | null;
+    createdAt: number;
+  }
+) {
+  const p = ensurePool(_db);
+  const res = await p.query(
+    `INSERT INTO user_trust_reviews(useraddress, reviewer, sellerverified, sellertrustnote, previoussellerverified, previoussellertrustnote, createdat)
+     VALUES($1,$2,$3,$4,$5,$6,$7)
+     RETURNING id, useraddress AS "userAddress", reviewer, sellerverified AS "sellerVerified", sellertrustnote AS "sellerTrustNote", previoussellerverified AS "previousSellerVerified", previoussellertrustnote AS "previousSellerTrustNote", createdat AS "createdAt"`,
+    [
+      input.userAddress,
+      input.reviewer,
+      input.sellerVerified,
+      input.sellerTrustNote,
+      input.previousSellerVerified,
+      input.previousSellerTrustNote,
+      input.createdAt,
+    ]
+  );
+  return toUserTrustReviewRow(res.rows[0]);
+}
+
+export async function listUserTrustReviews(_db: Pool | any, limit = 50): Promise<UserTrustReviewRow[]> {
+  const p = ensurePool(_db);
+  const res = await p.query(
+    `SELECT id,
+            useraddress AS "userAddress",
+            reviewer,
+            sellerverified AS "sellerVerified",
+            sellertrustnote AS "sellerTrustNote",
+            previoussellerverified AS "previousSellerVerified",
+            previoussellertrustnote AS "previousSellerTrustNote",
+            createdat AS "createdAt"
+     FROM user_trust_reviews
+     ORDER BY createdat DESC, id DESC
+     LIMIT $1`,
+    [limit]
+  );
+  return res.rows.map(toUserTrustReviewRow);
+}
+
+export async function listTrustQueueProfiles(_db: Pool | any, limit = 12): Promise<PublicUserProfileRow[]> {
+  const p = ensurePool(_db);
+  const res = await p.query(
+    `SELECT l.seller AS address
+     FROM listings l
+     LEFT JOIN users u ON u.address = l.seller
+     WHERE COALESCE(u.sellerverifiedat, 0) = 0
+     GROUP BY l.seller
+     ORDER BY MAX(l.createdat) DESC, COUNT(1) DESC
+     LIMIT $1`,
+    [limit]
+  );
+
+  const profiles = await Promise.all(res.rows.map((row) => getPublicUserProfile(p, String(row.address))));
+  return profiles.filter((profile): profile is PublicUserProfileRow => Boolean(profile));
+}
+
+export async function listVerifiedUserProfiles(_db: Pool | any, limit = 12): Promise<PublicUserProfileRow[]> {
+  const p = ensurePool(_db);
+  const res = await p.query(
+    `SELECT address
+     FROM users
+     WHERE sellerverifiedat IS NOT NULL
+     ORDER BY sellerverifiedat DESC, updatedat DESC
+     LIMIT $1`,
+    [limit]
+  );
+
+  const profiles = await Promise.all(res.rows.map((row) => getPublicUserProfile(p, String(row.address))));
+  return profiles.filter((profile): profile is PublicUserProfileRow => Boolean(profile));
 }
 
 export async function updateUserProfile(

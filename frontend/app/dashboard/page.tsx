@@ -139,6 +139,23 @@ type PromotionDraft = {
   endsAt: string;
 };
 
+type TrustReviewHistoryItem = {
+  id: number;
+  userAddress: string;
+  reviewer: string;
+  sellerVerified: boolean;
+  sellerTrustNote?: string | null;
+  previousSellerVerified?: boolean | null;
+  previousSellerTrustNote?: string | null;
+  createdAt: number;
+};
+
+type AdminTrustSummaryResponse = {
+  queue: PublicUserProfileResponse[];
+  verified: PublicUserProfileResponse[];
+  history: TrustReviewHistoryItem[];
+};
+
 type AccountTab = "profile" | "follows" | "garage" | "dealer-garage";
 
 function formatFilters(filters: SavedSearchFilters) {
@@ -317,7 +334,7 @@ export default function DashboardPage() {
   const [creditToken, setCreditToken] = React.useState<string>("");
   const [creditAmount, setCreditAmount] = React.useState<bigint | null>(null);
   const [myListingIds, setMyListingIds] = React.useState<Hex[] | null>(null);
-  const [myListings, setMyListings] = React.useState<Array<{ id: Hex; status: number; buyer: Address }> | null>(null);
+  const [myListings, setMyListings] = React.useState<Array<{ id: Hex; status: Parameters<typeof statusLabel>[0]; buyer: Address }> | null>(null);
   const [savedSearches, setSavedSearches] = React.useState<SavedSearch[]>([]);
   const [notifications, setNotifications] = React.useState<NotificationItem[]>([]);
   const [notificationUnreadCount, setNotificationUnreadCount] = React.useState(0);
@@ -333,6 +350,10 @@ export default function DashboardPage() {
   const [adminTrustAddress, setAdminTrustAddress] = React.useState("");
   const [adminTrustNote, setAdminTrustNote] = React.useState("");
   const [isSavingTrust, setIsSavingTrust] = React.useState(false);
+  const [trustQueue, setTrustQueue] = React.useState<PublicUserProfileResponse[]>([]);
+  const [verifiedSellers, setVerifiedSellers] = React.useState<PublicUserProfileResponse[]>([]);
+  const [trustHistory, setTrustHistory] = React.useState<TrustReviewHistoryItem[]>([]);
+  const [isLoadingTrustAdmin, setIsLoadingTrustAdmin] = React.useState(false);
 
   const envState = React.useMemo(() => {
     try {
@@ -369,6 +390,42 @@ export default function DashboardPage() {
   }, [adminTrustProfile, trustTargetAddress]);
 
   React.useEffect(() => {
+    let cancelled = false;
+
+    async function run() {
+      if (!auth.isAuthenticated || !auth.isAdmin) {
+        setTrustQueue([]);
+        setVerifiedSellers([]);
+        setTrustHistory([]);
+        return;
+      }
+
+      try {
+        setIsLoadingTrustAdmin(true);
+        const res = await fetchJson<AdminTrustSummaryResponse>("/users/admin/trust", { timeoutMs: 7_000 });
+        if (cancelled) return;
+        for (const profile of [...(res.queue ?? []), ...(res.verified ?? [])]) {
+          primeSellerProfile(profile);
+        }
+        setTrustQueue(res.queue ?? []);
+        setVerifiedSellers(res.verified ?? []);
+        setTrustHistory(res.history ?? []);
+      } catch (error: unknown) {
+        if (!cancelled) {
+          toast.error(getErrorMessage(error, "Failed to load seller trust review data"));
+        }
+      } finally {
+        if (!cancelled) setIsLoadingTrustAdmin(false);
+      }
+    }
+
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [auth.isAuthenticated, auth.isAdmin, dashboardRefreshKey]);
+
+  React.useEffect(() => {
     const requestedTab = searchParams.get("tab");
     const nextTab: AccountTab = requestedTab === "follows" || requestedTab === "garage" || requestedTab === "dealer-garage" ? requestedTab : "profile";
     setAccountTab((current) => (current === nextTab ? current : nextTab));
@@ -395,6 +452,7 @@ export default function DashboardPage() {
       const refreshed = await fetchJson<PublicUserProfileResponse>(`/users/${trustTargetAddress}`, { timeoutMs: 5_000 });
       primeSellerProfile(refreshed);
       setAdminTrustNote(refreshed.user.sellerTrustNote ?? "");
+      setDashboardRefreshKey((current) => current + 1);
 
       if (auth.user?.address?.toLowerCase() === trustTargetAddress.toLowerCase()) {
         auth.setUser(refreshed.user);
@@ -736,7 +794,7 @@ export default function DashboardPage() {
             const parsed = parseListing(r.result);
             return { id, status: Number(parsed.status), buyer: parsed.buyer };
           })
-          .filter(Boolean) as Array<{ id: Hex; status: number; buyer: Address }>;
+          .filter(Boolean) as Array<{ id: Hex; status: Parameters<typeof statusLabel>[0]; buyer: Address }>;
 
         if (!cancelled) setMyListings(rows);
       } catch {
@@ -748,7 +806,7 @@ export default function DashboardPage() {
     return () => {
       cancelled = true;
     };
-  }, [address, publicClient, myListingIds]);
+  }, [address, marketplaceRegistryAddress, publicClient, myListingIds]);
 
   if (envState.error || !envState.env) {
     return (
@@ -757,8 +815,6 @@ export default function DashboardPage() {
       </Card>
     );
   }
-
-  const env = envState.env;
 
   return (
     <div className="space-y-6">
@@ -1135,6 +1191,118 @@ export default function DashboardPage() {
                     <div className="text-sm text-muted-foreground">No public seller profile was found for that address yet.</div>
                   )}
                 </div>
+              </div>
+
+              <div className="grid gap-4 xl:grid-cols-2">
+                <div className="rounded-2xl border bg-white/90 p-4 space-y-3">
+                  <div>
+                    <div className="text-sm font-semibold">Review queue</div>
+                    <div className="text-sm text-muted-foreground">Sellers with marketplace activity but no admin verification yet.</div>
+                  </div>
+                  {isLoadingTrustAdmin ? (
+                    <div className="space-y-2">
+                      <Skeleton className="h-16 w-full" />
+                      <Skeleton className="h-16 w-full" />
+                    </div>
+                  ) : trustQueue.length === 0 ? (
+                    <div className="text-sm text-muted-foreground">No unreviewed seller profiles are currently in the queue.</div>
+                  ) : (
+                    trustQueue.map((profile) => (
+                      <button
+                        key={profile.user.address}
+                        type="button"
+                        className="w-full rounded-2xl border p-3 text-left transition-colors hover:bg-accent/20"
+                        onClick={() => setAdminTrustAddress(profile.user.address)}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="space-y-1">
+                            <div className="font-medium">{profile.user.displayName?.trim() || shortenHex(profile.user.address)}</div>
+                            <div className="text-xs text-muted-foreground break-all">{profile.user.address}</div>
+                          </div>
+                          <div className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Review</div>
+                        </div>
+                        <div className="mt-2">
+                          <SellerTrustSummary profile={profile} variant="detail" />
+                        </div>
+                      </button>
+                    ))
+                  )}
+                </div>
+
+                <div className="rounded-2xl border bg-white/90 p-4 space-y-3">
+                  <div>
+                    <div className="text-sm font-semibold">Verified sellers</div>
+                    <div className="text-sm text-muted-foreground">Recent verified sellers stay visible so admins can spot stale notes or reversals quickly.</div>
+                  </div>
+                  {isLoadingTrustAdmin ? (
+                    <div className="space-y-2">
+                      <Skeleton className="h-16 w-full" />
+                      <Skeleton className="h-16 w-full" />
+                    </div>
+                  ) : verifiedSellers.length === 0 ? (
+                    <div className="text-sm text-muted-foreground">No sellers have been verified yet.</div>
+                  ) : (
+                    verifiedSellers.map((profile) => (
+                      <button
+                        key={profile.user.address}
+                        type="button"
+                        className="w-full rounded-2xl border p-3 text-left transition-colors hover:bg-accent/20"
+                        onClick={() => setAdminTrustAddress(profile.user.address)}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="space-y-1">
+                            <div className="font-medium">{profile.user.displayName?.trim() || shortenHex(profile.user.address)}</div>
+                            <div className="text-xs text-muted-foreground break-all">{profile.user.address}</div>
+                          </div>
+                          <div className="text-xs text-muted-foreground">{profile.user.sellerVerifiedAt ? formatDateTime(profile.user.sellerVerifiedAt) : "Verified"}</div>
+                        </div>
+                        <div className="mt-2">
+                          <SellerTrustSummary profile={profile} variant="detail" />
+                        </div>
+                      </button>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              <div className="rounded-2xl border bg-white/90 p-4 space-y-3">
+                <div>
+                  <div className="text-sm font-semibold">Trust review history</div>
+                  <div className="text-sm text-muted-foreground">Every verification change is recorded so edits are auditable instead of ephemeral.</div>
+                </div>
+                {isLoadingTrustAdmin ? (
+                  <div className="space-y-2">
+                    <Skeleton className="h-14 w-full" />
+                    <Skeleton className="h-14 w-full" />
+                    <Skeleton className="h-14 w-full" />
+                  </div>
+                ) : trustHistory.length === 0 ? (
+                  <div className="text-sm text-muted-foreground">No seller trust review actions have been recorded yet.</div>
+                ) : (
+                  <div className="space-y-2">
+                    {trustHistory.map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        className="w-full rounded-2xl border p-3 text-left transition-colors hover:bg-accent/20"
+                        onClick={() => setAdminTrustAddress(item.userAddress)}
+                      >
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                          <div className="space-y-1">
+                            <div className="font-medium">{item.sellerVerified ? "Verified seller" : "Verification cleared"}</div>
+                            <div className="text-xs text-muted-foreground break-all">Seller: {item.userAddress}</div>
+                            <div className="text-xs text-muted-foreground">Reviewer: {item.reviewer}</div>
+                            {item.sellerTrustNote?.trim() ? <div className="text-sm text-slate-700">{item.sellerTrustNote.trim()}</div> : null}
+                            {item.previousSellerTrustNote?.trim() && item.previousSellerTrustNote.trim() !== item.sellerTrustNote?.trim() ? (
+                              <div className="text-xs text-muted-foreground">Previous note: {item.previousSellerTrustNote.trim()}</div>
+                            ) : null}
+                          </div>
+                          <div className="text-xs text-muted-foreground">{formatDateTime(item.createdAt)}</div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -1831,7 +1999,7 @@ export default function DashboardPage() {
                 <Link key={row.id} href={buildListingHref(String(row.id), defaultChainKey)} className="block rounded-2xl border px-3 py-3 text-sm transition-colors hover:bg-accent/30 sm:px-4">
                   <div className="flex items-center justify-between gap-3">
                     <div className="break-all font-medium">{row.id}</div>
-                    <div className="text-xs text-muted-foreground">{statusLabel(row.status as any)}</div>
+                    <div className="text-xs text-muted-foreground">{statusLabel(row.status)}</div>
                   </div>
                   {row.buyer && row.buyer !== zeroAddress ? (
                     <div className="mt-1 text-xs text-muted-foreground">Buyer: {shortenHex(row.buyer)}</div>
@@ -1920,8 +2088,8 @@ export default function DashboardPage() {
                   });
                   await publicClient.waitForTransactionReceipt({ hash });
                   toast.success("Withdraw complete", { id });
-                } catch (e: any) {
-                  toast.error(e?.shortMessage ?? e?.message ?? "Withdraw failed");
+                } catch (error: unknown) {
+                  toast.error(getErrorMessage(error, "Withdraw failed"));
                 }
               }}
             >
@@ -1989,8 +2157,8 @@ export default function DashboardPage() {
                           });
                           await publicClient.waitForTransactionReceipt({ hash });
                           toast.success("Controller updated", { id });
-                        } catch (e: any) {
-                          toast.error(e?.shortMessage ?? e?.message ?? "Failed to set controller");
+                        } catch (error: unknown) {
+                          toast.error(getErrorMessage(error, "Failed to set controller"));
                         }
                       }}
                     >
@@ -2019,8 +2187,8 @@ export default function DashboardPage() {
                           });
                           await publicClient.waitForTransactionReceipt({ hash });
                           toast.success("Vault arbiter updated", { id });
-                        } catch (e: any) {
-                          toast.error(e?.shortMessage ?? e?.message ?? "Failed to set vault arbiter");
+                        } catch (error: unknown) {
+                          toast.error(getErrorMessage(error, "Failed to set vault arbiter"));
                         }
                       }}
                     >
@@ -2066,8 +2234,8 @@ export default function DashboardPage() {
                         });
                         await publicClient.waitForTransactionReceipt({ hash });
                         toast.success("Registry arbiter updated", { id });
-                      } catch (e: any) {
-                        toast.error(e?.shortMessage ?? e?.message ?? "Failed to set registry arbiter");
+                      } catch (error: unknown) {
+                        toast.error(getErrorMessage(error, "Failed to set registry arbiter"));
                       }
                     }}
                   >
@@ -2093,12 +2261,12 @@ export default function DashboardPage() {
                           address: marketplaceRegistryAddress,
                           abi: marketplaceRegistryAbi,
                           functionName: "withdrawFees",
-                          args: [(tokenArg as Address) ?? zeroAddress],
+                          args: [tokenArg as Address],
                         });
                         await publicClient.waitForTransactionReceipt({ hash });
                         toast.success("Fees withdrawn", { id });
-                      } catch (e: any) {
-                        toast.error(e?.shortMessage ?? e?.message ?? "Withdraw fees failed");
+                      } catch (error: unknown) {
+                        toast.error(getErrorMessage(error, "Withdraw fees failed"));
                       }
                     }}
                   >

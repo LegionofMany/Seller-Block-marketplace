@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import {
   decodeEventLog,
@@ -21,7 +22,7 @@ import { Textarea } from "@/components/ui/textarea";
 
 import { fetchJson } from "@/lib/api";
 import { describeToken, getDefaultSettlementToken, getTokenOptions, parseTokenAmount } from "@/lib/tokens";
-import { getChainConfigById, getEnv, type ClientEnv } from "@/lib/env";
+import { getChainConfigById, getEnv } from "@/lib/env";
 import { buildListingHref } from "@/lib/listings";
 import { CATEGORY_TREE, subcategoriesFor } from "@/lib/categories";
 
@@ -112,6 +113,15 @@ type CreateListingDraft = {
   reveal: Hex;
 };
 
+type UploadResponse = {
+  items: Array<{ ipfsUri: string; url: string }>;
+};
+
+type ReceiptLogLike = {
+  data?: Hex;
+  topics?: readonly Hex[];
+};
+
 const CREATE_DRAFT_KEY = "seller-block.create-listing-draft.v1";
 
 function nowPlus(minutes: number) {
@@ -138,7 +148,7 @@ async function uploadImagesWithProgress(
   backendUrl: string,
   files: File[],
   onProgress: (percent: number) => void
-): Promise<{ items: Array<{ ipfsUri: string; url: string }> }> {
+): Promise<UploadResponse> {
   const request = new XMLHttpRequest();
   return new Promise((resolve, reject) => {
     const form = new FormData();
@@ -153,7 +163,7 @@ async function uploadImagesWithProgress(
     request.onerror = () => reject(new Error("Image upload failed"));
     request.onload = () => {
       if (request.status >= 200 && request.status < 300) {
-        resolve(request.response as { items: Array<{ ipfsUri: string; url: string }> });
+        resolve(request.response as UploadResponse);
         return;
       }
 
@@ -167,6 +177,40 @@ async function uploadImagesWithProgress(
     };
     request.send(form);
   });
+}
+
+function getErrorMessage(error: unknown, fallback: string) {
+  const candidate = error as { shortMessage?: unknown; message?: unknown } | null;
+  const message = candidate?.shortMessage ?? candidate?.message;
+  return typeof message === "string" && message.trim() ? message : fallback;
+}
+
+function getReceiptLogs(receipt: unknown): ReceiptLogLike[] {
+  if (!receipt || typeof receipt !== "object") return [];
+  const logs = (receipt as { logs?: unknown }).logs;
+  if (!Array.isArray(logs)) return [];
+
+  return logs.flatMap((log) => {
+    if (!log || typeof log !== "object") return [];
+    const candidate = log as { data?: unknown; topics?: unknown };
+    if (typeof candidate.data !== "string" || !Array.isArray(candidate.topics)) return [];
+    if (!candidate.topics.every((topic) => typeof topic === "string")) return [];
+    return [{ data: candidate.data as Hex, topics: candidate.topics as readonly Hex[] }];
+  });
+}
+
+function getListingCreatedId(receipt: unknown): Hex | null {
+  for (const log of getReceiptLogs(receipt)) {
+    try {
+      const decoded = decodeEventLog({ abi: createListingAbi, data: log.data, topics: log.topics });
+      if (decoded.eventName !== "ListingCreated") continue;
+      const args = decoded.args as Record<string, unknown>;
+      if (typeof args.id === "string") return args.id as Hex;
+    } catch {
+      // ignore non-matching logs
+    }
+  }
+  return null;
 }
 
 export default function CreateListingPage() {
@@ -215,33 +259,38 @@ export default function CreateListingPage() {
   const [draftRestored, setDraftRestored] = React.useState(false);
   const [lastDraftSavedAt, setLastDraftSavedAt] = React.useState<number | null>(null);
 
-  let env: ClientEnv;
-  try {
-    env = getEnv();
-  } catch (e: any) {
-    return (
-      <Card>
-        <CardContent className="p-6 text-sm text-destructive">{e?.message ?? "Missing env vars"}</CardContent>
-      </Card>
-    );
-  }
+  const envState = React.useMemo(() => {
+    try {
+      return { env: getEnv(), error: null as string | null };
+    } catch (error: unknown) {
+      return { env: null, error: getErrorMessage(error, "Missing env vars") };
+    }
+  }, []);
 
-  const activeChain = getChainConfigById(env, walletChainId);
-  const tokenOptions = React.useMemo(() => getTokenOptions(env, activeChain.chainId), [env, activeChain.chainId]);
-  const preferredToken = React.useMemo(() => getDefaultSettlementToken(env, activeChain.chainId), [env, activeChain.chainId]);
+  const activeChain = envState.env ? getChainConfigById(envState.env, walletChainId) : null;
+  const tokenOptions = React.useMemo(
+    () => (envState.env && activeChain ? getTokenOptions(envState.env, activeChain.chainId) : []),
+    [activeChain, envState.env]
+  );
+  const preferredToken = React.useMemo(
+    () => (envState.env && activeChain ? getDefaultSettlementToken(envState.env, activeChain.chainId) : null),
+    [activeChain, envState.env]
+  );
 
   React.useEffect(() => {
     if (tokenAddress.trim()) return;
+    if (!preferredToken) return;
     if (preferredToken.address === zeroAddress) return;
     setTokenAddress(preferredToken.address);
-  }, [preferredToken.address, tokenAddress]);
+  }, [preferredToken, tokenAddress]);
 
   const selectedToken = React.useMemo(() => {
+    if (!envState.env || !activeChain) return null;
     const raw = tokenAddress.trim();
-    if (!raw) return describeToken(env, activeChain.chainId, zeroAddress);
+    if (!raw) return describeToken(envState.env, activeChain.chainId, zeroAddress);
     if (!isAddress(raw)) return null;
-    return describeToken(env, activeChain.chainId, raw as Address);
-  }, [activeChain.chainId, env, tokenAddress]);
+    return describeToken(envState.env, activeChain.chainId, raw as Address);
+  }, [activeChain, envState.env, tokenAddress]);
 
   React.useEffect(() => {
     if (reveal !== ("0x" + "00".repeat(32))) return;
@@ -372,6 +421,16 @@ export default function CreateListingPage() {
     setDraftRestored(false);
   }
 
+  if (envState.error || !envState.env || !activeChain) {
+    return (
+      <Card>
+        <CardContent className="p-6 text-sm text-destructive">{envState.error ?? "Missing env vars"}</CardContent>
+      </Card>
+    );
+  }
+
+  const env = envState.env;
+
   async function submitListing() {
     if (!title.trim() || !description.trim()) {
       toast.error("Title and description are required");
@@ -418,11 +477,12 @@ export default function CreateListingPage() {
 
       metadataURI = res.metadataURI;
       setGeneratedMetadataURI(res.metadataURI);
-    } catch (err: any) {
-      setLastUploadError(err?.message ?? "Failed to upload metadata");
+    } catch (error: unknown) {
+      const message = getErrorMessage(error, "Failed to upload metadata");
+      setLastUploadError(message);
       setUploadStage("idle");
       setIsSubmitting(false);
-      toast.error(err?.message ?? "Failed to upload metadata");
+      toast.error(message);
       return;
     }
 
@@ -450,17 +510,7 @@ export default function CreateListingPage() {
 
       const receipt = await publicClient.waitForTransactionReceipt({ hash });
 
-      for (const log of (receipt as any).logs ?? []) {
-        try {
-          const decoded = decodeEventLog({ abi: createListingAbi, data: log.data, topics: log.topics });
-          if (decoded.eventName === "ListingCreated") {
-            listingId = (decoded.args as any).id as Hex;
-            break;
-          }
-        } catch {
-          // ignore non-matching logs
-        }
-      }
+      listingId = getListingCreatedId(receipt);
 
       if (!listingId) throw new Error("Could not find ListingCreated event in receipt");
 
@@ -515,8 +565,8 @@ export default function CreateListingPage() {
 
       clearDraft();
       router.push(buildListingHref(listingId, activeChain.key));
-    } catch (err: any) {
-      toast.error(err?.shortMessage ?? err?.message ?? "Transaction failed");
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error, "Transaction failed"));
     } finally {
       setIsSubmitting(false);
       setUploadStage("idle");
@@ -629,7 +679,7 @@ export default function CreateListingPage() {
                         {previewUrls.map((url, index) => (
                           <div key={`${files[index]?.name ?? "file"}-${index}`} className="overflow-hidden rounded-md border bg-muted">
                             <div className="relative aspect-square w-full">
-                              <img src={url} alt={files[index]?.name ?? `Selected image ${index + 1}`} className="h-full w-full object-cover" />
+                              <Image src={url} alt={files[index]?.name ?? `Selected image ${index + 1}`} fill className="object-cover" unoptimized />
                             </div>
                             <div className="truncate border-t px-2 py-1 text-[11px] text-muted-foreground">
                               {files[index]?.name ?? `Image ${index + 1}`}

@@ -4,7 +4,7 @@ import { z } from "zod";
 import { HttpError } from "../middlewares/errors";
 import { requireAdmin, requireAuthAddress } from "../middlewares/auth";
 import { getContext } from "../services/context";
-import { createUserFollow, deleteUserFollow, ensureUser, getPublicUserProfile, getUser, isUserFollowing, listFollowedUsers, updateUserProfile, updateUserTrust } from "../services/db";
+import { createUserFollow, createUserTrustReview, deleteUserFollow, ensureUser, getPublicUserProfile, getUser, isUserFollowing, listFollowedUsers, listTrustQueueProfiles, listUserTrustReviews, listVerifiedUserProfiles, updateUserProfile, updateUserTrust } from "../services/db";
 import { requireAddress } from "../utils/validation";
 
 function isAvatarValue(value: string): boolean {
@@ -149,8 +149,9 @@ export async function updateUserTrustAction(req: Request, res: Response) {
   }).safeParse(req.body ?? {});
   if (!parsed.success) throw new HttpError(400, "Invalid trust payload", "INVALID_TRUST_PAYLOAD");
 
-  await ensureUser(db, address, Date.now());
   const now = Date.now();
+  await ensureUser(db, address, now);
+  const previousUser = await getUser(db, address);
   await updateUserTrust(db, {
     address,
     sellerVerifiedAt: parsed.data.sellerVerified ? now : null,
@@ -158,7 +159,28 @@ export async function updateUserTrustAction(req: Request, res: Response) {
     sellerTrustNote: parsed.data.sellerTrustNote?.trim() ? parsed.data.sellerTrustNote.trim() : null,
     updatedAt: now,
   });
+  await createUserTrustReview(db, {
+    userAddress: address,
+    reviewer: adminSubject,
+    sellerVerified: parsed.data.sellerVerified,
+    sellerTrustNote: parsed.data.sellerTrustNote?.trim() ? parsed.data.sellerTrustNote.trim() : null,
+    previousSellerVerified: typeof previousUser?.sellerVerifiedAt === "number" ? true : false,
+    previousSellerTrustNote: previousUser?.sellerTrustNote ?? null,
+    createdAt: now,
+  });
 
   const user = await getUser(db, address);
   return res.json({ user });
+}
+
+export async function getAdminTrustSummary(req: Request, res: Response) {
+  requireAdmin(req);
+  const { db } = getContext();
+  const [queue, verified, history] = await Promise.all([
+    listTrustQueueProfiles(db, 12),
+    listVerifiedUserProfiles(db, 12),
+    listUserTrustReviews(db, 40),
+  ]);
+
+  return res.json({ queue, verified, history });
 }

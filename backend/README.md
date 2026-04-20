@@ -154,6 +154,7 @@ Users
 
 - `GET /users/:address`
 - `GET /users/me/follows`
+- `GET /users/admin/trust`
 - `GET /users/:address/follow-state`
 - `POST /users/:address/follow`
 - `DELETE /users/:address/follow`
@@ -167,6 +168,7 @@ Email auth notes
 - Email verification uses the same token system with a longer TTL and marks `emailVerifiedAt` when the link is consumed.
 - `POST /auth/email/verify/send` requires an authenticated email account session.
 - Seller trust verification is admin-managed through `PUT /users/:address/trust` and is separate from wallet settlement and any future payment products.
+- `GET /users/admin/trust` returns the current review queue, verified sellers, and trust change history so admin actions stay auditable.
 
 Favorites
 

@@ -2,11 +2,12 @@ import { Router } from "express";
 
 import { asyncHandler } from "../middlewares/async";
 import { authenticate } from "../middlewares/auth";
-import { followUser, getFollowState, getMyFollowedUsers, getUserProfile, unfollowUser, updateMyProfile, updateUserTrustAction } from "../controllers/usersController";
+import { followUser, getAdminTrustSummary, getFollowState, getMyFollowedUsers, getUserProfile, unfollowUser, updateMyProfile, updateUserTrustAction } from "../controllers/usersController";
 
 export function usersRouter() {
   const router = Router();
 
+  router.get("/users/admin/trust", authenticate, asyncHandler(getAdminTrustSummary));
   router.get("/users/:address", asyncHandler(getUserProfile));
   router.get("/users/me/follows", authenticate, asyncHandler(getMyFollowedUsers));
   router.get("/users/:address/follow-state", authenticate, asyncHandler(getFollowState));
