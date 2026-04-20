@@ -118,8 +118,8 @@ type UploadResponse = {
 };
 
 type ReceiptLogLike = {
-  data?: Hex;
-  topics?: readonly Hex[];
+  data: Hex;
+  topics: [Hex, ...Hex[]] | [];
 };
 
 const CREATE_DRAFT_KEY = "seller-block.create-listing-draft.v1";
@@ -195,7 +195,8 @@ function getReceiptLogs(receipt: unknown): ReceiptLogLike[] {
     const candidate = log as { data?: unknown; topics?: unknown };
     if (typeof candidate.data !== "string" || !Array.isArray(candidate.topics)) return [];
     if (!candidate.topics.every((topic) => typeof topic === "string")) return [];
-    return [{ data: candidate.data as Hex, topics: candidate.topics as readonly Hex[] }];
+    const topics = candidate.topics as Hex[];
+    return [{ data: candidate.data as Hex, topics: topics.length ? [topics[0], ...topics.slice(1)] : [] }];
   });
 }
 
@@ -432,6 +433,12 @@ export default function CreateListingPage() {
   const env = envState.env;
 
   async function submitListing() {
+    const currentChain = activeChain;
+    if (!currentChain) {
+      toast.error("Missing chain configuration");
+      return;
+    }
+
     if (!title.trim() || !description.trim()) {
       toast.error("Title and description are required");
       return;
@@ -492,7 +499,7 @@ export default function CreateListingPage() {
     }
 
     const token: Address = tokenAddress.trim().length ? (tokenAddress.trim() as Address) : zeroAddress;
-    const settlementToken = selectedToken ?? describeToken(env, activeChain.chainId, zeroAddress);
+  const settlementToken = selectedToken ?? describeToken(env, currentChain.chainId, zeroAddress);
     const price = saleType === 0 ? parseTokenAmount(fixedPrice || "0", settlementToken) : BigInt(0);
 
     let listingId: Hex | null = null;
@@ -502,7 +509,7 @@ export default function CreateListingPage() {
 
       const toastId = toast.loading("Creating listing…");
       const hash = await writeContractAsync({
-        address: activeChain.marketplaceRegistryAddress,
+        address: currentChain.marketplaceRegistryAddress,
         abi: createListingAbi,
         functionName: "createListing",
         args: [metadataURI, price, token, saleType],
@@ -524,7 +531,7 @@ export default function CreateListingPage() {
 
         const toast2 = toast.loading("Opening auction…");
         const hash2 = await writeContractAsync({
-          address: activeChain.marketplaceRegistryAddress,
+          address: currentChain.marketplaceRegistryAddress,
           abi: createListingAbi,
           functionName: "openAuction",
           args: [
@@ -553,7 +560,7 @@ export default function CreateListingPage() {
 
         const toast2 = toast.loading("Opening raffle…");
         const hash2 = await writeContractAsync({
-          address: activeChain.marketplaceRegistryAddress,
+          address: currentChain.marketplaceRegistryAddress,
           abi: createListingAbi,
           functionName: "openRaffle",
           args: [listingId, startTime, endTime, ticket, target, minP, commit],
@@ -564,7 +571,7 @@ export default function CreateListingPage() {
       }
 
       clearDraft();
-      router.push(buildListingHref(listingId, activeChain.key));
+      router.push(buildListingHref(listingId, currentChain.key));
     } catch (error: unknown) {
       toast.error(getErrorMessage(error, "Transaction failed"));
     } finally {

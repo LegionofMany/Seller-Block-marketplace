@@ -138,6 +138,9 @@ export default function ListingDetailPage() {
   const listingId = asBytes32(id);
   const chainKey = searchParams.get("chain") ?? envState.env?.defaultChain.key ?? "sepolia";
   const activeChain = envState.env ? getChainConfigByKey(envState.env, chainKey) : null;
+  const activeChainId = activeChain?.chainId ?? envState.env?.defaultChain.chainId ?? 11155111;
+  const activeChainKey = activeChain?.key ?? envState.env?.defaultChain.key ?? "sepolia";
+  const activeChainNativeCurrencySymbol = activeChain?.nativeCurrencySymbol ?? envState.env?.defaultChain.nativeCurrencySymbol ?? "ETH";
   const registryAddress = activeChain?.marketplaceRegistryAddress ?? zeroAddress;
   const settlementAddress = activeChain?.marketplaceSettlementV2Address ?? zeroAddress;
   const auctionModuleAddress = activeChain?.auctionModuleAddress ?? zeroAddress;
@@ -154,11 +157,11 @@ export default function ListingDetailPage() {
 
   const { data: raw, isLoading, isError, error } = useReadContract({
     address: registryAddress,
-    chainId: activeChain.chainId,
+    chainId: activeChainId,
     abi: marketplaceRegistryAbi,
     functionName: "listings",
     args: listingId ? [listingId] : undefined,
-    query: { enabled: Boolean(listingId), retry: 1 },
+    query: { enabled: Boolean(activeChain && listingId), retry: 1 },
   });
 
   const loadingListing = isLoading;
@@ -171,10 +174,10 @@ export default function ListingDetailPage() {
 
   const { data: arbiterAddress } = useReadContract({
     address: registryAddress,
-    chainId: activeChain.chainId,
+    chainId: activeChainId,
     abi: marketplaceRegistryAbi,
     functionName: "arbiter",
-    query: { retry: 1 },
+    query: { enabled: Boolean(activeChain), retry: 1 },
   });
 
   const [metadata, setMetadata] = React.useState<MarketplaceMetadata | null>(null);
@@ -193,8 +196,8 @@ export default function ListingDetailPage() {
   const [isRelayingSettlementAction, setIsRelayingSettlementAction] = React.useState(false);
 
   const settlementToken = React.useMemo(
-    () => (listing && envState.env && activeChain ? describeToken(envState.env, activeChain.chainId, listing.token as Address) : null),
-    [activeChain, envState.env, listing]
+    () => (listing && envState.env ? describeToken(envState.env, activeChainId, listing.token as Address) : null),
+    [activeChainId, envState.env, listing]
   );
 
   const galleryImages = React.useMemo(() => {
@@ -219,7 +222,7 @@ export default function ListingDetailPage() {
         setIsLoadingComments(true);
         setCommentsError(null);
         const res = await fetchJson<{ items: ListingComment[] }>(
-          `/listings/${listingId}/comments?chain=${encodeURIComponent(activeChain.key)}&limit=50&offset=0`,
+          `/listings/${listingId}/comments?chain=${encodeURIComponent(activeChainKey)}&limit=50&offset=0`,
           { timeoutMs: 10_000 }
         );
         setComments(res.items ?? []);
@@ -231,7 +234,7 @@ export default function ListingDetailPage() {
     }
 
     void run();
-  }, [listingId, activeChain.key]);
+  }, [listingId, activeChainKey]);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -244,7 +247,7 @@ export default function ListingDetailPage() {
 
       try {
         setIsFavoriteLoading(true);
-        const res = await fetchJson<{ isFavorite: boolean }>(`/favorites/listings/${listingId}/state?chain=${encodeURIComponent(activeChain.key)}`, {
+        const res = await fetchJson<{ isFavorite: boolean }>(`/favorites/listings/${listingId}/state?chain=${encodeURIComponent(activeChainKey)}`, {
           timeoutMs: 5_000,
         });
         if (!cancelled) setIsFavorite(Boolean(res.isFavorite));
@@ -259,7 +262,7 @@ export default function ListingDetailPage() {
     return () => {
       cancelled = true;
     };
-  }, [activeChain.key, auth.isAuthenticated, listingId]);
+  }, [activeChainKey, auth.isAuthenticated, listingId]);
 
   const refreshSellerOrder = React.useCallback(async () => {
     if (!listingId || !listing || listing.saleType !== 0) {
@@ -271,7 +274,7 @@ export default function ListingDetailPage() {
     try {
       setIsLoadingSellerOrder(true);
       setSellerOrderError(null);
-      const res = await fetchLatestSellerOrder(listingId, activeChain.key);
+      const res = await fetchLatestSellerOrder(listingId, activeChainKey);
       setSellerOrder(res.item);
     } catch (error: unknown) {
       setSellerOrder(null);
@@ -279,7 +282,7 @@ export default function ListingDetailPage() {
     } finally {
       setIsLoadingSellerOrder(false);
     }
-  }, [activeChain.key, listing, listingId]);
+  }, [activeChainKey, listing, listingId]);
 
   React.useEffect(() => {
     void refreshSellerOrder();
@@ -287,7 +290,7 @@ export default function ListingDetailPage() {
 
   const { data: permitNonce } = useReadContract({
     address: listing?.token,
-    chainId: activeChain.chainId,
+    chainId: activeChainId,
     abi: erc20PermitNonceAbi,
     functionName: "nonces",
     args: listing && !native && address ? [address as Address] : undefined,
@@ -299,7 +302,7 @@ export default function ListingDetailPage() {
 
   const { data: consumedSellerOrder } = useReadContract({
     address: settlementAddress,
-    chainId: activeChain.chainId,
+    chainId: activeChainId,
     abi: marketplaceSettlementV2Abi,
     functionName: "consumedOrders",
     args: sellerOrder ? [sellerOrder.orderHash] : undefined,
@@ -311,7 +314,7 @@ export default function ListingDetailPage() {
 
   const { data: buyerEscrowId } = useReadContract({
     address: settlementAddress,
-    chainId: activeChain.chainId,
+    chainId: activeChainId,
     abi: marketplaceSettlementV2Abi,
     functionName: "computeEscrowId",
     args: sellerOrder && address ? [sellerOrder.orderHash, address as Address] : undefined,
@@ -323,7 +326,7 @@ export default function ListingDetailPage() {
 
   const { data: settlementEscrowRaw } = useReadContract({
     address: settlementAddress,
-    chainId: activeChain.chainId,
+    chainId: activeChainId,
     abi: marketplaceSettlementV2Abi,
     functionName: "escrows",
     args: buyerEscrowId ? [buyerEscrowId] : undefined,
@@ -435,7 +438,7 @@ export default function ListingDetailPage() {
             issuedAt,
             targetType: "listing",
             targetId: listingId,
-            chainKey: activeChain.key,
+            chainKey: activeChainKey,
             reason: reasonRaw,
             ...(details ? { details: details.slice(0, 1000) } : {}),
           }),
@@ -448,7 +451,7 @@ export default function ListingDetailPage() {
           body: JSON.stringify({
             targetType: "listing",
             targetId: listingId,
-            chainKey: activeChain.key,
+            chainKey: activeChainKey,
             reason: reasonRaw,
             ...(details ? { details: details.slice(0, 1000) } : {}),
           }),
@@ -473,7 +476,7 @@ export default function ListingDetailPage() {
     try {
       setIsSubmittingComment(true);
       const res = await fetchJson<{ item: ListingComment }>(
-        `/listings/${listingId}/comments?chain=${encodeURIComponent(activeChain.key)}`,
+        `/listings/${listingId}/comments?chain=${encodeURIComponent(activeChainKey)}`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -500,14 +503,14 @@ export default function ListingDetailPage() {
     try {
       setIsFavoriteLoading(true);
       if (isFavorite) {
-        await fetchJson(`/favorites/listings/${listingId}?chain=${encodeURIComponent(activeChain.key)}`, { method: "DELETE" });
+        await fetchJson(`/favorites/listings/${listingId}?chain=${encodeURIComponent(activeChainKey)}`, { method: "DELETE" });
         setIsFavorite(false);
         toast.success("Removed from favorites");
       } else {
         await fetchJson("/favorites/listings", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ listingId, chainKey: activeChain.key }),
+          body: JSON.stringify({ listingId, chainKey: activeChainKey }),
         });
         setIsFavorite(true);
         toast.success("Saved to favorites");
@@ -592,7 +595,7 @@ export default function ListingDetailPage() {
 
     try {
       setIsPublishingSellerOrder(true);
-      const prepared = await prepareSellerOrder(listingId, activeChain.key, {});
+      const prepared = await prepareSellerOrder(listingId, activeChainKey, {});
       const signature = await walletClient.signTypedData({
         account: address as Address,
         domain: prepared.domain as any,
@@ -600,7 +603,7 @@ export default function ListingDetailPage() {
         primaryType: prepared.primaryType as any,
         message: prepared.message as any,
       });
-      const res = await publishSellerOrder(listingId, activeChain.key, prepared.message, signature);
+      const res = await publishSellerOrder(listingId, activeChainKey, prepared.message, signature);
       setSellerOrder(res.item);
       toast.success("Gasless checkout published");
     } catch (e: any) {
@@ -626,7 +629,7 @@ export default function ListingDetailPage() {
 
     try {
       setIsRelayingSettlementAction(true);
-      const prepared = await prepareBuyerAcceptance(listingId, activeChain.key, { orderHash: sellerOrder.orderHash });
+      const prepared = await prepareBuyerAcceptance(listingId, activeChainKey, { orderHash: sellerOrder.orderHash });
       const buyerSignature = await walletClient.signTypedData({
         account: address as Address,
         domain: prepared.domain as any,
@@ -641,7 +644,7 @@ export default function ListingDetailPage() {
         domain: {
           name: settlementToken.permitName ?? settlementToken.name,
           version: settlementToken.permitVersion ?? "1",
-          chainId: activeChain.chainId,
+          chainId: activeChainId,
           verifyingContract: settlementToken.address,
         } as any,
         types: {
@@ -663,7 +666,7 @@ export default function ListingDetailPage() {
         } as any,
       });
 
-      const relayed = await relayAcceptWithPermit(listingId, activeChain.key, {
+      const relayed = await relayAcceptWithPermit(listingId, activeChainKey, {
         orderHash: prepared.orderHash,
         buyerDeadline: prepared.message.deadline,
         buyerSignature,
@@ -687,7 +690,7 @@ export default function ListingDetailPage() {
 
     try {
       setIsRelayingSettlementAction(true);
-      const prepared = await prepareEscrowAction(listingId, activeChain.key, action, { orderHash: sellerOrder.orderHash });
+      const prepared = await prepareEscrowAction(listingId, activeChainKey, action, { orderHash: sellerOrder.orderHash });
       const buyerSignature = await walletClient.signTypedData({
         account: address as Address,
         domain: prepared.domain as any,
@@ -695,7 +698,7 @@ export default function ListingDetailPage() {
         primaryType: prepared.primaryType as any,
         message: prepared.message as any,
       });
-      const relayed = await relayEscrowAction(listingId, activeChain.key, action, {
+      const relayed = await relayEscrowAction(listingId, activeChainKey, action, {
         orderHash: prepared.orderHash,
         deadline: prepared.message.deadline,
         buyerSignature,
@@ -720,7 +723,7 @@ export default function ListingDetailPage() {
 
   const { data: bidAllowance } = useReadContract({
     address: (listing?.token ?? zeroAddress) as Address,
-    chainId: activeChain.chainId,
+    chainId: activeChainId,
     abi: erc20Abi,
     functionName: "allowance",
     args:
@@ -744,7 +747,7 @@ export default function ListingDetailPage() {
 
   const { data: raffleQuote } = useReadContract({
     address: raffleModuleAddress,
-    chainId: activeChain.chainId,
+    chainId: activeChainId,
     abi: raffleModuleAbi,
     functionName: "quoteEntry",
     args:
@@ -768,7 +771,7 @@ export default function ListingDetailPage() {
 
   const { data: raffleAllowance } = useReadContract({
     address: (listing?.token ?? zeroAddress) as Address,
-    chainId: activeChain.chainId,
+    chainId: activeChainId,
     abi: erc20Abi,
     functionName: "allowance",
     args:
@@ -786,7 +789,7 @@ export default function ListingDetailPage() {
 
   const [pendingHash, setPendingHash] = React.useState<`0x${string}` | undefined>();
   const toastTx = useToastTx(pendingHash, "Transaction pending");
-  const receipt = useWaitForTransactionReceipt({ chainId: activeChain.chainId, hash: pendingHash, query: { enabled: Boolean(pendingHash) } });
+  const receipt = useWaitForTransactionReceipt({ chainId: activeChainId, hash: pendingHash, query: { enabled: Boolean(pendingHash) } });
 
   React.useEffect(() => {
     if (receipt.isSuccess) {
@@ -905,7 +908,7 @@ export default function ListingDetailPage() {
   }
 
   const pageTitle = metadata?.title ?? (listing ? `${saleTypeLabel(listing.saleType)} listing` : "Loading…");
-  const priceLabel = listing ? formatPrice(listing.price, native, activeChain.nativeCurrencySymbol) : "—";
+  const priceLabel = listing ? formatPrice(listing.price, native, activeChainNativeCurrencySymbol) : "—";
   const locationLabel = [metadata?.city, metadata?.region, metadata?.postalCode].filter(Boolean).join(", ");
   const pageDescription = listing
     ? metadata?.description ?? (isSeller ? "Your listing is missing complete metadata. Restore title, description, and at least one image before sharing it publicly." : "Listing details unavailable.")
@@ -1037,7 +1040,7 @@ export default function ListingDetailPage() {
                     </div>
                     <div className="text-sm">
                       <div className="text-muted-foreground">Token</div>
-                      <div className="font-medium break-all">{native ? activeChain.nativeCurrencySymbol : listing.token}</div>
+                      <div className="font-medium break-all">{native ? activeChainNativeCurrencySymbol : listing.token}</div>
                     </div>
                     <div className="text-sm">
                       <div className="text-muted-foreground">Seller</div>
@@ -1179,7 +1182,7 @@ export default function ListingDetailPage() {
                     disabled={receipt.isLoading}
                     onClick={() => send(writeContractAsync({
                       address: registryAddress,
-                      chainId: activeChain.chainId,
+                      chainId: activeChainId,
                       abi: marketplaceRegistryAbi,
                       functionName: "cancelListing",
                       args: [listingId],
@@ -1329,7 +1332,7 @@ export default function ListingDetailPage() {
                       disabled={receipt.isLoading}
                       onClick={() => send(writeContractAsync({
                         address: registryAddress,
-                        chainId: activeChain.chainId,
+                        chainId: activeChainId,
                         abi: marketplaceRegistryAbi,
                         functionName: "confirmDelivery",
                         args: [listingId],
@@ -1344,7 +1347,7 @@ export default function ListingDetailPage() {
                       disabled={receipt.isLoading}
                       onClick={() => send(writeContractAsync({
                         address: registryAddress,
-                        chainId: activeChain.chainId,
+                        chainId: activeChainId,
                         abi: marketplaceRegistryAbi,
                         functionName: "requestRefund",
                         args: [listingId],
@@ -1384,7 +1387,7 @@ export default function ListingDetailPage() {
                         disabled={receipt.isLoading}
                         onClick={() => send(writeContractAsync({
                           address: registryAddress,
-                          chainId: activeChain.chainId,
+                          chainId: activeChainId,
                           abi: marketplaceRegistryAbi,
                           functionName: "arbiterRelease",
                           args: [listingId],
@@ -1399,7 +1402,7 @@ export default function ListingDetailPage() {
                         disabled={receipt.isLoading}
                         onClick={() => send(writeContractAsync({
                           address: registryAddress,
-                          chainId: activeChain.chainId,
+                          chainId: activeChainId,
                           abi: marketplaceRegistryAbi,
                           functionName: "arbiterRefund",
                           args: [listingId],
@@ -1424,7 +1427,7 @@ export default function ListingDetailPage() {
                       disabled={receipt.isLoading}
                       onClick={() => send(writeContractAsync({
                         address: registryAddress,
-                        chainId: activeChain.chainId,
+                        chainId: activeChainId,
                         abi: marketplaceRegistryAbi,
                         functionName: "withdrawPayout",
                         args: [listing.token],
@@ -1451,7 +1454,7 @@ export default function ListingDetailPage() {
                       disabled={receipt.isLoading}
                       onClick={() => send(writeContractAsync({
                         address: registryAddress,
-                        chainId: activeChain.chainId,
+                        chainId: activeChainId,
                         abi: marketplaceRegistryAbi,
                         functionName: "withdrawPayout",
                         args: [listing.token],
@@ -1469,7 +1472,7 @@ export default function ListingDetailPage() {
                   <div className="rounded-xl border p-4 space-y-3">
                     <div className="text-sm font-medium">Place bid</div>
                     <div className="grid gap-2">
-                      <Label>Bid amount {native ? `(${activeChain.nativeCurrencySymbol})` : "(token units)"}</Label>
+                      <Label>Bid amount {native ? `(${activeChainNativeCurrencySymbol})` : "(token units)"}</Label>
                       <Input value={bidAmount} onChange={(e) => setBidAmount(e.target.value)} placeholder={native ? "0.05" : "1.0"} />
                     </div>
                     {!native ? (
@@ -1483,7 +1486,7 @@ export default function ListingDetailPage() {
                             send(
                               writeContractAsync({
                                 address: listing.token,
-                                chainId: activeChain.chainId,
+                                chainId: activeChainId,
                                 abi: erc20Abi,
                                 functionName: "approve",
                                 args: [auctionModuleAddress, parsedBidAmount ?? BigInt(0)],
@@ -1501,7 +1504,7 @@ export default function ListingDetailPage() {
                             send(
                               writeContractAsync({
                                 address: registryAddress,
-                                chainId: activeChain.chainId,
+                                chainId: activeChainId,
                                 abi: marketplaceRegistryAbi,
                                 functionName: "bid",
                                 args: [listingId, parsedBidAmount ?? BigInt(0)],
@@ -1521,7 +1524,7 @@ export default function ListingDetailPage() {
                           send(
                             writeContractAsync({
                                 address: registryAddress,
-                                chainId: activeChain.chainId,
+                                chainId: activeChainId,
                               abi: marketplaceRegistryAbi,
                               functionName: "bid",
                               args: [listingId, parsedBidAmount ?? BigInt(0)],
@@ -1542,7 +1545,7 @@ export default function ListingDetailPage() {
                         disabled={receipt.isLoading}
                         onClick={() => send(writeContractAsync({
                           address: registryAddress,
-                          chainId: activeChain.chainId,
+                          chainId: activeChainId,
                           abi: marketplaceRegistryAbi,
                           functionName: "closeAuction",
                           args: [listingId],
@@ -1562,7 +1565,7 @@ export default function ListingDetailPage() {
                       <Input value={ticketCount} onChange={(e) => setTicketCount(e.target.value)} />
                     </div>
                     <div className="text-xs text-muted-foreground">
-                      Quote: {typeof raffleQuote === "bigint" ? formatPrice(raffleQuote, native, activeChain.nativeCurrencySymbol) : "—"}
+                      Quote: {typeof raffleQuote === "bigint" ? formatPrice(raffleQuote, native, activeChainNativeCurrencySymbol) : "—"}
                     </div>
 
                     {!native ? (
@@ -1576,7 +1579,7 @@ export default function ListingDetailPage() {
                             send(
                               writeContractAsync({
                                 address: listing.token,
-                                chainId: activeChain.chainId,
+                                chainId: activeChainId,
                                 abi: erc20Abi,
                                 functionName: "approve",
                                 args: [raffleModuleAddress, (raffleQuote as bigint) ?? BigInt(0)],
@@ -1594,7 +1597,7 @@ export default function ListingDetailPage() {
                             send(
                               writeContractAsync({
                                 address: registryAddress,
-                                chainId: activeChain.chainId,
+                                chainId: activeChainId,
                                 abi: marketplaceRegistryAbi,
                                 functionName: "enterRaffle",
                                 args: [listingId, parsedTicketCount ?? 0],
@@ -1614,7 +1617,7 @@ export default function ListingDetailPage() {
                           send(
                             writeContractAsync({
                                 address: registryAddress,
-                                chainId: activeChain.chainId,
+                                chainId: activeChainId,
                               abi: marketplaceRegistryAbi,
                               functionName: "enterRaffle",
                               args: [listingId, parsedTicketCount ?? 0],
@@ -1638,7 +1641,7 @@ export default function ListingDetailPage() {
                           disabled={receipt.isLoading}
                           onClick={() => send(writeContractAsync({
                             address: registryAddress,
-                            chainId: activeChain.chainId,
+                            chainId: activeChainId,
                             abi: marketplaceRegistryAbi,
                             functionName: "closeRaffle",
                             args: [listingId, reveal],
@@ -1666,7 +1669,7 @@ export default function ListingDetailPage() {
                       disabled={receipt.isLoading}
                       onClick={() => send(writeContractAsync({
                         address: registryAddress,
-                        chainId: activeChain.chainId,
+                        chainId: activeChainId,
                         abi: marketplaceRegistryAbi,
                         functionName: "withdrawPayout",
                         args: [zeroAddress],
