@@ -143,6 +143,19 @@ Auth
 
 - `POST /auth/email/register`
 - `POST /auth/email/login`
+- `POST /auth/email/magic-link/request`
+- `POST /auth/email/token/consume`
+- `POST /auth/email/verify/send`
+- `POST /auth/link-wallet/nonce`
+- `POST /auth/link-wallet/verify`
+- `POST /auth/link-wallet/unlink`
+
+Email auth notes
+
+- Email registration returns a live auth session and attempts to send a verification link when `POSTMARK_SERVER_TOKEN`, `NOTIFICATION_EMAIL_FROM`, and `FRONTEND_APP_URL` are configured.
+- Magic-link sign-in uses one-time email tokens with a short TTL and consumes them through `POST /auth/email/token/consume`.
+- Email verification uses the same token system with a longer TTL and marks `emailVerifiedAt` when the link is consumed.
+- `POST /auth/email/verify/send` requires an authenticated email account session.
 
 Favorites
 

@@ -5,9 +5,40 @@ import { verifyMessage } from "ethers";
 import { HttpError } from "../middlewares/errors";
 import { requireAuthAddress } from "../middlewares/auth";
 import { getContext } from "../services/context";
-import { buildAuthMessage, buildEmailSubject, buildWalletLinkMessage, generateNonce, hashPassword, isAdminSubject, issueAuthToken, verifyPassword } from "../services/auth";
-import { createAuthNonce, consumeAuthNonce, createEmailUser, ensureUser, findAuthNonce, findUserByEmail, findUserByLinkedWallet, getUser, getUserPasswordHash, updateUserLastLogin, updateUserLinkedWallet } from "../services/db";
+import { buildAuthMessage, buildEmailSubject, buildMagicLinkEmail, buildVerificationEmail, buildWalletLinkMessage, generateEmailAuthToken, generateNonce, hashEmailAuthToken, hashPassword, isAdminSubject, issueAuthToken, verifyPassword } from "../services/auth";
+import { consumeAuthNonce, consumeEmailAuthToken, createAuthNonce, createEmailAuthToken, createEmailUser, ensureUser, findAuthNonce, findEmailAuthToken, findUserByEmail, findUserByLinkedWallet, getUser, getUserPasswordHash, updateUserEmailVerifiedAt, updateUserLastLogin, updateUserLinkedWallet } from "../services/db";
+import { sendTransactionalEmail, transactionalEmailAvailable } from "../services/email";
 import { normalizeEmail, requireAddress } from "../utils/validation";
+
+const MAGIC_LINK_TTL_MS = 20 * 60 * 1000;
+const EMAIL_VERIFY_TTL_MS = 24 * 60 * 60 * 1000;
+
+async function issueEmailTokenEmail(input: { userAddress: string; email: string; purpose: "login" | "verify" }) {
+  const { db, env } = getContext();
+  if (!transactionalEmailAvailable() || !env.frontendAppUrl) {
+    throw new HttpError(503, "Email delivery is not configured", "EMAIL_DELIVERY_UNAVAILABLE");
+  }
+
+  const rawToken = generateEmailAuthToken();
+  const tokenHash = hashEmailAuthToken(rawToken);
+  const createdAt = Date.now();
+  const expiresAt = createdAt + (input.purpose === "verify" ? EMAIL_VERIFY_TTL_MS : MAGIC_LINK_TTL_MS);
+  await createEmailAuthToken(db, {
+    tokenHash,
+    userAddress: input.userAddress,
+    email: input.email,
+    purpose: input.purpose,
+    expiresAt,
+    createdAt,
+  });
+
+  const linkUrl = `${env.frontendAppUrl.replace(/\/$/, "")}/sign-in?email_token=${encodeURIComponent(rawToken)}&email_intent=${input.purpose}`;
+  const message = input.purpose === "verify" ? buildVerificationEmail(input.email, linkUrl) : buildMagicLinkEmail(input.email, linkUrl);
+  const delivered = await sendTransactionalEmail(input.email, message.subject, message.html, message.text);
+  if (!delivered) {
+    throw new HttpError(502, "Failed to send email", "EMAIL_DELIVERY_FAILED");
+  }
+}
 
 export async function issueNonce(req: Request, res: Response) {
   const parsed = z.object({ address: z.string().min(1) }).safeParse(req.body);
@@ -116,11 +147,19 @@ export async function registerWithEmail(req: Request, res: Response) {
   });
 
   const user = await getUser(db, address);
+  let emailVerificationSent = false;
+  try {
+    await issueEmailTokenEmail({ userAddress: address, email, purpose: "verify" });
+    emailVerificationSent = true;
+  } catch {
+    emailVerificationSent = false;
+  }
   return res.status(201).json({
     token: issueAuthToken(address, env),
     address,
     user,
     isAdmin: isAdminSubject(address, env),
+    emailVerificationSent,
   });
 }
 
@@ -256,4 +295,64 @@ export async function unlinkWallet(req: Request, res: Response) {
   await updateUserLinkedWallet(db, subject, null, Date.now());
   const refreshedUser = await getUser(db, subject);
   return res.json({ user: refreshedUser });
+}
+
+export async function requestMagicLink(req: Request, res: Response) {
+  const parsed = z.object({ email: z.string().min(3).max(320) }).safeParse(req.body);
+  if (!parsed.success) throw new HttpError(400, "Invalid magic-link payload", "INVALID_EMAIL_AUTH");
+
+  const { db } = getContext();
+  const email = normalizeEmail(parsed.data.email);
+  const user = await findUserByEmail(db, email);
+  if (user && user.authMethod === "email") {
+    await issueEmailTokenEmail({ userAddress: user.address, email, purpose: "login" });
+  }
+
+  return res.status(202).json({ ok: true });
+}
+
+export async function consumeEmailToken(req: Request, res: Response) {
+  const parsed = z.object({ token: z.string().min(16).max(512) }).safeParse(req.body);
+  if (!parsed.success) throw new HttpError(400, "Invalid email token payload", "INVALID_EMAIL_AUTH");
+
+  const { db, env } = getContext();
+  const tokenHash = hashEmailAuthToken(parsed.data.token.trim());
+  const row = await findEmailAuthToken(db, tokenHash);
+  if (!row || row.consumedAt) {
+    throw new HttpError(401, "This email link is invalid or has already been used", "INVALID_EMAIL_TOKEN");
+  }
+  if (row.expiresAt < Date.now()) {
+    throw new HttpError(401, "This email link has expired", "EXPIRED_EMAIL_TOKEN");
+  }
+
+  const user = await getUser(db, row.userAddress);
+  if (!user || user.authMethod !== "email") {
+    throw new HttpError(404, "Email account not found", "EMAIL_ACCOUNT_NOT_FOUND");
+  }
+
+  await consumeEmailAuthToken(db, tokenHash, Date.now());
+  if (row.purpose === "verify" || !user.emailVerifiedAt) {
+    await updateUserEmailVerifiedAt(db, user.address, Date.now());
+  }
+  await updateUserLastLogin(db, user.address, Date.now());
+  const refreshedUser = await getUser(db, user.address);
+
+  return res.json({
+    token: issueAuthToken(user.address, env),
+    address: user.address,
+    user: refreshedUser,
+    isAdmin: isAdminSubject(user.address, env),
+  });
+}
+
+export async function sendVerificationEmail(req: Request, res: Response) {
+  const { db } = getContext();
+  const subject = requireAuthAddress(req);
+  const user = await getUser(db, subject);
+  if (!user || user.authMethod !== "email" || !user.email) {
+    throw new HttpError(403, "Only email accounts can request verification", "EMAIL_AUTH_REQUIRED");
+  }
+
+  await issueEmailTokenEmail({ userAddress: user.address, email: user.email, purpose: "verify" });
+  return res.status(202).json({ ok: true });
 }

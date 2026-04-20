@@ -761,10 +761,33 @@ export default function DashboardPage() {
                     <div className="grid gap-4">
                       <div className="flex flex-wrap gap-2 text-xs">
                         {auth.user?.email?.trim() ? <span className="market-chip">Email account</span> : null}
+                        {auth.user?.authMethod === "email" ? <span className="market-chip">{auth.user?.emailVerifiedAt ? "Email verified" : "Email not verified"}</span> : null}
                         {auth.user?.postalCode?.trim() ? <span className="market-chip">Local zone {auth.user.postalCode.trim()}</span> : null}
                         {address ? <span className="market-chip">Wallet {shortenHex(address)}</span> : null}
                         {auth.user?.linkedWalletAddress ? <span className="market-chip">Linked wallet {shortenHex(auth.user.linkedWalletAddress)}</span> : null}
                       </div>
+                      {auth.user?.authMethod === "email" && !auth.user?.emailVerifiedAt ? (
+                        <div className="rounded-2xl border border-amber-200/80 bg-amber-50/80 p-4">
+                          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                            <div className="space-y-1">
+                              <div className="text-sm font-semibold text-slate-950">Verify your email</div>
+                              <div className="text-sm text-muted-foreground">
+                                Verification unlocks a confirmed account state for sign-in links, notifications, and account recovery.
+                              </div>
+                            </div>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              disabled={auth.isLoading || !auth.user?.email}
+                              onClick={async () => {
+                                await auth.sendVerificationEmail();
+                              }}
+                            >
+                              Send verification email
+                            </Button>
+                          </div>
+                        </div>
+                      ) : null}
                       {auth.user?.authMethod === "email" ? (
                         <div className="rounded-2xl border border-slate-200/80 bg-slate-50/90 p-4">
                           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">

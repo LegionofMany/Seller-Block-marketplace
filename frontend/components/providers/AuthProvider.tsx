@@ -4,7 +4,7 @@ import * as React from "react";
 import { useAccount, useSignMessage } from "wagmi";
 import { toast } from "sonner";
 
-import { fetchJson } from "@/lib/api";
+import { fetchJson, type ApiError } from "@/lib/api";
 import { clearStoredAuthToken, getStoredAuthToken, setStoredAuthToken, type UserProfile } from "@/lib/auth";
 
 type AuthContextValue = {
@@ -16,6 +16,9 @@ type AuthContextValue = {
   isAuthenticated: boolean;
   signIn: () => Promise<void>;
   signInWithEmail: (input: { email: string; password: string }) => Promise<void>;
+  requestMagicLink: (input: { email: string }) => Promise<void>;
+  consumeEmailToken: (input: { token: string }) => Promise<void>;
+  sendVerificationEmail: () => Promise<void>;
   registerWithEmail: (input: {
     email: string;
     password: string;
@@ -37,9 +40,14 @@ type AuthSessionResponse = {
   address: string;
   user: UserProfile | null;
   isAdmin?: boolean;
+  emailVerificationSent?: boolean;
 };
 
 const AuthContext = React.createContext<AuthContextValue | null>(null);
+
+function getErrorMessage(error: unknown, fallback: string) {
+  return (error as ApiError | undefined)?.message ?? fallback;
+}
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const { address: walletAddress } = useAccount();
@@ -135,8 +143,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       applySession(verified);
       toast.success("Signed in");
-    } catch (e: any) {
-      toast.error(e?.message ?? "Sign in failed");
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error, "Sign in failed"));
     } finally {
       setIsLoading(false);
     }
@@ -152,13 +160,62 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
       applySession(verified);
       toast.success("Signed in");
-    } catch (e: any) {
-      toast.error(e?.message ?? "Email sign in failed");
-      throw e;
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error, "Email sign in failed"));
+      throw error;
     } finally {
       setIsLoading(false);
     }
   }, [applySession]);
+
+  const requestMagicLink = React.useCallback(async ({ email }: { email: string }) => {
+    try {
+      setIsLoading(true);
+      await fetchJson<{ ok: true }>("/auth/email/magic-link/request", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      toast.success("If the account exists, a sign-in link has been sent");
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error, "Failed to send magic link"));
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  const consumeEmailToken = React.useCallback(async ({ token }: { token: string }) => {
+    try {
+      setIsLoading(true);
+      const verified = await fetchJson<AuthSessionResponse>("/auth/email/token/consume", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token }),
+        timeoutMs: 10_000,
+      });
+      applySession(verified);
+      toast.success("Email link accepted");
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error, "Email link sign in failed"));
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [applySession]);
+
+  const sendVerificationEmail = React.useCallback(async () => {
+    try {
+      setIsLoading(true);
+      await fetchJson<{ ok: true }>("/auth/email/verify/send", { method: "POST" });
+      toast.success("Verification email sent");
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error, "Failed to send verification email"));
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
 
   const registerWithEmail = React.useCallback(async (
     {
@@ -191,10 +248,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         body: JSON.stringify({ email, password, fullName, displayName, streetAddress1, streetAddress2, city, region, postalCode }),
       });
       applySession(verified);
-      toast.success("Account created");
-    } catch (e: any) {
-      toast.error(e?.message ?? "Email registration failed");
-      throw e;
+      toast.success(verified.emailVerificationSent ? "Account created. Verification email sent." : "Account created");
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error, "Email registration failed"));
+      throw error;
     } finally {
       setIsLoading(false);
     }
@@ -210,12 +267,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       isAuthenticated: Boolean(token && address),
       signIn,
       signInWithEmail,
+      requestMagicLink,
+      consumeEmailToken,
+      sendVerificationEmail,
       registerWithEmail,
       signOut,
       refresh,
       setUser,
     }),
-    [token, address, user, isAdmin, isLoading, signIn, signInWithEmail, registerWithEmail, refresh, signOut]
+    [token, address, user, isAdmin, isLoading, signIn, signInWithEmail, requestMagicLink, consumeEmailToken, sendVerificationEmail, registerWithEmail, refresh, signOut]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

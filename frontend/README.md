@@ -4,6 +4,8 @@ Next.js (App Router) + TailwindCSS frontend for the Seller Block Marketplace mon
 
 Current status: this workspace is a UI scaffold (starter template) and is intended as the starting point for marketplace screens.
 
+Current auth status: wallet auth, email/password auth, email magic-link sign-in, email verification prompts, and email-account wallet linking are all wired into the active marketplace flows.
+
 ## Prerequisites
 
 - Node.js 18.18+ (or 20+) and npm
@@ -51,6 +53,8 @@ Optional but useful:
 - `NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION` (optional Google site verification token)
 - `NEXT_PUBLIC_SEPOLIA_START_BLOCK` (improves listings/dashboard load time)
 - `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` (enables WalletConnect for tablet/mobile sign-in outside wallet browsers)
+
+Email magic-link and verification delivery depend on backend configuration for `POSTMARK_SERVER_TOKEN`, `NOTIFICATION_EMAIL_FROM`, and `FRONTEND_APP_URL`.
 
 `NEXT_PUBLIC_CHAIN_CONFIG_JSON` supports either an array of chains or an object with `defaultChainKey` and `chains`. Each chain can define:
 
@@ -120,7 +124,7 @@ The included [vercel.json](vercel.json) keeps the frontend build command explici
 
 ## Backend integration
 
-The backend API (separate workspace) runs by default on `http://localhost:4000` and currently exposes `GET /health`.
+The backend API (separate workspace) runs by default on `http://localhost:4000` and currently exposes listing, metadata, wallet auth, email auth, magic-link, verification, favorites, and promotions endpoints.
 
 ## Notes
 

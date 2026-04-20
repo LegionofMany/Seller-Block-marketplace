@@ -16,6 +16,7 @@ import { getEnv } from "@/lib/env";
 
 export default function SignInPage() {
   const auth = useAuth();
+  const { consumeEmailToken, requestMagicLink } = auth;
   const { address } = useAccount();
   const router = useRouter();
   const pathname = usePathname();
@@ -33,6 +34,10 @@ export default function SignInPage() {
   const [region, setRegion] = React.useState("");
   const [postalCode, setPostalCode] = React.useState("");
   const [mode, setMode] = React.useState<"login" | "register">("login");
+  const [emailLinkBusy, setEmailLinkBusy] = React.useState(false);
+  const [emailLinkStatus, setEmailLinkStatus] = React.useState<"idle" | "processing" | "success" | "error">("idle");
+  const emailToken = searchParams.get("email_token")?.trim() ?? "";
+  const emailIntent = searchParams.get("email_intent")?.trim() ?? "login";
 
   const emailDisabled = auth.isLoading;
   const registrationMissingFields = [
@@ -50,6 +55,35 @@ export default function SignInPage() {
     const requestedMode = searchParams.get("mode") === "register" ? "register" : "login";
     setMode((current) => (current === requestedMode ? current : requestedMode));
   }, [searchParams]);
+
+  React.useEffect(() => {
+    if (!emailToken || emailLinkStatus === "processing" || emailLinkStatus === "success") return;
+
+    let cancelled = false;
+    setEmailLinkStatus("processing");
+    setEmailLinkBusy(true);
+    void consumeEmailToken({ token: emailToken })
+      .then(() => {
+        if (cancelled) return;
+        setEmailLinkStatus("success");
+        const params = new URLSearchParams(searchParams.toString());
+        params.delete("email_token");
+        params.delete("email_intent");
+        const query = params.toString();
+        router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+        router.push("/dashboard");
+      })
+      .catch(() => {
+        if (!cancelled) setEmailLinkStatus("error");
+      })
+      .finally(() => {
+        if (!cancelled) setEmailLinkBusy(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [consumeEmailToken, emailLinkStatus, emailToken, pathname, router, searchParams]);
 
   const setModeWithQuery = React.useCallback(
     (nextMode: "login" | "register") => {
@@ -95,6 +129,20 @@ export default function SignInPage() {
     }
 
     router.push("/dashboard");
+  }
+
+  async function handleMagicLinkRequest() {
+    if (!email.trim()) {
+      toast.error("Enter your email first");
+      return;
+    }
+
+    setEmailLinkBusy(true);
+    try {
+      await requestMagicLink({ email: email.trim() });
+    } finally {
+      setEmailLinkBusy(false);
+    }
   }
 
   return (
@@ -145,6 +193,15 @@ export default function SignInPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          {emailToken ? (
+            <div className="rounded-2xl border border-slate-200 bg-white/80 px-4 py-3 text-sm text-slate-700">
+              {emailLinkStatus === "error"
+                ? `This ${emailIntent === "verify" ? "verification" : "sign-in"} link is invalid, expired, or already used.`
+                : emailLinkBusy
+                  ? `Checking your ${emailIntent === "verify" ? "verification" : "sign-in"} link...`
+                  : "This email link has been processed."}
+            </div>
+          ) : null}
           <div className="grid grid-cols-2 gap-2">
             <Button type="button" variant={mode === "login" ? "default" : "outline"} onClick={() => setModeWithQuery("login")} disabled={emailDisabled} className="w-full">
               Sign in
@@ -224,10 +281,16 @@ export default function SignInPage() {
             >
               {mode === "login" ? "Sign in with email" : "Create email account"}
             </Button>
+            {mode === "login" ? (
+              <Button type="button" variant="outline" disabled={emailDisabled || emailLinkBusy || !email.trim()} onClick={() => void handleMagicLinkRequest()}>
+                {emailLinkBusy ? "Sending link..." : "Email me a sign-in link"}
+              </Button>
+            ) : null}
           </form>
 
           <div className="space-y-2 text-sm text-slate-700">
             <div>Email accounts now create a real backend session and keep homepage favorites, followed-seller ordering, alerts, and garage activity tied to that account.</div>
+            <div>Magic-link access is available for passwordless sign-in on phone, tablet, or desktop when email delivery is configured.</div>
             <div>Wallet settlement and on-chain seller actions still require a connected wallet. This page keeps both identity paths available side by side.</div>
             <div>Profile editing, local discovery, and account tabs now use the same identity model instead of a separate onboarding placeholder.</div>
           </div>

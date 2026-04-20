@@ -1,5 +1,6 @@
 import { getContext } from "./context";
 import { createNotification, listAllSavedSearches, queryListings, updateSavedSearchLastCheckedAt, type SavedSearchFilters } from "./db";
+import { sendTransactionalEmail } from "./email";
 
 export type NotificationsWorkerStatus = {
   running: boolean;
@@ -26,34 +27,6 @@ function saleTypeFromSavedSearch(value: SavedSearchFilters["type"]): number | un
   if (value === "auction") return 1;
   if (value === "raffle") return 2;
   return undefined;
-}
-
-async function sendPostmarkEmail(to: string, subject: string, htmlBody: string, textBody: string) {
-  const { env, logger } = getContext();
-  if (!env.postmarkServerToken || !env.notificationEmailFrom) return;
-
-  try {
-    const res = await fetch("https://api.postmarkapp.com/email", {
-      method: "POST",
-      headers: {
-        Accept: "application/json",
-        "Content-Type": "application/json",
-        "X-Postmark-Server-Token": env.postmarkServerToken,
-      },
-      body: JSON.stringify({
-        From: env.notificationEmailFrom,
-        To: to,
-        Subject: subject,
-        HtmlBody: htmlBody,
-        TextBody: textBody,
-      }),
-    });
-    if (!res.ok) {
-      logger.warn({ status: res.status, to }, "failed to send notification email");
-    }
-  } catch (err) {
-    logger.warn({ err, to }, "notification email request failed");
-  }
 }
 
 async function processSavedSearches() {
@@ -96,7 +69,7 @@ async function processSavedSearches() {
 
       if (notification && search.email && env.frontendAppUrl) {
         const listingUrl = `${env.frontendAppUrl.replace(/\/$/, "")}/listing/${row.id}?chain=${encodeURIComponent(row.chainKey)}`;
-        await sendPostmarkEmail(
+        await sendTransactionalEmail(
           search.email,
           `Seller Block alert: ${search.name}`,
           `<p>A new listing matched your saved search <strong>${search.name}</strong>.</p><p><a href="${listingUrl}">Open listing</a></p>`,

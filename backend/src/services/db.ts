@@ -115,6 +115,17 @@ export type AuthNonceRow = {
   consumedAt?: number | null;
 };
 
+export type EmailAuthTokenRow = {
+  tokenHash: string;
+  userAddress: string;
+  email: string;
+  purpose: "login" | "verify";
+  expiresAt: number;
+  createdAt: number;
+  consumedAt?: number | null;
+  metadataJson?: string;
+};
+
 export type ListingCommentRow = {
   id: number;
   listingId: string;
@@ -809,6 +820,19 @@ function toAuthNonceRow(r: any): AuthNonceRow {
   };
 }
 
+function toEmailAuthTokenRow(r: any): EmailAuthTokenRow {
+  return {
+    tokenHash: String(r.tokenHash ?? r.tokenhash),
+    userAddress: String(r.userAddress ?? r.useraddress),
+    email: String(r.email),
+    purpose: String(r.purpose) === "verify" ? "verify" : "login",
+    expiresAt: Number(r.expiresAt ?? r.expiresat),
+    createdAt: Number(r.createdAt ?? r.createdat),
+    consumedAt: r.consumedAt ?? r.consumedat ?? null,
+    metadataJson: r.metadataJson ?? r.metadatajson ?? "{}",
+  };
+}
+
 function toListingCommentRow(r: any): ListingCommentRow {
   return {
     id: Number(r.id),
@@ -945,6 +969,45 @@ export async function updateUserLastLogin(_db: Pool | any, address: string, last
 export async function updateUserLinkedWallet(_db: Pool | any, address: string, linkedWalletAddress: string | null, updatedAt: number) {
   const p = ensurePool(_db);
   await p.query('UPDATE users SET linkedwalletaddress = $2, updatedat = GREATEST(updatedat, $3) WHERE address = $1', [address, linkedWalletAddress, updatedAt]);
+}
+
+export async function updateUserEmailVerifiedAt(_db: Pool | any, address: string, emailVerifiedAt: number) {
+  const p = ensurePool(_db);
+  await p.query('UPDATE users SET emailverifiedat = $2, updatedat = GREATEST(updatedat, $2) WHERE address = $1', [address, emailVerifiedAt]);
+}
+
+export async function createEmailAuthToken(
+  _db: Pool | any,
+  input: {
+    tokenHash: string;
+    userAddress: string;
+    email: string;
+    purpose: "login" | "verify";
+    expiresAt: number;
+    createdAt: number;
+    metadataJson?: string;
+  }
+) {
+  const p = ensurePool(_db);
+  await p.query(
+    `INSERT INTO email_auth_tokens(tokenhash, useraddress, email, purpose, expiresat, createdat, consumedat, metadatajson)
+     VALUES($1,$2,$3,$4,$5,$6,NULL,$7)`,
+    [input.tokenHash, input.userAddress, input.email, input.purpose, input.expiresAt, input.createdAt, input.metadataJson ?? "{}"]
+  );
+}
+
+export async function findEmailAuthToken(_db: Pool | any, tokenHash: string): Promise<EmailAuthTokenRow | null> {
+  const p = ensurePool(_db);
+  const res = await p.query(
+    'SELECT tokenhash AS "tokenHash", useraddress AS "userAddress", email, purpose, expiresat AS "expiresAt", createdat AS "createdAt", consumedat AS "consumedAt", metadatajson AS "metadataJson" FROM email_auth_tokens WHERE tokenhash = $1 LIMIT 1',
+    [tokenHash]
+  );
+  return res.rows[0] ? toEmailAuthTokenRow(res.rows[0]) : null;
+}
+
+export async function consumeEmailAuthToken(_db: Pool | any, tokenHash: string, consumedAt: number) {
+  const p = ensurePool(_db);
+  await p.query('UPDATE email_auth_tokens SET consumedat = $2 WHERE tokenhash = $1 AND consumedat IS NULL', [tokenHash, consumedAt]);
 }
 
 export async function getUser(_db: Pool | any, address: string): Promise<UserRow | null> {

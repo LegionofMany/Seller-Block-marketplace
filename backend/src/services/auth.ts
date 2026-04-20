@@ -28,6 +28,30 @@ export function buildWalletLinkMessage(address: string, nonce: string, env: Env)
   ].join("\n");
 }
 
+export function generateEmailAuthToken(): string {
+  return crypto.randomBytes(24).toString("base64url");
+}
+
+export function hashEmailAuthToken(token: string): string {
+  return crypto.createHash("sha256").update(token).digest("hex");
+}
+
+export function buildMagicLinkEmail(email: string, linkUrl: string) {
+  return {
+    subject: "Your Seller Block sign-in link",
+    html: `<p>Use this secure link to sign in to Seller Block.</p><p><a href="${linkUrl}">Sign in to your account</a></p><p>This link expires in 20 minutes and can only be used once.</p>`,
+    text: `Use this secure link to sign in to Seller Block: ${linkUrl}\n\nThis link expires in 20 minutes and can only be used once.`,
+  };
+}
+
+export function buildVerificationEmail(email: string, linkUrl: string) {
+  return {
+    subject: "Verify your Seller Block email",
+    html: `<p>Verify your email address to finish setting up your Seller Block account.</p><p><a href="${linkUrl}">Verify email</a></p><p>This link expires in 24 hours and can only be used once.</p>`,
+    text: `Verify your Seller Block email address: ${linkUrl}\n\nThis link expires in 24 hours and can only be used once.`,
+  };
+}
+
 const EMAIL_SUBJECT_PREFIX = "email:";
 
 export function buildEmailSubject(email: string): string {
