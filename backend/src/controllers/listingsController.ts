@@ -1,10 +1,14 @@
+import { createHash } from "node:crypto";
+
 import type { Request, Response } from "express";
 import { getContext } from "../services/context";
 import {
   findAuction,
   findListing,
   findRaffle,
+  listMostViewedListings,
   queryListings,
+  recordListingView,
   upsertListing,
   type ListingRow,
 } from "../services/db";
@@ -28,6 +32,17 @@ function sortFromQuery(value: unknown): "newest" | "price_asc" | "price_desc" | 
   if (v === "price_asc" || v === "price-asc" || v === "price_low" || v === "price_low_high") return "price_asc";
   if (v === "price_desc" || v === "price-desc" || v === "price_high" || v === "price_high_low") return "price_desc";
   return undefined;
+}
+
+function toViewerKey(req: Request): string {
+  const authToken = req.headers.authorization?.startsWith("Bearer ") ? req.headers.authorization.slice("Bearer ".length).trim() : "";
+  const forwardedFor = String((req.headers["x-forwarded-for"] as string) ?? req.ip ?? "")
+    .split(",")[0]
+    ?.trim()
+    .slice(0, 80);
+  const userAgent = String(req.headers["user-agent"] ?? "").trim().slice(0, 160);
+  const seed = authToken || `${forwardedFor}|${userAgent}` || "anonymous";
+  return createHash("sha256").update(seed).digest("hex");
 }
 
 async function backfillListingIfMissing(id: string, chainKey?: string): Promise<ListingRow | null> {
@@ -140,6 +155,30 @@ export async function getListings(req: Request, res: Response) {
   return res.json(body);
 }
 
+export async function getMostViewedListings(req: Request, res: Response) {
+  const { env, db, cache } = getContext();
+  const chainKey = normalizeChainKey(req.query.chainKey ?? req.query.chain);
+  const { limit } = parseLimitOffset(req.query);
+  const windowDaysRaw = typeof req.query.windowDays === "string" ? Number.parseInt(req.query.windowDays, 10) : Number.NaN;
+  const windowDays = Number.isFinite(windowDaysRaw) ? Math.max(1, Math.min(365, windowDaysRaw)) : 30;
+
+  const cacheKey = `listings:most-viewed:${chainKey ?? "any"}:${limit}:${windowDays}`;
+  const cached = cache.get<any>(cacheKey);
+  if (cached) return res.json(cached);
+
+  const items = await listMostViewedListings(db, {
+    ...(chainKey ? { chainKey } : {}),
+    active: true,
+    sinceMs: Date.now() - windowDays * 24 * 60 * 60 * 1000,
+    autoHideReportThreshold: env.listingAutoHideReportsThreshold,
+    limit,
+  });
+
+  const body = { items, limit, windowDays };
+  cache.set(cacheKey, body);
+  return res.json(body);
+}
+
 export async function getListingById(req: Request, res: Response) {
   const { db, cache } = getContext();
   const id = requireBytes32(String(req.params.id ?? ""), "listing id");
@@ -161,6 +200,31 @@ export async function getListingById(req: Request, res: Response) {
   const body = { listing, auction, raffle };
   cache.set(cacheKey, body);
   return res.json(body);
+}
+
+export async function createListingView(req: Request, res: Response) {
+  const { db } = getContext();
+  const id = requireBytes32(String(req.params.id ?? ""), "listing id");
+  const chainKey = normalizeChainKey(req.query.chainKey ?? req.query.chain);
+
+  const listing = ((await findListing(db, id, chainKey)) ?? (await backfillListingIfMissing(id, chainKey)));
+  if (!listing || isSmokeMetadataUri(listing.metadataURI)) {
+    return res.status(404).json({ error: { message: "Listing not found" } });
+  }
+
+  const createdAt = Date.now();
+  const bucketMs = 30 * 60 * 1000;
+  const viewBucketStart = createdAt - (createdAt % bucketMs);
+
+  await recordListingView(db, {
+    listingChainKey: listing.chainKey,
+    listingId: listing.id,
+    viewerKey: toViewerKey(req),
+    createdAt,
+    viewBucketStart,
+  });
+
+  return res.status(202).json({ ok: true });
 }
 
 export async function getListingsBySeller(req: Request, res: Response) {

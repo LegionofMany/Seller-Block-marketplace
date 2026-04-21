@@ -5,7 +5,7 @@ import { type Address, type Hex, parseAbiItem } from "viem";
 import { usePublicClient } from "wagmi";
 
 import { getEnv } from "@/lib/env";
-import { fetchJson } from "@/lib/api";
+import { fetchJson, type ApiError } from "@/lib/api";
 import { marketplaceRegistryAbi } from "@/lib/contracts/abi/MarketplaceRegistry";
 import { parseListing } from "@/lib/contracts/parse";
 import { type ListingStatus, type SaleType } from "@/lib/contracts/types";
@@ -66,9 +66,9 @@ const listingCreatedEvent = parseAbiItem(
 const SAFE_LOG_SCAN_BLOCKS = 10_000n;
 
 function isRateLimitError(err: unknown): boolean {
-  const anyErr = err as any;
-  const message = String(anyErr?.shortMessage ?? anyErr?.message ?? "");
-  const details = String(anyErr?.details ?? "");
+  const errorLike = err as { shortMessage?: unknown; message?: unknown; details?: unknown } | null;
+  const message = String(errorLike?.shortMessage ?? errorLike?.message ?? "");
+  const details = String(errorLike?.details ?? "");
   return /\b429\b/.test(message) ||
     /too many requests/i.test(message) ||
     /rate limit/i.test(message) ||
@@ -299,8 +299,8 @@ export function useListings(params?: ListingsParams) {
         const listings = await promise;
         if (!cancelled) setData(listings);
         return;
-      } catch (e: any) {
-        if (!cancelled) setError(e?.message ?? "Failed to load listings");
+      } catch (e: unknown) {
+        if (!cancelled) setError((e as ApiError | null)?.message ?? "Failed to load listings");
       } finally {
         inflightByKey.delete(cacheKey);
         if (!cancelled) setIsLoading(false);

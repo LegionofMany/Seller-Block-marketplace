@@ -16,6 +16,10 @@ export type ListingRow = {
   blockNumber: number;
 };
 
+export type ListingViewSummaryRow = ListingRow & {
+  viewCount: number;
+};
+
 export type AuctionRow = {
   chainKey: string;
   listingId: string;
@@ -315,6 +319,13 @@ function toListingRow(r: any): ListingRow {
   };
 }
 
+function toListingViewSummaryRow(r: any): ListingViewSummaryRow {
+  return {
+    ...toListingRow(r),
+    viewCount: Number(r.viewCount ?? r.viewcount ?? 0),
+  };
+}
+
 function parseJsonObject(value: unknown): Record<string, unknown> {
   if (typeof value !== "string" || !value.trim()) return {};
   try {
@@ -603,6 +614,14 @@ export type ListingsQuery = {
   offset: number;
 };
 
+export type MostViewedListingsQuery = {
+  chainKey?: string | undefined;
+  active?: boolean | undefined;
+  sinceMs?: number | undefined;
+  autoHideReportThreshold?: number | undefined;
+  limit: number;
+};
+
 export async function queryListings(_db: Pool | any, q: ListingsQuery) {
   const p = ensurePool(_db);
   const where: string[] = [];
@@ -706,6 +725,74 @@ export async function queryListings(_db: Pool | any, q: ListingsQuery) {
     params
   );
   return res.rows.map(toListingRow);
+}
+
+export async function recordListingView(
+  _db: Pool | any,
+  input: { listingChainKey: string; listingId: string; viewerKey: string; createdAt: number; viewBucketStart: number }
+) {
+  const p = ensurePool(_db);
+  await p.query(
+    `INSERT INTO listing_views(listingchainkey, listingid, viewerkey, viewbucketstart, createdat)
+     VALUES($1,$2,$3,$4,$5)
+     ON CONFLICT (listingchainkey, listingid, viewerkey, viewbucketstart) DO NOTHING`,
+    [input.listingChainKey, input.listingId, input.viewerKey, input.viewBucketStart, input.createdAt]
+  );
+}
+
+export async function listMostViewedListings(_db: Pool | any, q: MostViewedListingsQuery): Promise<ListingViewSummaryRow[]> {
+  const p = ensurePool(_db);
+  const where: string[] = [];
+  const params: any[] = [];
+
+  where.push(`LOWER(l.metadatauri) NOT LIKE 'ipfs://seller-block/smoke-%'`);
+
+  if (q.chainKey) {
+    where.push(`l.chainkey = $${params.length + 1}`);
+    params.push(q.chainKey);
+  }
+  if (typeof q.active === "boolean") {
+    where.push(`l.active = $${params.length + 1}`);
+    params.push(q.active ? 1 : 0);
+  }
+  if (typeof q.sinceMs === "number" && Number.isFinite(q.sinceMs)) {
+    where.push(`v.createdat >= $${params.length + 1}`);
+    params.push(q.sinceMs);
+  }
+  if (typeof q.autoHideReportThreshold === "number" && q.autoHideReportThreshold > 0) {
+    where.push(
+      `(SELECT COUNT(1) FROM reports r WHERE r.targettype = 'listing' AND r.targetid = CONCAT(l.chainkey, ':', l.id)) < $${params.length + 1}`
+    );
+    params.push(q.autoHideReportThreshold);
+  }
+
+  params.push(q.limit);
+  const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
+  const limitParam = `$${params.length}`;
+
+  const res = await p.query(
+    `SELECT l.chainkey AS "chainKey",
+            l.chainid AS "chainId",
+            l.id,
+            l.seller,
+            l.metadatauri AS "metadataURI",
+            l.price,
+            l.token,
+            l.saletype AS "saleType",
+            l.active,
+            l.createdat AS "createdAt",
+            l.blocknumber AS "blockNumber",
+            COUNT(v.id)::INTEGER AS "viewCount"
+     FROM listing_views v
+     JOIN listings l ON l.chainkey = v.listingchainkey AND l.id = v.listingid
+     ${whereSql}
+     GROUP BY l.chainkey, l.chainid, l.id, l.seller, l.metadatauri, l.price, l.token, l.saletype, l.active, l.createdat, l.blocknumber
+     ORDER BY COUNT(v.id) DESC, MAX(v.createdat) DESC, l.blocknumber DESC
+     LIMIT ${limitParam}`,
+    params
+  );
+
+  return res.rows.map(toListingViewSummaryRow);
 }
 
 export type UserBlockRow = {

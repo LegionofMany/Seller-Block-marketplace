@@ -154,7 +154,7 @@ export default function SignInPage() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="market-note text-sm">
-            WalletConnect status: {walletConnectEnabled ? "enabled" : "missing NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID"}
+            WalletConnect status: {walletConnectEnabled ? "ready for mobile/tablet scans" : "frontend WalletConnect env missing"}
           </div>
           <div className="flex flex-wrap gap-3">
             <ConnectButton showBalance={false} chainStatus="icon" />
@@ -174,11 +174,15 @@ export default function SignInPage() {
             <div>2. Approve the nonce message to create the existing wallet session.</div>
             <div>3. After sign-in, marketplace alerts, follows, and personalized homepage inventory can use your authenticated profile.</div>
           </div>
-          {!walletConnectEnabled ? (
-            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-slate-700">
-              Mobile/tablet wallet connection is still blocked until a real WalletConnect Cloud project ID is added to the frontend env and deployed. The code path is already wired; the missing piece is the env value.
+          {walletConnectEnabled ? (
+            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-slate-700">
+              WalletConnect is configured, so tablet and phone users can scan into the wallet flow here instead of relying on desktop-only wallet browsers.
             </div>
-          ) : null}
+          ) : (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-slate-700">
+              Mobile/tablet wallet connection still needs a deployed WalletConnect Cloud project ID in the frontend env. The email sign-in path below remains the fallback until that production env is present.
+            </div>
+          )}
         </CardContent>
       </Card>
 

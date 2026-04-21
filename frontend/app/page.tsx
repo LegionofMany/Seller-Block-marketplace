@@ -7,7 +7,7 @@ import { ListingCard } from "@/components/listing/ListingCard";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { fetchJson } from "@/lib/api";
+import { fetchJson, type ApiError } from "@/lib/api";
 import { type ListingSummary, useListings } from "@/lib/hooks/useListings";
 
 type FavoriteListing = {
@@ -34,6 +34,7 @@ type BackendListingRow = {
   token: string;
   saleType: number;
   active: 0 | 1;
+  viewCount?: number;
 };
 
 function toListingSummary(row: BackendListingRow): ListingSummary {
@@ -86,6 +87,8 @@ export default function HomePage() {
   const [favoriteError, setFavoriteError] = React.useState<string | null>(null);
   const [sponsoredListings, setSponsoredListings] = React.useState<Array<{ listing: ListingSummary; sponsorLabel?: string | null; campaignName?: string | null }>>([]);
   const [sponsoredError, setSponsoredError] = React.useState<string | null>(null);
+  const [mostViewedListings, setMostViewedListings] = React.useState<Array<{ listing: ListingSummary; viewCount: number }>>([]);
+  const [mostViewedError, setMostViewedError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -103,10 +106,10 @@ export default function HomePage() {
           setFollowedSellers((res.items ?? []).map((item) => String(item).toLowerCase()));
           setFollowedError(null);
         }
-      } catch (e: any) {
+      } catch (e: unknown) {
         if (!cancelled) {
           setFollowedSellers([]);
-          setFollowedError(e?.message ?? "Could not load followed sellers");
+          setFollowedError((e as ApiError | null)?.message ?? "Could not load followed sellers");
         }
       }
     }
@@ -142,10 +145,10 @@ export default function HomePage() {
           setFavoriteListings(listingResponses);
           setFavoriteError(null);
         }
-      } catch (e: any) {
+      } catch (e: unknown) {
         if (!cancelled) {
           setFavoriteListings([]);
-          setFavoriteError(e?.message ?? "Could not load favorite listings");
+          setFavoriteError((e as ApiError | null)?.message ?? "Could not load favorite listings");
         }
       }
     }
@@ -179,10 +182,34 @@ export default function HomePage() {
           setSponsoredListings(items);
           setSponsoredError(null);
         }
-      } catch (e: any) {
+      } catch (e: unknown) {
         if (!cancelled) {
           setSponsoredListings([]);
-          setSponsoredError(e?.message ?? "Could not load spotlight placements");
+          setSponsoredError((e as ApiError | null)?.message ?? "Could not load spotlight placements");
+        }
+      }
+    }
+
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  React.useEffect(() => {
+    let cancelled = false;
+
+    async function run() {
+      try {
+        const res = await fetchJson<{ items: BackendListingRow[] }>("/listings/most-viewed?limit=4&windowDays=30", { timeoutMs: 5_000 });
+        if (!cancelled) {
+          setMostViewedListings((res.items ?? []).map((item) => ({ listing: toListingSummary(item), viewCount: Number(item.viewCount ?? 0) })));
+          setMostViewedError(null);
+        }
+      } catch (e: unknown) {
+        if (!cancelled) {
+          setMostViewedListings([]);
+          setMostViewedError((e as ApiError | null)?.message ?? "Could not load most viewed listings");
         }
       }
     }
@@ -396,6 +423,28 @@ export default function HomePage() {
       </section>
 
       <section className="grid gap-4 lg:grid-cols-[1fr_1fr]">
+        <Card className="market-panel">
+          <CardHeader>
+            <CardTitle>Most viewed ads</CardTitle>
+            <CardDescription>Popular listings now reflect real listing detail traffic instead of placeholder homepage copy.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {mostViewedError ? <div className="market-note text-sm">{mostViewedError}</div> : null}
+            {mostViewedListings.length === 0 ? (
+              <div className="market-note text-sm">View data is still warming up. As shoppers open listing pages, the most viewed ads will populate here.</div>
+            ) : (
+              <div className="grid gap-4 sm:grid-cols-2">
+                {mostViewedListings.map((item) => (
+                  <div key={`${item.listing.chainKey}-${item.listing.id}`} className="space-y-2">
+                    <div className="text-xs uppercase tracking-[0.16em] text-muted-foreground">{item.viewCount} views in the current window</div>
+                    <ListingCard row={item.listing} />
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
         <Card className="market-panel">
           <CardHeader>
             <CardTitle>Marketplace safety</CardTitle>

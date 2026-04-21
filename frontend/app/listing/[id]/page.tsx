@@ -4,7 +4,7 @@ import * as React from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
-import { type Address, type Hex, isAddress, parseEther, zeroAddress } from "viem";
+import { type Address, type Hex, parseEther, zeroAddress } from "viem";
 import { useAccount, useReadContract, useWaitForTransactionReceipt, useWalletClient, useWriteContract } from "wagmi";
 import { toast } from "sonner";
 
@@ -12,11 +12,10 @@ import { useAuth } from "@/components/providers/AuthProvider";
 import { SellerTrustSummary } from "@/components/site/SellerTrustSummary";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 
 import { getChainConfigByKey, getEnv } from "@/lib/env";
@@ -29,9 +28,8 @@ import { isNativeToken, saleTypeLabel, statusLabel } from "@/lib/contracts/types
 import { formatPrice, shortenHex } from "@/lib/format";
 import { useSellerProfile } from "@/lib/hooks/useSellerProfile";
 import { useToastTx } from "@/lib/hooks/useToastTx";
-import { buildListingHref } from "@/lib/listings";
 import { fetchMetadataById, fetchMetadataByUri, getRenderableListingImage, hasCompleteMarketplaceMetadata, isSmokeMetadataUri, LISTING_FALLBACK_IMAGE, metadataIdFromUri, type MarketplaceMetadata } from "@/lib/metadata";
-import { fetchJson } from "@/lib/api";
+import { fetchJson, type ApiError } from "@/lib/api";
 import { addBlockedSeller } from "@/lib/blocks";
 import { describeToken } from "@/lib/tokens";
 import {
@@ -44,6 +42,27 @@ import {
   relayEscrowAction,
   type ListingOrderIntent,
 } from "@/lib/settlement";
+
+type SignTypedDataPayload<TMessage extends Record<string, unknown>> = {
+  account: Address;
+  domain: {
+    name: string;
+    version: string;
+    chainId: number;
+    verifyingContract: Address;
+  };
+  types: Record<string, Array<{ name: string; type: string }>>;
+  primaryType: string;
+  message: TMessage;
+};
+
+type PermitMessage = {
+  owner: Address;
+  spender: Address;
+  value: bigint;
+  nonce: bigint;
+  deadline: bigint;
+};
 
 function asBytes32(value: string): Hex | null {
   if (!value?.startsWith("0x")) return null;
@@ -194,6 +213,7 @@ export default function ListingDetailPage() {
   const [isLoadingSellerOrder, setIsLoadingSellerOrder] = React.useState(false);
   const [isPublishingSellerOrder, setIsPublishingSellerOrder] = React.useState(false);
   const [isRelayingSettlementAction, setIsRelayingSettlementAction] = React.useState(false);
+  const recordedViewKeysRef = React.useRef<Set<string>>(new Set());
 
   const settlementToken = React.useMemo(
     () => (listing && envState.env ? describeToken(envState.env, activeChainId, listing.token as Address) : null),
@@ -214,6 +234,20 @@ export default function ListingDetailPage() {
     if (!listing?.metadataURI) return null;
     return metadataIdFromUri(listing.metadataURI);
   }, [listing?.metadataURI]);
+
+  React.useEffect(() => {
+    if (!listingId || !listing || hiddenSmokeListing) return;
+    const viewKey = `${activeChainKey}:${listingId}`;
+    if (recordedViewKeysRef.current.has(viewKey)) return;
+    recordedViewKeysRef.current.add(viewKey);
+
+    void fetchJson<{ ok: true }>(`/listings/${listingId}/views?chain=${encodeURIComponent(activeChainKey)}`, {
+      method: "POST",
+      timeoutMs: 5_000,
+    }).catch(() => {
+      // View tracking should never block the listing page.
+    });
+  }, [activeChainKey, hiddenSmokeListing, listing, listingId]);
 
   React.useEffect(() => {
     async function run() {
@@ -598,16 +632,16 @@ export default function ListingDetailPage() {
       const prepared = await prepareSellerOrder(listingId, activeChainKey, {});
       const signature = await walletClient.signTypedData({
         account: address as Address,
-        domain: prepared.domain as any,
-        types: prepared.types as any,
-        primaryType: prepared.primaryType as any,
-        message: prepared.message as any,
-      });
+        domain: prepared.domain,
+        types: prepared.types,
+        primaryType: prepared.primaryType,
+        message: prepared.message,
+      } as SignTypedDataPayload<typeof prepared.message>);
       const res = await publishSellerOrder(listingId, activeChainKey, prepared.message, signature);
       setSellerOrder(res.item);
       toast.success("Gasless checkout published");
-    } catch (e: any) {
-      toast.error(e?.message ?? "Failed to publish gasless checkout");
+    } catch (e: unknown) {
+      toast.error((e as ApiError | null)?.message ?? "Failed to publish gasless checkout");
     } finally {
       setIsPublishingSellerOrder(false);
     }
@@ -632,11 +666,11 @@ export default function ListingDetailPage() {
       const prepared = await prepareBuyerAcceptance(listingId, activeChainKey, { orderHash: sellerOrder.orderHash });
       const buyerSignature = await walletClient.signTypedData({
         account: address as Address,
-        domain: prepared.domain as any,
-        types: prepared.types as any,
-        primaryType: prepared.primaryType as any,
-        message: prepared.message as any,
-      });
+        domain: prepared.domain,
+        types: prepared.types,
+        primaryType: prepared.primaryType,
+        message: prepared.message,
+      } as SignTypedDataPayload<typeof prepared.message>);
 
       const permitDeadline = prepared.message.deadline;
       const permitSignature = await walletClient.signTypedData({
@@ -646,7 +680,7 @@ export default function ListingDetailPage() {
           version: settlementToken.permitVersion ?? "1",
           chainId: activeChainId,
           verifyingContract: settlementToken.address,
-        } as any,
+        },
         types: {
           Permit: [
             { name: "owner", type: "address" },
@@ -655,7 +689,7 @@ export default function ListingDetailPage() {
             { name: "nonce", type: "uint256" },
             { name: "deadline", type: "uint256" },
           ],
-        } as any,
+        },
         primaryType: "Permit",
         message: {
           owner: address as Address,
@@ -663,8 +697,8 @@ export default function ListingDetailPage() {
           value: BigInt(sellerOrder.price),
           nonce: permitNonce,
           deadline: BigInt(permitDeadline),
-        } as any,
-      });
+        },
+      } as SignTypedDataPayload<PermitMessage>);
 
       const relayed = await relayAcceptWithPermit(listingId, activeChainKey, {
         orderHash: prepared.orderHash,
@@ -675,8 +709,8 @@ export default function ListingDetailPage() {
       });
       setPendingHash(relayed.txHash);
       toast.success("Gasless purchase submitted");
-    } catch (e: any) {
-      toast.error(e?.message ?? "Failed to submit gasless purchase");
+    } catch (e: unknown) {
+      toast.error((e as ApiError | null)?.message ?? "Failed to submit gasless purchase");
     } finally {
       setIsRelayingSettlementAction(false);
     }
@@ -693,11 +727,11 @@ export default function ListingDetailPage() {
       const prepared = await prepareEscrowAction(listingId, activeChainKey, action, { orderHash: sellerOrder.orderHash });
       const buyerSignature = await walletClient.signTypedData({
         account: address as Address,
-        domain: prepared.domain as any,
-        types: prepared.types as any,
-        primaryType: prepared.primaryType as any,
-        message: prepared.message as any,
-      });
+        domain: prepared.domain,
+        types: prepared.types,
+        primaryType: prepared.primaryType,
+        message: prepared.message,
+      } as SignTypedDataPayload<typeof prepared.message>);
       const relayed = await relayEscrowAction(listingId, activeChainKey, action, {
         orderHash: prepared.orderHash,
         deadline: prepared.message.deadline,
@@ -705,8 +739,8 @@ export default function ListingDetailPage() {
       });
       setPendingHash(relayed.txHash);
       toast.success(action === "confirm" ? "Delivery confirmation submitted" : "Refund request submitted");
-    } catch (e: any) {
-      toast.error(e?.message ?? "Failed to relay buyer action");
+    } catch (e: unknown) {
+      toast.error((e as ApiError | null)?.message ?? "Failed to relay buyer action");
     } finally {
       setIsRelayingSettlementAction(false);
     }

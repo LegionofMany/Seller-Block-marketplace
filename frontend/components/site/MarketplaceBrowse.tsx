@@ -14,7 +14,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { getBlockedSellers } from "@/lib/blocks";
 import { CATEGORY_TREE, subcategoriesFor } from "@/lib/categories";
 import { getEnv } from "@/lib/env";
-import { fetchJson } from "@/lib/api";
+import { fetchJson, type ApiError } from "@/lib/api";
 import { useListings } from "@/lib/hooks/useListings";
 
 export function MarketplaceBrowse() {
@@ -108,8 +108,8 @@ export function MarketplaceBrowse() {
       });
       setSavedSearchName("");
       toast.success("Saved search created");
-    } catch (e: any) {
-      toast.error(e?.message ?? "Failed to save search");
+    } catch (e: unknown) {
+      toast.error((e as ApiError | null)?.message ?? "Failed to save search");
     } finally {
       setIsSavingSearch(false);
     }

@@ -185,6 +185,18 @@ function getErrorMessage(error: unknown, fallback: string) {
   return typeof message === "string" && message.trim() ? message : fallback;
 }
 
+function mergeSelectedFiles(current: File[], incoming: File[]): File[] {
+  const merged = [...current];
+  for (const file of incoming) {
+    const duplicate = merged.some(
+      (item) => item.name === file.name && item.size === file.size && item.lastModified === file.lastModified
+    );
+    if (!duplicate) merged.push(file);
+    if (merged.length >= 12) break;
+  }
+  return merged.slice(0, 12);
+}
+
 function getReceiptLogs(receipt: unknown): ReceiptLogLike[] {
   if (!receipt || typeof receipt !== "object") return [];
   const logs = (receipt as { logs?: unknown }).logs;
@@ -308,6 +320,19 @@ export default function CreateListingPage() {
       for (const url of urls) URL.revokeObjectURL(url);
     };
   }, [files]);
+
+  const addFiles = React.useCallback((incoming: File[]) => {
+    if (!incoming.length) return;
+    setFiles((current) => mergeSelectedFiles(current, incoming));
+    setLastUploadError(null);
+    setGeneratedMetadataURI("");
+  }, []);
+
+  const removeFileAt = React.useCallback((index: number) => {
+    setFiles((current) => current.filter((_, currentIndex) => currentIndex !== index));
+    setLastUploadError(null);
+    setGeneratedMetadataURI("");
+  }, []);
 
   React.useEffect(() => {
     if (typeof window === "undefined") return;
@@ -673,20 +698,55 @@ export default function CreateListingPage() {
                 </div>
                 <div className="space-y-2 sm:col-span-2">
                   <Label>Images (required, up to 12)</Label>
-                  <Input type="file" accept="image/*" multiple onChange={(e) => {
-                    setFiles(Array.from(e.target.files ?? []));
-                    setLastUploadError(null);
-                    setGeneratedMetadataURI("");
-                  }} />
-                  <div className="text-xs text-muted-foreground">Photos are selected per device session and are not stored in the local draft.</div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Choose from gallery</Label>
+                      <Input
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        onChange={(e) => {
+                          addFiles(Array.from(e.target.files ?? []));
+                          e.currentTarget.value = "";
+                        }}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Take photo</Label>
+                      <Input
+                        type="file"
+                        accept="image/*"
+                        capture="environment"
+                        onChange={(e) => {
+                          addFiles(Array.from(e.target.files ?? []));
+                          e.currentTarget.value = "";
+                        }}
+                      />
+                    </div>
+                  </div>
+                  <div className="text-xs text-muted-foreground">Photos are selected per device session and are not stored in the local draft. New gallery or camera selections append up to 12 images so phone and tablet uploads can be built in batches.</div>
                   {files.length ? (
                     <>
-                      <div className="text-xs text-muted-foreground">Selected: {files.map((file) => file.name).join(", ")}</div>
+                      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+                        <span>Selected: {files.length}/12</span>
+                        <Button type="button" size="sm" variant="ghost" onClick={() => setFiles([])}>
+                          Clear all photos
+                        </Button>
+                      </div>
                       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 lg:grid-cols-4">
                         {previewUrls.map((url, index) => (
                           <div key={`${files[index]?.name ?? "file"}-${index}`} className="overflow-hidden rounded-md border bg-muted">
                             <div className="relative aspect-square w-full">
                               <Image src={url} alt={files[index]?.name ?? `Selected image ${index + 1}`} fill className="object-cover" unoptimized />
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="secondary"
+                                className="absolute right-2 top-2 h-8 rounded-full px-3"
+                                onClick={() => removeFileAt(index)}
+                              >
+                                Remove
+                              </Button>
                             </div>
                             <div className="truncate border-t px-2 py-1 text-[11px] text-muted-foreground">
                               {files[index]?.name ?? `Image ${index + 1}`}

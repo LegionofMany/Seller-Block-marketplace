@@ -1,8 +1,24 @@
 import { type Address, type Hex } from "viem";
 import { type Listing, type ListingStatus, type SaleType } from "./types";
 
-export function parseListing(raw: any): Listing {
-  const tuple = raw as any;
+type ListingTupleLike = {
+  seller?: unknown;
+  buyer?: unknown;
+  saleType?: unknown;
+  status?: unknown;
+  metadataURI?: unknown;
+  price?: unknown;
+  token?: unknown;
+  moduleId?: unknown;
+  escrowId?: unknown;
+  startTime?: unknown;
+  endTime?: unknown;
+  raffleCommit?: unknown;
+  [index: number]: unknown;
+};
+
+export function parseListing(raw: unknown): Listing {
+  const tuple = raw as ListingTupleLike;
   const seller = tuple.seller ?? tuple[0];
   const buyer = tuple.buyer ?? tuple[1];
   const saleType = (tuple.saleType ?? tuple[2]) as SaleType;

@@ -8,6 +8,7 @@ import { base, baseSepolia, mainnet, sepolia } from "viem/chains";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RainbowKitProvider, darkTheme } from "@rainbow-me/rainbowkit";
 
+import { type ApiError } from "@/lib/api";
 import { getEnv } from "@/lib/env";
 import { Card, CardContent } from "@/components/ui/card";
 
@@ -95,11 +96,11 @@ export function Web3Providers({ children }: { children: React.ReactNode }) {
         ssr: true,
       });
       setState({ status: "ready", config });
-    } catch (e: any) {
+    } catch (e: unknown) {
       setState({
         status: "error",
         message:
-          (e?.message ?? "Check NEXT_PUBLIC_* variables.") +
+          ((e as ApiError | null)?.message ?? "Check NEXT_PUBLIC_* variables.") +
           " (If you just edited .env.local, restart `npm run dev`.)",
       });
     }
