@@ -5,6 +5,7 @@ import * as React from "react";
 
 import { ListingCard } from "@/components/listing/ListingCard";
 import { useAuth } from "@/components/providers/AuthProvider";
+import { AccentCallout } from "@/components/ui/accent-callout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { fetchJson, type ApiError } from "@/lib/api";
@@ -334,7 +335,7 @@ export default function HomePage() {
       </section>
 
       <section className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
-        <Card className="market-panel">
+        <Card className="market-panel market-panel-spotlight market-panel-spotlight-mint">
           <CardHeader>
             <CardTitle>Followed sellers first</CardTitle>
             <CardDescription>This section is driven by your real follow graph, not static homepage copy.</CardDescription>
@@ -346,9 +347,9 @@ export default function HomePage() {
                 Follow a seller from their profile page, then come back here to see their newest ads ahead of the open marketplace feed.
               </div>
             ) : followedSellers.length === 0 ? (
-              <div className="market-note text-sm">
+              <AccentCallout label="Follow sellers" tone="mint">
                 You are signed in, but you are not following any sellers yet. Visit seller pages, follow trusted profiles, and their newest ads will land here first.
-              </div>
+              </AccentCallout>
             ) : followedListings.length === 0 ? (
               <div className="market-note text-sm">
                 You follow sellers already, but none of their recent inventory is available in the current homepage window yet.
@@ -364,7 +365,7 @@ export default function HomePage() {
         </Card>
 
         <div className="grid gap-4">
-          <Card className="market-panel">
+          <Card className="market-panel market-panel-spotlight market-panel-spotlight-blue">
             <CardHeader>
               <CardTitle>Favorites next</CardTitle>
               <CardDescription>The homepage order now explicitly reserves the second slot for favorite ads and sellers.</CardDescription>
@@ -374,7 +375,9 @@ export default function HomePage() {
               {!auth.isAuthenticated ? (
                 <div className="market-note text-sm">Sign in with email or wallet, save listings from their detail pages, and they will appear here on your next visit.</div>
               ) : favoriteListings.length === 0 ? (
-                <div className="market-note text-sm">You do not have favorite listings yet. Open any listing and save it to lift it into this homepage layer.</div>
+                <AccentCallout label="Save favorites" tone="blue">
+                  You do not have favorite listings yet. Open any listing and save it to lift it into this homepage layer.
+                </AccentCallout>
               ) : (
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   {favoriteListings.map((listing) => (
@@ -385,7 +388,7 @@ export default function HomePage() {
             </CardContent>
           </Card>
 
-          <Card className="market-panel">
+          <Card className="market-panel market-panel-spotlight market-panel-spotlight-amber">
             <CardHeader>
               <CardTitle>Top ads</CardTitle>
               <CardDescription>Featured listings still have a dedicated layer after followed sellers and favorites, but the surface now reads like top marketplace ads instead of an internal placement console.</CardDescription>
@@ -393,7 +396,9 @@ export default function HomePage() {
             <CardContent>
               {sponsoredError ? <div className="market-note text-sm">{sponsoredError}</div> : null}
               {sponsoredListings.length === 0 ? (
-                  <div className="market-note text-sm">No featured top ads are active right now. As campaign windows or featured listings go live, they will appear here.</div>
+                <AccentCallout label="Featured placement" tone="amber">
+                  No featured top ads are active right now. As campaign windows or featured listings go live, they will appear here.
+                </AccentCallout>
               ) : (
                 <div className="grid gap-4">
                   {sponsoredListings.map((item) => (
@@ -541,16 +546,16 @@ export default function HomePage() {
           </CardContent>
         </Card>
 
-        <Card className="market-panel">
+        <Card className="market-panel market-panel-spotlight market-panel-spotlight-amber">
           <CardHeader>
             <CardTitle>Marketplace safety</CardTitle>
             <CardDescription>Trust and safety rules belong in the main buyer journey, not buried in docs.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             {safetyWarnings.map((warning) => (
-              <div key={warning} className="market-note text-sm leading-6">
+              <AccentCallout key={warning} label="Safety guidance" tone="amber">
                 {warning}
-              </div>
+              </AccentCallout>
             ))}
           </CardContent>
         </Card>
@@ -580,15 +585,15 @@ export default function HomePage() {
       </section>
 
       <section className="grid gap-4 lg:grid-cols-[1fr_1fr]">
-        <Card className="market-panel">
+        <Card className="market-panel market-panel-spotlight market-panel-spotlight-blue">
           <CardHeader>
             <CardTitle>Sign in on any device</CardTitle>
             <CardDescription>Email-first access now sits alongside wallet connection so phones and tablets are not blocked by desktop wallet assumptions.</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="market-note text-sm">
-                Use the sign-in surface to create an account, recover a password, connect a wallet later, and move into the watch-first signed-in flow.
-            </div>
+            <AccentCallout label="Account access" tone="blue">
+              Use the sign-in surface to create an account, recover a password, connect a wallet later, and move into the watch-first signed-in flow.
+            </AccentCallout>
             <Button asChild className="rounded-full">
               <Link href="/sign-in">Open sign-in</Link>
             </Button>

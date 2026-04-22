@@ -10,6 +10,7 @@ import { toast } from "sonner";
 
 import { ListingCard } from "@/components/listing/ListingCard";
 import { SellerTrustSummary } from "@/components/site/SellerTrustSummary";
+import { AccentCallout } from "@/components/ui/accent-callout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -1648,7 +1649,7 @@ export default function DashboardPage() {
                 </CardContent>
               </Card>
 
-              <Card className="market-panel">
+              <Card className="market-panel market-panel-spotlight market-panel-spotlight-mint">
                 <CardHeader>
                   <div className="market-section-title">Network</div>
                   <CardTitle>Followed sellers</CardTitle>
@@ -1656,21 +1657,31 @@ export default function DashboardPage() {
                 </CardHeader>
                 <CardContent className="space-y-3 p-4 pt-0 sm:p-6 sm:pt-0">
                   {!auth.isAuthenticated ? (
-                    <div className="space-y-3 text-sm text-muted-foreground">
-                      <div>Sign in to manage the seller profiles you follow.</div>
-                      <Button asChild variant="outline" size="sm">
-                        <Link href="/sign-in">Sign in</Link>
-                      </Button>
-                    </div>
+                    <AccentCallout
+                      label="Follow sellers"
+                      tone="mint"
+                      actions={
+                        <Button asChild variant="outline" size="sm">
+                          <Link href="/sign-in">Open sign-in</Link>
+                        </Button>
+                      }
+                    >
+                      Sign in to keep trusted sellers in a cleaner private network.
+                    </AccentCallout>
                   ) : followedError ? (
                     <div className="text-sm text-muted-foreground">{followedError}</div>
                   ) : followedSellers.length === 0 ? (
-                    <div className="space-y-3 text-sm text-muted-foreground">
-                      <div>You are not following any sellers yet.</div>
-                      <Button asChild variant="outline" size="sm">
-                        <Link href={watchBrowseHref}>Browse marketplace</Link>
-                      </Button>
-                    </div>
+                    <AccentCallout
+                      label="Build your circle"
+                      tone="mint"
+                      actions={
+                        <Button asChild variant="outline" size="sm">
+                          <Link href={watchBrowseHref}>Browse marketplace</Link>
+                        </Button>
+                      }
+                    >
+                      Your follow list is still open. Start with sellers you trust and their newest inventory will surface here first.
+                    </AccentCallout>
                   ) : (
                     followedSellers.map((sellerAddress) => (
                       <Link key={sellerAddress} href={`/seller/${sellerAddress}`} className="flex items-center justify-between rounded-2xl border px-4 py-3 text-sm transition-colors hover:bg-accent/30">
@@ -1685,7 +1696,7 @@ export default function DashboardPage() {
                 </CardContent>
               </Card>
 
-              <Card className="market-panel">
+              <Card className="market-panel market-panel-spotlight market-panel-spotlight-blue">
                 <CardHeader>
                   <div className="market-section-title">Saved inventory</div>
                   <CardTitle>Favorite ads</CardTitle>
@@ -1693,21 +1704,31 @@ export default function DashboardPage() {
                 </CardHeader>
                 <CardContent className="space-y-3 p-4 pt-0 sm:p-6 sm:pt-0">
                   {!auth.isAuthenticated ? (
-                    <div className="space-y-3 text-sm text-muted-foreground">
-                      <div>Sign in to keep favorite listings in your watch flow.</div>
-                      <Button asChild variant="outline" size="sm">
-                        <Link href="/sign-in?mode=register">Create account</Link>
-                      </Button>
-                    </div>
+                    <AccentCallout
+                      label="Save standout ads"
+                      tone="blue"
+                      actions={
+                        <Button asChild variant="outline" size="sm">
+                          <Link href="/sign-in?mode=register">Create account</Link>
+                        </Button>
+                      }
+                    >
+                      Sign in to keep saved listings inside your watch flow instead of losing them between visits.
+                    </AccentCallout>
                   ) : favoriteError ? (
                     <div className="text-sm text-muted-foreground">{favoriteError}</div>
                   ) : favoriteListings.length === 0 ? (
-                    <div className="space-y-3 text-sm text-muted-foreground">
-                      <div>Your saved-ads list is empty. Save a listing from any detail page to see it here.</div>
-                      <Button asChild variant="outline" size="sm">
-                        <Link href={watchBrowseHref}>Browse listings</Link>
-                      </Button>
-                    </div>
+                    <AccentCallout
+                      label="Curate your shortlist"
+                      tone="blue"
+                      actions={
+                        <Button asChild variant="outline" size="sm">
+                          <Link href={watchBrowseHref}>Browse listings</Link>
+                        </Button>
+                      }
+                    >
+                      Your shortlist is empty. Save any listing that deserves a second look and it will stay ready here.
+                    </AccentCallout>
                   ) : (
                     <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
                       {favoriteListings.map((listing) => (
@@ -1718,7 +1739,7 @@ export default function DashboardPage() {
                 </CardContent>
               </Card>
 
-              <Card className="market-panel">
+              <Card className="market-panel market-panel-spotlight market-panel-spotlight-amber">
                 <CardHeader>
                   <div className="market-section-title">Discovery</div>
                   <CardTitle>Saved searches</CardTitle>
@@ -1726,9 +1747,13 @@ export default function DashboardPage() {
                 </CardHeader>
                 <CardContent className="space-y-3 p-4 pt-0 sm:p-6 sm:pt-0">
                   {!auth.isAuthenticated ? (
-                    <div className="text-sm text-muted-foreground">Sign in to manage saved search alerts.</div>
+                    <AccentCallout label="Search watches" tone="amber">
+                      Sign in to keep saved search alerts organized in one sharper watch layer.
+                    </AccentCallout>
                   ) : savedSearches.length === 0 ? (
-                    <div className="text-sm text-muted-foreground">No saved searches yet.</div>
+                    <AccentCallout label="No saved searches yet" tone="amber">
+                      Your alert list is still blank. Save a refined marketplace view and it will reappear here with its filters intact.
+                    </AccentCallout>
                   ) : (
                     savedSearches.map((item) => (
                       <div key={item.id} className="rounded-md border p-3 sm:p-4">
@@ -1958,7 +1983,7 @@ export default function DashboardPage() {
                 </CardContent>
               </Card>
 
-              <Card id="notifications" className="market-panel">
+              <Card id="notifications" className="market-panel market-panel-spotlight market-panel-spotlight-blue">
                 <CardHeader>
                   <div className="market-section-title">Alerts</div>
                   <CardTitle>Notifications</CardTitle>
@@ -1988,9 +2013,13 @@ export default function DashboardPage() {
                   </div>
 
                   {!auth.isAuthenticated ? (
-                    <div className="text-sm text-muted-foreground">Sign in to keep saved-search alerts and marketplace updates in one watch inbox.</div>
+                    <AccentCallout label="Watch inbox" tone="blue">
+                      Sign in to keep saved-search alerts and marketplace updates in one refined inbox.
+                    </AccentCallout>
                   ) : notifications.length === 0 ? (
-                    <div className="text-sm text-muted-foreground">Your alert inbox is clear for now. New saved-search matches and marketplace updates will appear here.</div>
+                    <AccentCallout label="Inbox is clear" tone="blue">
+                      Nothing needs attention right now. Fresh saved-search matches and marketplace updates will appear here as they land.
+                    </AccentCallout>
                   ) : (
                     notifications.map((item) => {
                       const listingId = typeof item.payload.listingId === "string" ? item.payload.listingId : null;
@@ -2037,7 +2066,7 @@ export default function DashboardPage() {
           ) : null}
 
           {accountTab === "my-listings" ? (
-            <Card className="market-panel">
+            <Card className="market-panel market-panel-spotlight market-panel-spotlight-mint">
               <CardHeader>
                 <div className="market-section-title">Listings</div>
                 <CardTitle>My listings</CardTitle>
@@ -2051,12 +2080,17 @@ export default function DashboardPage() {
                     <Skeleton className="h-4 w-72" />
                   </div>
                 ) : myListingIds.length === 0 ? (
-                  <div className="space-y-3 text-sm text-muted-foreground">
-                    <div>No listings found.</div>
-                    <Button asChild variant="outline" size="sm">
-                      <Link href="/create">Create your first listing</Link>
-                    </Button>
-                  </div>
+                  <AccentCallout
+                    label="Start selling"
+                    tone="mint"
+                    actions={
+                      <Button asChild variant="outline" size="sm">
+                        <Link href="/create">Create your first listing</Link>
+                      </Button>
+                    }
+                  >
+                    Your seller inventory is still empty. Publish the first listing and this space becomes your live storefront.
+                  </AccentCallout>
                 ) : (
                   <div className="space-y-2">
                     {(myListings ?? []).map((row) => (

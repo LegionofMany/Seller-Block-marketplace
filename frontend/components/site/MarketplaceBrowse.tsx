@@ -7,6 +7,7 @@ import { toast } from "sonner";
 
 import { ListingCard } from "@/components/listing/ListingCard";
 import { useAuth } from "@/components/providers/AuthProvider";
+import { AccentCallout } from "@/components/ui/accent-callout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -191,15 +192,15 @@ export function MarketplaceBrowse() {
       </div>
 
       {savedLocation ? (
-        <Card className="market-panel">
+        <Card className="market-panel market-panel-spotlight market-panel-spotlight-blue">
           <CardHeader>
             <CardTitle>Nearby discovery</CardTitle>
             <CardDescription>Use your saved profile area to narrow the marketplace without retyping filters each visit.</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="market-note text-sm">
-              {savedLocationLabel ? `Saved area: ${savedLocationLabel}.` : "Your profile has location data ready for local browsing."}
-            </div>
+            <AccentCallout label="Saved area" tone="blue" className="w-full sm:max-w-xl">
+              {savedLocationLabel ? `${savedLocationLabel} is ready for local browsing.` : "Your profile location is ready to shape nearby results."}
+            </AccentCallout>
             <div className="flex flex-wrap gap-2">
               <Button
                 type="button"
@@ -391,10 +392,10 @@ export function MarketplaceBrowse() {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="market-panel market-panel-spotlight market-panel-spotlight-mint">
         <CardHeader>
           <CardTitle>Saved search alerts</CardTitle>
-          <CardDescription>Save the current filters and get in-app alerts. Email is optional.</CardDescription>
+          <CardDescription>Save a refined view and bring it back with cleaner alerting. Email stays optional.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 lg:grid-cols-[1fr_1fr_auto] lg:items-end">
           <div className="space-y-2">
@@ -410,7 +411,11 @@ export function MarketplaceBrowse() {
               Save search
             </Button>
           </div>
-          {!auth.isAuthenticated ? <div className="text-sm text-muted-foreground lg:col-span-3">Sign in to save alerts for the filters you want to revisit.</div> : null}
+          {!auth.isAuthenticated ? (
+            <AccentCallout label="Save this search" tone="mint" className="lg:col-span-3">
+              Sign in to keep this filtered view on hand and turn it into a polished alert stream.
+            </AccentCallout>
+          ) : null}
         </CardContent>
       </Card>
 
@@ -421,8 +426,12 @@ export function MarketplaceBrowse() {
       ) : null}
 
       {!isLoading && !error && listings.length === 0 ? (
-        <Card>
-          <CardContent className="p-6 text-sm text-muted-foreground">No listings match this view yet. Try widening the location, category, or price filters.</CardContent>
+        <Card className="market-panel market-panel-spotlight market-panel-spotlight-amber">
+          <CardContent className="p-6">
+            <AccentCallout label="No matches yet" tone="amber">
+              This view is quiet right now. Broaden the area, category, or price range to reopen the marketplace.
+            </AccentCallout>
+          </CardContent>
         </Card>
       ) : null}
 

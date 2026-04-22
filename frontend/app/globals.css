@@ -155,6 +155,39 @@
     backdrop-filter: blur(10px);
   }
 
+  .market-panel-spotlight {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .market-panel-spotlight::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    border-radius: inherit;
+    background: linear-gradient(135deg, var(--market-panel-glow), transparent 62%);
+    opacity: 0.9;
+  }
+
+  .market-panel-spotlight-mint {
+    --market-panel-glow: rgba(33, 211, 154, 0.18);
+    border-color: rgba(26, 161, 116, 0.44);
+    box-shadow: 0 16px 42px rgba(7, 80, 62, 0.14);
+  }
+
+  .market-panel-spotlight-blue {
+    --market-panel-glow: rgba(49, 159, 255, 0.2);
+    border-color: rgba(43, 114, 230, 0.36);
+    box-shadow: 0 16px 42px rgba(22, 69, 140, 0.14);
+  }
+
+  .market-panel-spotlight-amber {
+    --market-panel-glow: rgba(255, 186, 59, 0.18);
+    border-color: rgba(214, 145, 14, 0.38);
+    box-shadow: 0 16px 42px rgba(102, 71, 15, 0.14);
+  }
+
   .market-section-title {
     font-size: 0.8rem;
     font-weight: 700;
@@ -189,6 +222,74 @@
     background: rgba(235, 251, 248, 0.82);
     padding: 0.9rem 1rem;
     color: hsl(var(--muted-foreground));
+  }
+
+  .market-callout {
+    position: relative;
+    overflow: hidden;
+    border-radius: 1.15rem;
+    border: 1px solid transparent;
+    padding: 1rem 1.05rem 1rem 1.2rem;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22);
+  }
+
+  .market-callout::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0.8rem;
+    bottom: 0.8rem;
+    width: 0.32rem;
+    border-radius: 9999px;
+    background: var(--market-callout-accent);
+  }
+
+  .market-callout-label {
+    font-size: 0.71rem;
+    font-weight: 800;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--market-callout-label);
+  }
+
+  .market-callout-copy {
+    margin-top: 0.45rem;
+    max-width: 42rem;
+    font-size: 0.97rem;
+    line-height: 1.72;
+    color: var(--market-callout-copy);
+    text-wrap: pretty;
+  }
+
+  .market-callout-actions {
+    margin-top: 0.9rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.65rem;
+  }
+
+  .market-callout-mint {
+    --market-callout-accent: linear-gradient(180deg, #19c37d, #0f8f67);
+    --market-callout-label: #0f6a51;
+    --market-callout-copy: #113c33;
+    background: linear-gradient(135deg, rgba(223, 255, 244, 0.96), rgba(240, 255, 251, 0.9));
+    border-color: rgba(23, 157, 108, 0.28);
+  }
+
+  .market-callout-blue {
+    --market-callout-accent: linear-gradient(180deg, #2c8fff, #1664d8);
+    --market-callout-label: #1f4ca7;
+    --market-callout-copy: #163462;
+    background: linear-gradient(135deg, rgba(226, 242, 255, 0.97), rgba(242, 249, 255, 0.92));
+    border-color: rgba(35, 107, 222, 0.24);
+  }
+
+  .market-callout-amber {
+    --market-callout-accent: linear-gradient(180deg, #ffb428, #ea7a16);
+    --market-callout-label: #9c4d0f;
+    --market-callout-copy: #5a3314;
+    background: linear-gradient(135deg, rgba(255, 244, 217, 0.97), rgba(255, 250, 238, 0.93));
+    border-color: rgba(220, 137, 23, 0.26);
   }
 
   .market-tab-strip {
@@ -272,6 +373,15 @@
 
     .market-note {
       padding: 0.8rem 0.9rem;
+    }
+
+    .market-callout {
+      padding: 0.9rem 0.9rem 0.9rem 1.05rem;
+    }
+
+    .market-callout-copy {
+      font-size: 0.92rem;
+      line-height: 1.62;
     }
 
     .market-tab-button {
