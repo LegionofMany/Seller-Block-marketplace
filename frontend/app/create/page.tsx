@@ -16,6 +16,7 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { AccentCallout } from "@/components/ui/accent-callout";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -788,7 +789,7 @@ export default function CreateListingPage() {
       </section>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px] xl:gap-6">
-        <Card className="market-panel">
+        <Card className="market-panel market-panel-spotlight market-panel-spotlight-blue">
           <CardHeader>
             <div className="market-section-title">Listing setup</div>
             <CardTitle>Build the listing buyers expect</CardTitle>
@@ -797,35 +798,39 @@ export default function CreateListingPage() {
           <CardContent className="p-4 pt-0 sm:p-6 sm:pt-0">
             <form onSubmit={onSubmit} className="space-y-6">
               {draftRestored ? (
-                <div className="rounded-2xl border border-amber-200/80 bg-amber-50/80 px-4 py-3 text-sm text-slate-700">
+                <AccentCallout label="Draft restored" tone="amber">
                   Draft restored. Text, pricing, and schedule details came back from local storage. Photos are not persisted, so reselect images before publishing.
-                </div>
+                </AccentCallout>
               ) : null}
               {publishRecovery ? (
-                <div className="rounded-2xl border border-sky-200/80 bg-sky-50/80 px-4 py-3 text-sm text-slate-700">
-                  <div className="font-medium text-slate-950">Recovered publish session</div>
-                  <div className="mt-1">
+                <AccentCallout
+                  label="Recovered publish session"
+                  tone="blue"
+                  actions={
+                    <>
+                      <Button type="button" size="sm" variant="outline" disabled={isSubmitting} onClick={() => void continuePublishRecovery()}>
+                        {getRecoveryActionLabel(publishRecovery)}
+                      </Button>
+                      {publishRecovery.listingId ? (
+                        <Button type="button" size="sm" variant="ghost" asChild>
+                          <a href={buildListingHref(publishRecovery.listingId, publishRecovery.chainKey)}>Open current listing</a>
+                        </Button>
+                      ) : null}
+                      <Button type="button" size="sm" variant="ghost" onClick={clearPublishRecovery}>
+                        Dismiss recovery
+                      </Button>
+                    </>
+                  }
+                >
+                  <div>
                     {publishRecovery.stage === "metadata-ready"
                       ? "Images and metadata already reached the backend. Continue from the wallet publish step without uploading the photos again."
                       : publishRecovery.stage === "auction-pending"
                         ? "The base listing already exists. Continue from the auction setup step without recreating the ad or re-uploading photos."
                         : "The base listing already exists. Continue from the raffle setup step without recreating the ad or re-uploading photos."}
+                    {publishRecovery.errorMessage ? <div className="mt-3 text-xs text-slate-600">Last error: {publishRecovery.errorMessage}</div> : null}
                   </div>
-                  {publishRecovery.errorMessage ? <div className="mt-2 text-xs text-slate-600">Last error: {publishRecovery.errorMessage}</div> : null}
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <Button type="button" size="sm" variant="outline" disabled={isSubmitting} onClick={() => void continuePublishRecovery()}>
-                      {getRecoveryActionLabel(publishRecovery)}
-                    </Button>
-                    {publishRecovery.listingId ? (
-                      <Button type="button" size="sm" variant="ghost" asChild>
-                        <a href={buildListingHref(publishRecovery.listingId, publishRecovery.chainKey)}>Open current listing</a>
-                      </Button>
-                    ) : null}
-                    <Button type="button" size="sm" variant="ghost" onClick={clearPublishRecovery}>
-                      Dismiss recovery
-                    </Button>
-                  </div>
-                </div>
+                </AccentCallout>
               ) : null}
 
               <div className="space-y-3 rounded-2xl border bg-accent/30 p-3 sm:p-4">
@@ -1112,29 +1117,28 @@ export default function CreateListingPage() {
         </Card>
 
         <aside className="space-y-3 sm:space-y-4">
-          <Card className="market-panel">
+          <Card className="market-panel market-panel-spotlight market-panel-spotlight-amber">
             <CardHeader>
               <div className="market-section-title">What buyers see</div>
               <CardTitle>Publishing checklist</CardTitle>
+              <CardDescription>Keep the draft readable, photo-rich, and priced like a real classifieds listing before it goes live.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3 p-4 pt-0 text-sm text-muted-foreground sm:p-6 sm:pt-0">
-              <div className="rounded-xl border p-4">
-                <div className="font-medium text-foreground">Draft handling</div>
-                <div className="mt-1">Listing details auto-save on this device after edits. Photos stay local to the current session and must be reselected after a refresh.</div>
-              </div>
-              <div className="rounded-xl border p-4">
-                <div className="font-medium text-foreground">Publish recovery</div>
-                <div className="mt-1">If photo upload or listing creation already succeeded and the later publish step fails, this page now keeps a recoverable publish session so you can continue without re-uploading the same images.</div>
-              </div>
-              <div className="market-note">Lead with plain-language title, real photos, city/region, and one direct price.</div>
-              <div className="rounded-xl border p-4">
-                <div className="font-medium text-foreground">Recommended for classifieds</div>
-                <div className="mt-1">Use fixed price for most listings so the detail page stays simple and buyers can act immediately.</div>
-              </div>
-              <div className="rounded-xl border p-4">
-                <div className="font-medium text-foreground">Network</div>
-                <div className="mt-1">This publish flow still settles through the {publicNetworkLabel.toLowerCase()}, but the listing details, location, and recovery path stay front and center instead of the chain jargon.</div>
-              </div>
+              <AccentCallout label="Draft handling" tone="blue">
+                Listing details auto-save on this device after edits. Photos stay local to the current session and must be reselected after a refresh.
+              </AccentCallout>
+              <AccentCallout label="Publish recovery" tone="amber">
+                If photo upload or listing creation already succeeded and the later publish step fails, this page keeps a recoverable publish session so you can continue without re-uploading the same images.
+              </AccentCallout>
+              <AccentCallout label="Buyer-facing basics" tone="mint">
+                Lead with a plain-language title, real photos, city and region, and one direct price.
+              </AccentCallout>
+              <AccentCallout label="Recommended for classifieds" tone="mint">
+                Use fixed price for most listings so the detail page stays simple and buyers can act immediately.
+              </AccentCallout>
+              <AccentCallout label="Network" tone="blue">
+                This publish flow still settles through the {publicNetworkLabel.toLowerCase()}, but the listing details, location, and recovery path stay front and center instead of chain jargon.
+              </AccentCallout>
             </CardContent>
           </Card>
         </aside>

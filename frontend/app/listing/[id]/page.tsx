@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { SellerTrustSummary } from "@/components/site/SellerTrustSummary";
 import { Badge } from "@/components/ui/badge";
+import { AccentCallout } from "@/components/ui/accent-callout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -986,7 +987,7 @@ export default function ListingDetailPage() {
         </div>
       </section>
 
-      <Card className="market-panel">
+      <Card className="market-panel market-panel-spotlight market-panel-spotlight-blue">
         <CardContent className="space-y-5 p-4 sm:space-y-6 sm:p-6">
           {loadingListing || !listing ? (
             <div className="space-y-3">
@@ -997,23 +998,27 @@ export default function ListingDetailPage() {
           ) : (
             <>
               {isSeller && metadataId && !metadata ? (
-                <div className="space-y-2 rounded-md border p-3">
-                  <div className="text-sm font-medium">Metadata not found in backend</div>
-                  <div className="text-xs text-muted-foreground break-words">
+                <AccentCallout
+                  label="Metadata not found"
+                  tone="amber"
+                  actions={
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="lg"
+                      className="w-full sm:w-auto"
+                      disabled={isReuploadingMetadata}
+                      onClick={reuploadMissingMetadata}
+                    >
+                      {isReuploadingMetadata ? "Uploading…" : "Re-upload metadata"}
+                    </Button>
+                  }
+                >
+                  <div className="text-xs break-words">
                     This listing references metadata id {metadataId}, but the backend returned 404.
                     You can re-upload the original metadata to restore title/description/image.
                   </div>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="lg"
-                    className="w-full sm:w-auto"
-                    disabled={isReuploadingMetadata}
-                    onClick={reuploadMissingMetadata}
-                  >
-                    {isReuploadingMetadata ? "Uploading…" : "Re-upload metadata"}
-                  </Button>
-                </div>
+                </AccentCallout>
               ) : null}
 
               <div className="grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_360px] xl:gap-6">
@@ -1033,9 +1038,9 @@ export default function ListingDetailPage() {
                   </div>
 
                   {!metadata ? (
-                    <div className="rounded-xl border border-dashed bg-accent/20 p-4 text-sm text-muted-foreground">
+                    <AccentCallout label="Details still syncing" tone="blue">
                       Listing details are still syncing. Core on-chain data is available, but photos and the full description have not been restored in the metadata service yet.
-                    </div>
+                    </AccentCallout>
                   ) : null}
 
                   {galleryImages.length > 1 ? (

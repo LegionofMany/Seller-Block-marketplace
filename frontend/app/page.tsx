@@ -325,11 +325,11 @@ export default function HomePage() {
                 This entry point keeps sign-in, category browsing, and featured inventory easy to read before the full marketplace opens up.
               </div>
             </div>
-            <div className="market-note text-sm">
+            <AccentCallout label="Watch-first flow" tone={auth.isAuthenticated ? "mint" : "blue"}>
               {auth.isAuthenticated
                 ? "Signed-in members now get a watch-first account flow with followed sellers, saved ads, and alerts grouped together."
                 : "Sign in to unlock watch activity and personalized order, or keep browsing the public marketplace right away."}
-            </div>
+            </AccentCallout>
           </div>
         </div>
       </section>
@@ -341,19 +341,19 @@ export default function HomePage() {
             <CardDescription>Driven by real follows, not placeholder merchandising.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {followedError ? <div className="market-note text-sm">{followedError}</div> : null}
+            {followedError ? <AccentCallout label="Followed sellers" tone="amber">{followedError}</AccentCallout> : null}
             {!auth.isAuthenticated ? (
-              <div className="market-note text-sm">
+              <AccentCallout label="Start following" tone="mint">
                 Follow a seller from their profile page, then come back here to see their newest ads ahead of the open marketplace feed.
-              </div>
+              </AccentCallout>
             ) : followedSellers.length === 0 ? (
               <AccentCallout label="Follow sellers" tone="mint">
                 You are signed in, but you are not following any sellers yet. Visit seller pages, follow trusted profiles, and their newest ads will land here first.
               </AccentCallout>
             ) : followedListings.length === 0 ? (
-              <div className="market-note text-sm">
+              <AccentCallout label="Waiting on inventory" tone="blue">
                 You follow sellers already, but none of their recent inventory is available in the current homepage window yet.
-              </div>
+              </AccentCallout>
             ) : (
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 {followedListings.map((listing) => (
@@ -371,9 +371,11 @@ export default function HomePage() {
               <CardDescription>Saved listings hold a dedicated slot near the top of the landing experience.</CardDescription>
             </CardHeader>
             <CardContent>
-              {favoriteError ? <div className="market-note text-sm">{favoriteError}</div> : null}
+              {favoriteError ? <AccentCallout label="Favorites" tone="amber">{favoriteError}</AccentCallout> : null}
               {!auth.isAuthenticated ? (
-                <div className="market-note text-sm">Sign in with email or wallet, save listings from their detail pages, and they will appear here on your next visit.</div>
+                <AccentCallout label="Save listings" tone="blue">
+                  Sign in with email or wallet, save listings from their detail pages, and they will appear here on your next visit.
+                </AccentCallout>
               ) : favoriteListings.length === 0 ? (
                 <AccentCallout label="Save favorites" tone="blue">
                   You do not have favorite listings yet. Open any listing and save it to lift it into this homepage layer.
@@ -394,7 +396,7 @@ export default function HomePage() {
               <CardDescription>Featured inventory stays visible without reading like an internal ad console.</CardDescription>
             </CardHeader>
             <CardContent>
-              {sponsoredError ? <div className="market-note text-sm">{sponsoredError}</div> : null}
+              {sponsoredError ? <AccentCallout label="Top ads" tone="amber">{sponsoredError}</AccentCallout> : null}
               {sponsoredListings.length === 0 ? (
                 <AccentCallout label="Featured placement" tone="amber">
                   No featured top ads are active right now. As campaign windows or featured listings go live, they will appear here.
@@ -418,7 +420,7 @@ export default function HomePage() {
       </section>
 
       <section className="grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
-        <Card className="market-panel">
+        <Card className="market-panel market-panel-spotlight market-panel-spotlight-mint">
           <CardHeader>
             <CardTitle>Browse by category</CardTitle>
             <CardDescription>Category entry points now match the public-launch classifieds mix, including antiques and housewares.</CardDescription>
@@ -434,7 +436,7 @@ export default function HomePage() {
           </CardContent>
         </Card>
 
-        <Card className="market-panel">
+        <Card className="market-panel market-panel-spotlight market-panel-spotlight-blue">
           <CardHeader>
             <CardTitle>Account flow</CardTitle>
             <CardDescription>Keep the homepage clean, then let sign-in open the deeper watch and profile tools.</CardDescription>
@@ -463,7 +465,7 @@ export default function HomePage() {
             </Button>
           </div>
 
-          {localError ? <div className="market-note text-sm">{localError}</div> : null}
+          {localError ? <AccentCallout label="Nearby inventory" tone="amber">{localError}</AccentCallout> : null}
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
             {isLoadingLocal
@@ -483,9 +485,11 @@ export default function HomePage() {
               : localListings.length > 0
                 ? localListings.map((listing) => <ListingCard key={`${listing.chainKey}-${listing.id}`} row={listing} />)
                 : (
-                  <Card className="sm:col-span-2 xl:col-span-4">
-                    <CardContent className="p-6 text-sm text-muted-foreground">
-                      No nearby listings are active for your saved area yet. Open the marketplace to broaden the search or update your profile location.
+                  <Card className="market-panel market-panel-spotlight market-panel-spotlight-blue sm:col-span-2 xl:col-span-4">
+                    <CardContent className="p-6">
+                      <AccentCallout label="No nearby matches" tone="blue">
+                        No nearby listings are active for your saved area yet. Open the marketplace to broaden the search or update your profile location.
+                      </AccentCallout>
                     </CardContent>
                   </Card>
                 )}
@@ -524,15 +528,17 @@ export default function HomePage() {
       </section>
 
       <section className="grid gap-4 lg:grid-cols-[1fr_1fr]">
-        <Card className="market-panel">
+        <Card className="market-panel market-panel-spotlight market-panel-spotlight-blue">
           <CardHeader>
             <CardTitle>Most viewed ads</CardTitle>
             <CardDescription>Popular listings now reflect real buyer attention instead of placeholder ranking.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            {mostViewedError ? <div className="market-note text-sm">{mostViewedError}</div> : null}
+            {mostViewedError ? <AccentCallout label="Most viewed ads" tone="amber">{mostViewedError}</AccentCallout> : null}
             {mostViewedListings.length === 0 ? (
-              <div className="market-note text-sm">View data is still warming up. As shoppers open listing pages, the most viewed ads will populate here.</div>
+              <AccentCallout label="View data warming up" tone="blue">
+                As shoppers open listing pages, the most viewed ads will populate here.
+              </AccentCallout>
             ) : (
               <div className="grid gap-4 sm:grid-cols-2">
                 {mostViewedListings.map((item) => (
@@ -560,7 +566,7 @@ export default function HomePage() {
           </CardContent>
         </Card>
 
-        <Card className="market-panel">
+        <Card className="market-panel market-panel-spotlight market-panel-spotlight-mint">
           <CardHeader>
             <CardTitle>Fresh this week</CardTitle>
             <CardDescription>Fresh inventory stays visible without letting utility controls take over the page.</CardDescription>

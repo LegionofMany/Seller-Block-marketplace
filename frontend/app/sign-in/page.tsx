@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { useAccount } from "wagmi";
 
 import { useAuth } from "@/components/providers/AuthProvider";
+import { AccentCallout } from "@/components/ui/accent-callout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -188,15 +189,15 @@ export default function SignInPage() {
 
   return (
     <div className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
-      <Card className="market-panel order-2 xl:order-1">
+      <Card className="market-panel market-panel-spotlight market-panel-spotlight-blue order-2 xl:order-1">
         <CardHeader>
           <CardTitle>Wallet sign-in</CardTitle>
           <CardDescription>Desktop extension wallets still work, but tablet and mobile users usually need WalletConnect unless they are already inside a wallet browser.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="market-note text-sm">
-            WalletConnect status: {walletConnectEnabled ? "ready for mobile/tablet scans" : "frontend WalletConnect env missing"}
-          </div>
+          <AccentCallout label="Wallet status" tone={walletConnectEnabled ? "blue" : "amber"}>
+            WalletConnect is {walletConnectEnabled ? "ready for mobile and tablet scans" : "not configured in the frontend environment yet"}.
+          </AccentCallout>
           <div className="flex flex-wrap gap-3">
             <ConnectButton showBalance={false} chainStatus="icon" />
             {address && !auth.isAuthenticated ? (
@@ -216,18 +217,18 @@ export default function SignInPage() {
             <div>3. After sign-in, marketplace alerts, follows, and personalized homepage inventory can use your authenticated profile.</div>
           </div>
           {walletConnectEnabled ? (
-            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-slate-700">
+            <AccentCallout label="Mobile wallet flow" tone="mint">
               WalletConnect is configured, so tablet and phone users can scan into the wallet flow here instead of relying on desktop-only wallet browsers.
-            </div>
+            </AccentCallout>
           ) : (
-            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-slate-700">
-              Mobile/tablet wallet connection still needs a deployed WalletConnect Cloud project ID in the frontend env. The email sign-in path below remains the fallback until that production env is present.
-            </div>
+            <AccentCallout label="Fallback path" tone="amber">
+              Mobile and tablet wallet connection still needs a deployed WalletConnect Cloud project ID in the frontend environment. The email sign-in flow below remains the clean fallback until that production setting is present.
+            </AccentCallout>
           )}
         </CardContent>
       </Card>
 
-      <Card className="market-panel order-1 xl:order-2 border-slate-300/80 bg-[linear-gradient(180deg,rgba(252,248,239,0.92),rgba(255,255,255,0.98))]">
+      <Card className="market-panel market-panel-spotlight market-panel-spotlight-amber order-1 xl:order-2 border-slate-300/80 bg-[linear-gradient(180deg,rgba(252,248,239,0.92),rgba(255,255,255,0.98))]">
         <CardHeader>
           <div className="market-section-title">Account access</div>
           <CardTitle>{mode === "login" ? "Email sign-in" : mode === "register" ? "Create your account" : "Reset your password"}</CardTitle>
@@ -241,7 +242,7 @@ export default function SignInPage() {
         </CardHeader>
         <CardContent className="space-y-4">
           {emailToken ? (
-            <div className="rounded-2xl border border-slate-200 bg-white/80 px-4 py-3 text-sm text-slate-700">
+            <AccentCallout label="Email link status" tone="blue">
               {emailIntent === "reset"
                 ? "Create a new password below. This reset link can only be used once and expires quickly for safety."
                 : emailLinkStatus === "error"
@@ -249,7 +250,7 @@ export default function SignInPage() {
                   : emailLinkBusy
                     ? `Checking your ${emailIntent === "verify" ? "verification" : "sign-in"} link...`
                     : "This email link has been processed."}
-            </div>
+            </AccentCallout>
           ) : null}
           <div className="grid grid-cols-3 gap-2">
             <Button type="button" variant={mode === "login" ? "default" : "outline"} onClick={() => setModeWithQuery("login")} disabled={emailDisabled} className="w-full">
@@ -263,16 +264,16 @@ export default function SignInPage() {
             </Button>
           </div>
           {mode === "register" ? (
-            <div className="rounded-2xl border border-slate-200 bg-white/80 px-4 py-3 text-sm text-slate-700">
+            <AccentCallout label="Mobile-first account setup" tone="mint">
               This form is mobile-first: start with identity and location, then create the password that keeps your watch activity, follows, and alerts together across devices. Postal code is used to make local discovery and nearby inventory more useful.
-            </div>
+            </AccentCallout>
           ) : null}
           {mode === "reset" ? (
-            <div className="rounded-2xl border border-slate-200 bg-white/80 px-4 py-3 text-sm text-slate-700">
+            <AccentCallout label="Password reset" tone="amber">
               {emailToken
                 ? "Set a new password for this account. After a successful reset, the session will be signed in automatically."
                 : "Enter your account email and Seller Block will send a one-time password reset link if the account exists."}
-            </div>
+            </AccentCallout>
           ) : null}
           <form className="grid gap-4" onSubmit={(event) => void handleEmailSubmit(event)}>
             {mode === "register" ? (

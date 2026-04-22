@@ -6,6 +6,7 @@ import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { useAccount } from "wagmi";
 
 import { Button } from "@/components/ui/button";
+import { AccentCallout } from "@/components/ui/accent-callout";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { fetchJson } from "@/lib/api";
 import { shortenHex } from "@/lib/format";
@@ -189,7 +190,9 @@ export function SiteHeader() {
           </div>
 
           <div className="space-y-2 p-4">
-            <div className="market-note text-xs">Public replies, local discovery, and wallet settlement are all available from the main marketplace flow.</div>
+            <AccentCallout label="Marketplace flow" tone="blue" className="text-xs">
+              Public replies, local discovery, and wallet settlement are all available from the main marketplace flow.
+            </AccentCallout>
             <Button asChild variant="ghost" className="h-10 w-full justify-start rounded-xl" onClick={() => setOpen(false)}>
               <Link href="/marketplace">Listings</Link>
             </Button>
