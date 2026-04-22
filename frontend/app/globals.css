@@ -337,11 +337,44 @@
     box-shadow: 0 10px 22px rgba(18, 74, 77, 0.08);
   }
 
+  .market-tab-button-mint {
+    border-color: rgba(24, 141, 127, 0.16);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55);
+  }
+
+  .market-tab-button-blue {
+    border-color: rgba(35, 107, 222, 0.16);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55);
+  }
+
+  .market-tab-button-amber {
+    border-color: rgba(220, 137, 23, 0.16);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55);
+  }
+
   .market-tab-button-active {
     border-color: hsl(var(--ring));
     background: linear-gradient(180deg, rgba(242, 255, 253, 0.98), rgba(221, 247, 243, 0.9));
     box-shadow: 0 14px 28px rgba(18, 74, 77, 0.14);
     transform: translateY(-2px);
+  }
+
+  .market-tab-button-active-mint {
+    border-color: rgba(24, 141, 127, 0.34);
+    background: linear-gradient(180deg, rgba(239, 255, 252, 0.98), rgba(213, 245, 236, 0.92));
+    box-shadow: 0 14px 28px rgba(18, 92, 79, 0.16);
+  }
+
+  .market-tab-button-active-blue {
+    border-color: rgba(35, 107, 222, 0.32);
+    background: linear-gradient(180deg, rgba(241, 248, 255, 0.99), rgba(220, 235, 255, 0.93));
+    box-shadow: 0 14px 28px rgba(28, 84, 169, 0.16);
+  }
+
+  .market-tab-button-active-amber {
+    border-color: rgba(220, 137, 23, 0.34);
+    background: linear-gradient(180deg, rgba(255, 248, 234, 0.99), rgba(255, 236, 202, 0.93));
+    box-shadow: 0 14px 28px rgba(161, 92, 24, 0.15);
   }
 
   .market-details summary {

@@ -644,14 +644,20 @@ export default function DashboardPage() {
 
   const accountTabs = React.useMemo(
     () => [
-      { key: "profile" as const, label: "Profile", description: "Identity, address, and account settings", count: auth.user?.postalCode?.trim() ? auth.user.postalCode.trim() : auth.user?.email?.trim() || "Setup" },
-      { key: "watch" as const, label: "Watch", description: "Followed sellers, saved ads, alerts, and search watches", count: String(followedSellers.length + favoriteListings.length + savedSearches.length + notificationUnreadCount) },
-      { key: "my-listings" as const, label: "My listings", description: "Ads connected to your current seller wallet", count: Array.isArray(myListingIds) ? String(myListingIds.length) : "-" },
+      { key: "profile" as const, label: "Profile", description: "Identity, address, and account settings.", tone: "mint", count: auth.user?.postalCode?.trim() ? auth.user.postalCode.trim() : auth.user?.email?.trim() || "Setup" },
+      { key: "watch" as const, label: "Watch", description: "Followed sellers, saved ads, alerts, and search watches.", tone: "blue", count: String(followedSellers.length + favoriteListings.length + savedSearches.length + notificationUnreadCount) },
+      { key: "my-listings" as const, label: "My listings", description: "Ads connected to your current seller wallet.", tone: "amber", count: Array.isArray(myListingIds) ? String(myListingIds.length) : "-" },
     ],
     [auth.user?.email, auth.user?.postalCode, favoriteListings.length, followedSellers.length, myListingIds, notificationUnreadCount, savedSearches.length]
   );
 
   const activeTabMeta = accountTabs.find((tab) => tab.key === accountTab) ?? accountTabs[0];
+  const activeTabSummaryClass =
+    activeTabMeta.tone === "mint"
+      ? "market-panel market-panel-spotlight market-panel-spotlight-mint border-slate-200/80 bg-white/78"
+      : activeTabMeta.tone === "amber"
+        ? "market-panel market-panel-spotlight market-panel-spotlight-amber border-slate-200/80 bg-white/78"
+        : "market-panel market-panel-spotlight market-panel-spotlight-blue border-slate-200/80 bg-white/78";
 
   const { data: lastListingId } = useReadContract({
     address: marketplaceRegistryAddress,
@@ -878,7 +884,11 @@ export default function DashboardPage() {
             type="button"
             role="tab"
             aria-selected={accountTab === tab.key}
-            className={accountTab === tab.key ? "market-tab-button market-tab-button-active" : "market-tab-button"}
+            className={
+              accountTab === tab.key
+                ? `market-tab-button market-tab-button-${tab.tone} market-tab-button-active market-tab-button-active-${tab.tone}`
+                : `market-tab-button market-tab-button-${tab.tone}`
+            }
             onClick={() => selectAccountTab(tab.key)}
           >
             <span className="text-sm font-semibold text-slate-950">{tab.label}</span>
@@ -892,7 +902,7 @@ export default function DashboardPage() {
         Swipe to see Watch and My listings.
       </div>
 
-      <Card className="market-panel market-panel-spotlight market-panel-spotlight-blue border-slate-200/80 bg-white/78">
+      <Card className={activeTabSummaryClass}>
         <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
           <div>
             <div className="market-section-title">{activeTabMeta.label}</div>
