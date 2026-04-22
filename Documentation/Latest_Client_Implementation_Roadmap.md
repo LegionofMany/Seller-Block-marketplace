@@ -38,9 +38,100 @@ Status as of April 22, 2026 for this roadmap tranche:
 
 - shipped: email-first sign-in and registration, forgot-password flow, profile/address/phone capture, watch/favorites/follows dashboard refactor, landing-page/category improvements, local discovery, create-flow publish recovery, public-launch category updates, token/network copy cleanup, accent refresh, saved-search alerts with marketplace deep links, and notification/email copy polish
 - partially complete: final manual UX regression across sign-in, posting, watch flow, and trust/copy surfaces; hosted deployment and migration verification outside local builds
-- still requires product decision: SMS verification scope, BlockPages timing, exact "SEO and google loop" implementation meaning, and stablecoin launch matrix by geography
+- unresolved but now decision-ready: SMS verification scope, BlockPages timing, exact "SEO and google loop" implementation meaning, and stablecoin launch matrix by geography
 
-This means the implementation is near-complete for the public-launch UX scope, but the tranche is not fully closed until the remaining decisions and manual validation steps are signed off.
+This means the implementation is near-complete for the public-launch UX scope. The closure path is now explicit: adopt the launch defaults in the final closure pass below, finish the remaining manual validation, and confirm hosted deployment parity.
+
+## Final Closure Pass
+
+This section converts the remaining open questions into launch-default recommendations so the tranche can move from near-complete to signoff-ready without reopening broad scope.
+
+### Recommended Launch Defaults
+
+1. SMS verification
+
+Recommended decision: do not require SMS verification for public launch.
+
+Reasoning:
+
+- email-first sign-up, verification email, password reset, and full identity capture are already implemented
+- adding SMS now introduces provider, delivery, and fraud-control dependencies without improving the current launch-critical UX enough to justify the delay
+- SMS can remain a post-launch trust uplift or abuse-control feature if usage patterns show it is needed
+
+Implementation consequence:
+
+- phase 1 can be treated as complete for launch scope once manual regression passes
+
+2. BlockPages timing
+
+Recommended decision: keep BlockPages out of first-run onboarding and stage it as an immediate post-launch trust/KYC layer.
+
+Reasoning:
+
+- the client explicitly described BlockPages as a later trust step, not the first barrier
+- forcing KYC into basic sign-up would cut directly against the current classifieds-first launch target
+- trust surfaces already exist in the product and can absorb a later verification badge or trust-upgrade entry point cleanly
+
+Implementation consequence:
+
+- BlockPages remains roadmap follow-up work and does not block public-launch signoff
+
+3. "SEO and google loop"
+
+Recommended decision: define launch scope as SEO-ready marketplace pages now, and defer Google-assisted address autofill unless separately approved.
+
+Launch interpretation:
+
+- keep sitemap and robots in place
+- ensure landing, marketplace, listing detail, and seller profile surfaces remain indexable where appropriate
+- keep metadata and shareable URLs aligned with real marketplace navigation
+- do not treat Google Maps or Places integration as implied launch scope without explicit client approval
+
+Reasoning:
+
+- this is the narrowest interpretation consistent with the client language and the current codebase
+- it improves discovery and trust without creating new external-service complexity at the end of the tranche
+
+Implementation consequence:
+
+- this item can be closed for launch scope unless the client explicitly means Google address autocomplete or ad-network integration
+
+4. Launch stablecoin / geography matrix
+
+Recommended decision: keep actual settlement support narrow at launch and keep regional currency messaging broader than the underlying token rail.
+
+Launch default:
+
+- one confirmed permit-compatible stablecoin per supported production chain
+- Canada-facing UI may present CAD-oriented marketplace expectations, but should not promise QCAD settlement unless QCAD is actually configured, available, and validated on the launch chain
+- US-facing UI should prefer plain USDC-style wording where the underlying rail is a USD stablecoin
+- avoid exposing a wide multi-token matrix at launch; expand only after production token support is verified
+
+Reasoning:
+
+- this is consistent with the repo guidance to stay stablecoin-first and narrow at launch
+- it avoids overpromising regional token support before production chain config and permit compatibility are fully confirmed
+- it preserves user clarity while still allowing later locale-aware token defaults
+
+Implementation consequence:
+
+- token/network copy can be treated as launch-complete once production config confirms the single-token-per-chain choice
+
+### Signoff Trigger
+
+This roadmap tranche can move from near-complete to signed off when all of the following are true:
+
+1. The four recommended launch defaults above are accepted, either explicitly by the client or implicitly by product leadership for the launch cut.
+2. Manual regression is completed for sign-in, password reset, profile editing, watch flow, local discovery, create/publish recovery, and trust/copy surfaces.
+3. Hosted deployment parity is verified for the current frontend/backend behavior, including required migrations and environment configuration.
+4. No launch-surface copy or UX blockers remain after the final QA pass.
+
+### Signed-Off State
+
+If the recommended launch defaults are accepted, the correct roadmap status becomes:
+
+- signed off for public-launch implementation scope
+- BlockPages, SMS, broader regional token expansion, and other deferred items remain in post-launch roadmap status unless separately promoted
 
 ## Scope Lock
 
@@ -137,7 +228,7 @@ This means the implementation is near-complete for the public-launch UX scope, b
 
 ### Status
 
-Partially complete. The public-launch scope and deferred work are documented in this roadmap, but the explicit decision items below are still unresolved.
+Decision-ready. The public-launch scope and deferred work are documented, and the remaining open items now have recommended launch defaults in the final closure pass.
 
 ### Goal
 
@@ -415,10 +506,10 @@ These should not block the public-launch tranche.
 
 ## Recommended Next Sprint
 
-1. Resolve open product decisions for SMS, BlockPages timing, SEO scope, and launch stablecoin geography
+1. Accept or override the four recommended launch defaults in the final closure pass
 2. Run final manual regression on sign-in, password reset, posting, watch flow, and local discovery
 3. Verify required backend migrations and hosted deployment parity for the latest frontend/backend slices
-4. Close any remaining launch-surface copy issues discovered during manual QA
+4. Mark the tranche signed off for public-launch scope if no blocking issues remain
 
 ## Ownership Notes
 

@@ -643,8 +643,6 @@ export async function queryListings(_db: Pool | any, q: ListingsQuery) {
   // Production feeds should not surface synthetic smoke-test listings.
   where.push(`LOWER(listings.metadatauri) NOT LIKE 'ipfs://seller-block/smoke-%'`);
 
-  const joinMetadata = Boolean(q.q || q.category || q.subcategory || q.city || q.region || q.postalCode);
-
   if (q.seller) {
     where.push(`seller = $${params.length + 1}`);
     params.push(q.seller);
@@ -737,7 +735,7 @@ export async function queryListings(_db: Pool | any, q: ListingsQuery) {
             m.region,
             m.postalcode AS "postalCode"
      FROM listings
-     ${joinMetadata ? 'LEFT JOIN metadata m ON m.uri = listings.metadataURI' : ''}
+               LEFT JOIN metadata m ON m.uri = listings.metadataURI
      ${whereSql}
      ${orderBy}
      LIMIT ${limitParam} OFFSET ${offsetParam}`,
