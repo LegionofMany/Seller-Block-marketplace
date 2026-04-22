@@ -296,7 +296,7 @@ export default function HomePage() {
                 Buy, sell, and watch local ads from one clear entry point.
               </h1>
               <p className="max-w-2xl text-sm leading-7 text-slate-700 sm:text-base">
-                The landing page now puts sign-in, categories, top ads, and live marketplace inventory ahead of protocol language. Buyers can start with real classifieds navigation, then move into saved ads, followed sellers, and account tools only when they need them.
+                The landing page now puts sign-in, categories, top ads, and live inventory into a cleaner first impression. Buyers can start with familiar classifieds browsing, then step into saved ads, followed sellers, and account tools only when they want them.
               </p>
             </div>
             <div className="flex flex-wrap gap-3">
@@ -322,7 +322,7 @@ export default function HomePage() {
               <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Landing page priorities</div>
               <div className="mt-2 text-xl font-semibold text-slate-950">Sign in, categories, top ads, then the live marketplace.</div>
               <div className="mt-2 text-sm text-slate-700">
-                The marketplace feed still lives under Browse, but this entry surface now clearly explains where to sign in, where to browse by category, and which top ads deserve attention right now.
+                This entry point keeps sign-in, category browsing, and featured inventory easy to read before the full marketplace opens up.
               </div>
             </div>
             <div className="market-note text-sm">
@@ -338,7 +338,7 @@ export default function HomePage() {
         <Card className="market-panel market-panel-spotlight market-panel-spotlight-mint">
           <CardHeader>
             <CardTitle>Followed sellers first</CardTitle>
-            <CardDescription>This section is driven by your real follow graph, not static homepage copy.</CardDescription>
+            <CardDescription>Driven by real follows, not placeholder merchandising.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             {followedError ? <div className="market-note text-sm">{followedError}</div> : null}
@@ -368,7 +368,7 @@ export default function HomePage() {
           <Card className="market-panel market-panel-spotlight market-panel-spotlight-blue">
             <CardHeader>
               <CardTitle>Favorites next</CardTitle>
-              <CardDescription>The homepage order now explicitly reserves the second slot for favorite ads and sellers.</CardDescription>
+              <CardDescription>Saved listings hold a dedicated slot near the top of the landing experience.</CardDescription>
             </CardHeader>
             <CardContent>
               {favoriteError ? <div className="market-note text-sm">{favoriteError}</div> : null}
@@ -391,7 +391,7 @@ export default function HomePage() {
           <Card className="market-panel market-panel-spotlight market-panel-spotlight-amber">
             <CardHeader>
               <CardTitle>Top ads</CardTitle>
-              <CardDescription>Featured listings still have a dedicated layer after followed sellers and favorites, but the surface now reads like top marketplace ads instead of an internal placement console.</CardDescription>
+              <CardDescription>Featured inventory stays visible without reading like an internal ad console.</CardDescription>
             </CardHeader>
             <CardContent>
               {sponsoredError ? <div className="market-note text-sm">{sponsoredError}</div> : null}
@@ -421,7 +421,7 @@ export default function HomePage() {
         <Card className="market-panel">
           <CardHeader>
             <CardTitle>Browse by category</CardTitle>
-            <CardDescription>Category entry points now reflect the public-launch classifieds focus, including antiques and housewares.</CardDescription>
+            <CardDescription>Category entry points now match the public-launch classifieds mix, including antiques and housewares.</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {Object.entries(CATEGORY_TREE).map(([category, subcategories]) => (
@@ -437,7 +437,7 @@ export default function HomePage() {
         <Card className="market-panel">
           <CardHeader>
             <CardTitle>Account flow</CardTitle>
-            <CardDescription>Keep the public homepage simple, then let sign-in unlock the watch and profile tools.</CardDescription>
+            <CardDescription>Keep the homepage clean, then let sign-in open the deeper watch and profile tools.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             {spotlightRules.map((rule) => (
@@ -456,7 +456,7 @@ export default function HomePage() {
             <div>
               <div className="market-section-title">Nearby inventory</div>
               <h2 className="text-2xl font-semibold tracking-tight text-slate-950">Fresh ads around {savedLocationLabel || "your area"}</h2>
-              <p className="mt-1 text-sm text-muted-foreground">Signed-in discovery now uses your saved profile location so local inventory can surface before generic marketplace results.</p>
+              <p className="mt-1 text-sm text-muted-foreground">Signed-in discovery uses your saved location so nearby inventory can surface before generic marketplace results.</p>
             </div>
             <Button asChild variant="outline" className="rounded-full">
               <Link href={buildMarketplaceHref(savedLocation ?? {})}>Refine local search</Link>
@@ -498,7 +498,7 @@ export default function HomePage() {
           <div>
             <div className="market-section-title">Live marketplace</div>
             <h2 className="text-2xl font-semibold tracking-tight text-slate-950">Fresh ads now</h2>
-            <p className="mt-1 text-sm text-muted-foreground">Recent inventory stays visible here after sign-in prompts, category entry points, and top ads are handled above.</p>
+            <p className="mt-1 text-sm text-muted-foreground">Recent inventory stays visible here after sign-in prompts, categories, and featured ads are handled above.</p>
           </div>
           <Button asChild variant="outline" className="rounded-full">
             <Link href="/marketplace">Open full marketplace</Link>
@@ -527,7 +527,7 @@ export default function HomePage() {
         <Card className="market-panel">
           <CardHeader>
             <CardTitle>Most viewed ads</CardTitle>
-            <CardDescription>Popular listings now reflect real listing detail traffic instead of placeholder homepage copy.</CardDescription>
+            <CardDescription>Popular listings now reflect real buyer attention instead of placeholder ranking.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             {mostViewedError ? <div className="market-note text-sm">{mostViewedError}</div> : null}
@@ -549,7 +549,7 @@ export default function HomePage() {
         <Card className="market-panel market-panel-spotlight market-panel-spotlight-amber">
           <CardHeader>
             <CardTitle>Marketplace safety</CardTitle>
-            <CardDescription>Trust and safety rules belong in the main buyer journey, not buried in docs.</CardDescription>
+            <CardDescription>Trust and safety belong in the buyer journey, not buried in documentation.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             {safetyWarnings.map((warning) => (
@@ -563,7 +563,7 @@ export default function HomePage() {
         <Card className="market-panel">
           <CardHeader>
             <CardTitle>Fresh this week</CardTitle>
-            <CardDescription>Newest real inventory remains available without burying the landing page under utility controls.</CardDescription>
+            <CardDescription>Fresh inventory stays visible without letting utility controls take over the page.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             {freshListings.slice(0, 4).map((listing) => (
@@ -588,7 +588,7 @@ export default function HomePage() {
         <Card className="market-panel market-panel-spotlight market-panel-spotlight-blue">
           <CardHeader>
             <CardTitle>Sign in on any device</CardTitle>
-            <CardDescription>Email-first access now sits alongside wallet connection so phones and tablets are not blocked by desktop wallet assumptions.</CardDescription>
+            <CardDescription>Email-first access stays available without forcing a desktop wallet assumption.</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <AccentCallout label="Account access" tone="blue">

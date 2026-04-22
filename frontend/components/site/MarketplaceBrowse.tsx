@@ -188,14 +188,14 @@ export function MarketplaceBrowse() {
     <div className="space-y-6">
       <div className="flex flex-col gap-2">
         <h1 className="text-2xl font-semibold tracking-tight">Marketplace</h1>
-        <p className="text-sm text-muted-foreground">Browse live classifieds and on-chain listings created on {env.defaultChain.name}.</p>
+        <p className="text-sm text-muted-foreground">Browse live classifieds and settlement-ready listings on {env.defaultChain.name}.</p>
       </div>
 
       {savedLocation ? (
         <Card className="market-panel market-panel-spotlight market-panel-spotlight-blue">
           <CardHeader>
             <CardTitle>Nearby discovery</CardTitle>
-            <CardDescription>Use your saved profile area to narrow the marketplace without retyping filters each visit.</CardDescription>
+            <CardDescription>Use your saved area to reopen nearby browsing without rebuilding filters each time.</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <AccentCallout label="Saved area" tone="blue" className="w-full sm:max-w-xl">
@@ -247,7 +247,7 @@ export function MarketplaceBrowse() {
       <Card>
         <CardHeader>
           <CardTitle>Categories</CardTitle>
-          <CardDescription>Browse by category, then narrow by subcategory.</CardDescription>
+          <CardDescription>Open with broad categories, then tighten the view with subcategories.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex flex-wrap gap-2">
@@ -319,7 +319,7 @@ export function MarketplaceBrowse() {
       <Card>
         <CardHeader>
           <CardTitle>Search</CardTitle>
-          <CardDescription>Filter by sale type, location, price, and sort order. Signed-in shoppers can also load their saved profile area.</CardDescription>
+          <CardDescription>Refine by sale type, location, price, and sort order, or pull in your saved area once signed in.</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={applyFilters} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -395,7 +395,7 @@ export function MarketplaceBrowse() {
       <Card className="market-panel market-panel-spotlight market-panel-spotlight-mint">
         <CardHeader>
           <CardTitle>Saved search alerts</CardTitle>
-          <CardDescription>Save a refined view and bring it back with cleaner alerting. Email stays optional.</CardDescription>
+          <CardDescription>Save a refined view and bring it back through a cleaner alert flow. Email stays optional.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 lg:grid-cols-[1fr_1fr_auto] lg:items-end">
           <div className="space-y-2">

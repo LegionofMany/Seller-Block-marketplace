@@ -844,8 +844,8 @@ export default function DashboardPage() {
           <div className="space-y-4">
             <div className="market-section-title">Your account</div>
             <div className="space-y-2">
-              <h1 className="text-2xl font-semibold tracking-tight text-slate-950 sm:text-4xl">Run your account like a local marketplace hub.</h1>
-              <p className="max-w-2xl text-[13px] leading-6 text-muted-foreground sm:text-base">Profile, watch activity, and your live ads now sit behind a clearer account shell. Followed sellers, favorites, alerts, and saved searches are grouped together instead of scattered across separate tabs.</p>
+              <h1 className="text-2xl font-semibold tracking-tight text-slate-950 sm:text-4xl">Run your account with a cleaner market rhythm.</h1>
+              <p className="max-w-2xl text-[13px] leading-6 text-muted-foreground sm:text-base">Profile, watch activity, and live inventory now sit inside one sharper account shell, so follows, saved ads, alerts, and listings feel like one continuous flow.</p>
             </div>
           </div>
 
@@ -921,7 +921,7 @@ export default function DashboardPage() {
                 <CardHeader>
                   <div className="market-section-title">Public profile</div>
                   <CardTitle>Profile</CardTitle>
-                  <CardDescription>Update the account identity buyers, alerts, and local discovery use across your marketplace session.</CardDescription>
+                  <CardDescription>Shape the public identity, contact details, and local profile signals buyers see first.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4 p-4 pt-0 sm:p-6 sm:pt-0">
                   {!auth.isAuthenticated ? (
@@ -1146,7 +1146,7 @@ export default function DashboardPage() {
           <CardHeader>
             <div className="market-section-title">Homepage admin</div>
             <CardTitle>Spotlight placements</CardTitle>
-            <CardDescription>Manage the curated inventory that appears in the spotlight layer on the landing page. Changes here write directly to the backend placement model.</CardDescription>
+            <CardDescription>Control the featured inventory and trust surfaces that shape the public landing page.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-5 p-4 pt-0 sm:p-6 sm:pt-0">
             <div className="grid gap-3 sm:grid-cols-3">
@@ -1201,7 +1201,9 @@ export default function DashboardPage() {
                 </div>
                 <div className="rounded-2xl border border-dashed bg-slate-50/80 p-4">
                   {!trustTargetAddress ? (
-                    <div className="text-sm text-muted-foreground">Enter a valid seller address to preview current trust state.</div>
+                        <AccentCallout label="Trust preview" tone="amber">
+                          Enter a valid seller address to preview the current trust state before making changes.
+                        </AccentCallout>
                   ) : isLoadingAdminTrustProfile ? (
                     <div className="space-y-2">
                       <Skeleton className="h-5 w-40" />
@@ -1217,7 +1219,9 @@ export default function DashboardPage() {
                       <SellerTrustSummary profile={adminTrustProfile} variant="detail" />
                     </div>
                   ) : (
-                    <div className="text-sm text-muted-foreground">No public seller profile was found for that address yet.</div>
+                    <AccentCallout label="No public profile" tone="amber">
+                      That address has no public seller profile yet, so there is nothing to review or verify.
+                    </AccentCallout>
                   )}
                 </div>
               </div>
@@ -1226,7 +1230,7 @@ export default function DashboardPage() {
                 <div className="rounded-2xl border bg-white/90 p-4 space-y-3">
                   <div>
                     <div className="text-sm font-semibold">Review queue</div>
-                    <div className="text-sm text-muted-foreground">Sellers with marketplace activity but no admin verification yet.</div>
+                    <div className="text-sm text-muted-foreground">Seller profiles waiting for a first trust decision.</div>
                   </div>
                   {isLoadingTrustAdmin ? (
                     <div className="space-y-2">
@@ -1234,7 +1238,9 @@ export default function DashboardPage() {
                       <Skeleton className="h-16 w-full" />
                     </div>
                   ) : trustQueue.length === 0 ? (
-                    <div className="text-sm text-muted-foreground">No unreviewed seller profiles are currently in the queue.</div>
+                    <AccentCallout label="Queue is clear" tone="mint">
+                      No seller profiles are waiting for review right now.
+                    </AccentCallout>
                   ) : (
                     trustQueue.map((profile) => (
                       <button
@@ -1261,7 +1267,7 @@ export default function DashboardPage() {
                 <div className="rounded-2xl border bg-white/90 p-4 space-y-3">
                   <div>
                     <div className="text-sm font-semibold">Verified sellers</div>
-                    <div className="text-sm text-muted-foreground">Recent verified sellers stay visible so admins can spot stale notes or reversals quickly.</div>
+                    <div className="text-sm text-muted-foreground">Recently approved sellers stay visible for fast review and note cleanup.</div>
                   </div>
                   {isLoadingTrustAdmin ? (
                     <div className="space-y-2">
@@ -1269,7 +1275,9 @@ export default function DashboardPage() {
                       <Skeleton className="h-16 w-full" />
                     </div>
                   ) : verifiedSellers.length === 0 ? (
-                    <div className="text-sm text-muted-foreground">No sellers have been verified yet.</div>
+                    <AccentCallout label="No verified sellers" tone="blue">
+                      No seller has been marked verified yet, so this list will open once the first trust approval is made.
+                    </AccentCallout>
                   ) : (
                     verifiedSellers.map((profile) => (
                       <button
@@ -1297,7 +1305,7 @@ export default function DashboardPage() {
               <div className="rounded-2xl border bg-white/90 p-4 space-y-3">
                 <div>
                   <div className="text-sm font-semibold">Trust review history</div>
-                  <div className="text-sm text-muted-foreground">Every verification change is recorded so edits are auditable instead of ephemeral.</div>
+                  <div className="text-sm text-muted-foreground">Every trust decision stays visible as an auditable review trail.</div>
                 </div>
                 {isLoadingTrustAdmin ? (
                   <div className="space-y-2">
@@ -1306,7 +1314,9 @@ export default function DashboardPage() {
                     <Skeleton className="h-14 w-full" />
                   </div>
                 ) : trustHistory.length === 0 ? (
-                  <div className="text-sm text-muted-foreground">No seller trust review actions have been recorded yet.</div>
+                  <AccentCallout label="No review history" tone="amber">
+                    No trust actions have been recorded yet, so the audit trail is still empty.
+                  </AccentCallout>
                 ) : (
                   <div className="space-y-2">
                     {trustHistory.map((item) => (
@@ -1340,7 +1350,7 @@ export default function DashboardPage() {
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <div className="text-sm font-semibold">Current placement inventory</div>
-                    <div className="text-sm text-muted-foreground">Review priority, timing, and labels before they surface on the landing page.</div>
+                    <div className="text-sm text-muted-foreground">Review timing, priority, and labeling before a placement reaches the homepage.</div>
                   </div>
                   <Button
                     type="button"
@@ -1361,7 +1371,9 @@ export default function DashboardPage() {
                     <Skeleton className="h-16 w-full" />
                   </div>
                 ) : promotions.length === 0 ? (
-                  <div className="rounded-2xl border border-dashed bg-white/70 p-4 text-sm text-muted-foreground">No spotlight placements exist yet. Create the first campaign from the form on the right.</div>
+                  <AccentCallout label="No spotlight placements" tone="amber">
+                    The spotlight layer is empty. Create the first placement from the form to the right.
+                  </AccentCallout>
                 ) : (
                   promotions.map((item) => (
                     <div key={item.id} className="rounded-2xl border bg-white/80 p-4">
@@ -1426,7 +1438,7 @@ export default function DashboardPage() {
               <div className="rounded-2xl border bg-white/90 p-4 sm:p-5">
                 <div className="space-y-1">
                   <div className="text-sm font-semibold">{editingPromotionId ? "Update placement" : "Create placement"}</div>
-                  <div className="text-sm text-muted-foreground">Use a real listing id and a clean campaign label so the landing page reads like curated inventory instead of raw ad tech.</div>
+                  <div className="text-sm text-muted-foreground">Use a real listing id and a clean campaign label so the homepage reads like curated inventory, not ad ops.</div>
                 </div>
 
                 {promotionDraft ? (
@@ -1623,7 +1635,7 @@ export default function DashboardPage() {
                 <CardHeader>
                   <div className="market-section-title">Watch center</div>
                   <CardTitle>Watch activity</CardTitle>
-                  <CardDescription>Followed sellers, saved ads, saved searches, and alerts are grouped here so repeat browsing feels like one flow instead of four separate tools.</CardDescription>
+                  <CardDescription>Follows, saved ads, alerts, and search watches stay together here for faster repeat browsing.</CardDescription>
                 </CardHeader>
                 <CardContent className="grid gap-3 p-4 pt-0 sm:grid-cols-2 sm:p-6 sm:pt-0 xl:grid-cols-4">
                   <div className="market-stat bg-white/85">
@@ -1653,7 +1665,7 @@ export default function DashboardPage() {
                 <CardHeader>
                   <div className="market-section-title">Network</div>
                   <CardTitle>Followed sellers</CardTitle>
-                  <CardDescription>People and seller pages you chose to keep in your repeat-buying circle.</CardDescription>
+                  <CardDescription>Sellers you want close at hand when you come back to browse again.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3 p-4 pt-0 sm:p-6 sm:pt-0">
                   {!auth.isAuthenticated ? (
@@ -1700,7 +1712,7 @@ export default function DashboardPage() {
                 <CardHeader>
                   <div className="market-section-title">Saved inventory</div>
                   <CardTitle>Favorite ads</CardTitle>
-                  <CardDescription>Listings you saved for later comparison, follow-up, or local pickup planning.</CardDescription>
+                  <CardDescription>Saved listings that deserve a second look, a comparison pass, or a follow-up.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3 p-4 pt-0 sm:p-6 sm:pt-0">
                   {!auth.isAuthenticated ? (
@@ -1743,7 +1755,7 @@ export default function DashboardPage() {
                 <CardHeader>
                   <div className="market-section-title">Discovery</div>
                   <CardTitle>Saved searches</CardTitle>
-                  <CardDescription>Review, edit, and remove the alert searches you saved from the listings page.</CardDescription>
+                  <CardDescription>Edit the search watches that keep bringing the right inventory back.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3 p-4 pt-0 sm:p-6 sm:pt-0">
                   {!auth.isAuthenticated ? (
@@ -1987,7 +1999,7 @@ export default function DashboardPage() {
                 <CardHeader>
                   <div className="market-section-title">Alerts</div>
                   <CardTitle>Notifications</CardTitle>
-                  <CardDescription>In-app alerts for saved-search matches and marketplace activity.</CardDescription>
+                  <CardDescription>One inbox for saved-search matches, seller activity, and listing updates.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3 p-4 pt-0 sm:p-6 sm:pt-0">
                   <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
@@ -2070,7 +2082,7 @@ export default function DashboardPage() {
               <CardHeader>
                 <div className="market-section-title">Listings</div>
                 <CardTitle>My listings</CardTitle>
-                <CardDescription>Listings you created, surfaced in a simpler classifieds-oriented seller inventory view.</CardDescription>
+                <CardDescription>Your live seller inventory, presented in a cleaner classifieds-style view.</CardDescription>
               </CardHeader>
               <CardContent className="p-4 pt-0 sm:p-6 sm:pt-0">
                 {myListingIds === null || myListings === null ? (
