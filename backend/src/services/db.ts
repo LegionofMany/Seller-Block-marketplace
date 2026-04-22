@@ -14,6 +14,12 @@ export type ListingRow = {
   active: 0 | 1;
   createdAt: number;
   blockNumber: number;
+  title?: string | null;
+  category?: string | null;
+  subcategory?: string | null;
+  city?: string | null;
+  region?: string | null;
+  postalCode?: string | null;
 };
 
 export type ListingViewSummaryRow = ListingRow & {
@@ -60,6 +66,7 @@ export type UserRow = {
   bio?: string | null;
   avatarCid?: string | null;
   email?: string | null;
+  phoneNumber?: string | null;
   emailVerifiedAt?: number | null;
   sellerVerifiedAt?: number | null;
   sellerVerifiedBy?: string | null;
@@ -139,7 +146,7 @@ export type EmailAuthTokenRow = {
   tokenHash: string;
   userAddress: string;
   email: string;
-  purpose: "login" | "verify";
+  purpose: "login" | "verify" | "reset";
   expiresAt: number;
   createdAt: number;
   consumedAt?: number | null;
@@ -316,6 +323,12 @@ function toListingRow(r: any): ListingRow {
     active: Number(r.active) ? 1 : 0,
     createdAt: Number(r.createdAt ?? r.createdat ?? r.created_at),
     blockNumber: Number(r.blockNumber ?? r.blocknumber ?? r.block_number),
+    title: r.title ?? null,
+    category: r.category ?? null,
+    subcategory: r.subcategory ?? null,
+    city: r.city ?? null,
+    region: r.region ?? null,
+    postalCode: r.postalCode ?? r.postalcode ?? r.postal_code ?? null,
   };
 }
 
@@ -716,7 +729,13 @@ export async function queryListings(_db: Pool | any, q: ListingsQuery) {
             listings.saletype AS "saleType",
             listings.active,
             listings.createdat AS "createdAt",
-            listings.blocknumber AS "blockNumber"
+            listings.blocknumber AS "blockNumber",
+            m.title,
+            m.category,
+            m.subcategory,
+            m.city,
+            m.region,
+            m.postalcode AS "postalCode"
      FROM listings
      ${joinMetadata ? 'LEFT JOIN metadata m ON m.uri = listings.metadataURI' : ''}
      ${whereSql}
@@ -868,6 +887,7 @@ function toUserRow(r: any): UserRow {
     bio: r.bio ?? null,
     avatarCid: r.avatarCid ?? r.avatarcid ?? null,
     email: r.email ?? null,
+    phoneNumber: r.phoneNumber ?? r.phonenumber ?? r.phone_number ?? null,
     emailVerifiedAt: r.emailVerifiedAt ?? r.emailverifiedat ?? null,
     sellerVerifiedAt: r.sellerVerifiedAt ?? r.sellerverifiedat ?? null,
     sellerVerifiedBy: r.sellerVerifiedBy ?? r.sellerverifiedby ?? null,
@@ -940,11 +960,12 @@ function toAuthNonceRow(r: any): AuthNonceRow {
 }
 
 function toEmailAuthTokenRow(r: any): EmailAuthTokenRow {
+  const purpose = String(r.purpose);
   return {
     tokenHash: String(r.tokenHash ?? r.tokenhash),
     userAddress: String(r.userAddress ?? r.useraddress),
     email: String(r.email),
-    purpose: String(r.purpose) === "verify" ? "verify" : "login",
+    purpose: purpose === "verify" ? "verify" : purpose === "reset" ? "reset" : "login",
     expiresAt: Number(r.expiresAt ?? r.expiresat),
     createdAt: Number(r.createdAt ?? r.createdat),
     consumedAt: r.consumedAt ?? r.consumedat ?? null,
@@ -1023,7 +1044,7 @@ export async function ensureUser(_db: Pool | any, address: string, createdAt: nu
 export async function findUserByEmail(_db: Pool | any, email: string): Promise<UserRow | null> {
   const p = ensurePool(_db);
   const res = await p.query(
-    'SELECT address, fullname AS "fullName", displayname AS "displayName", bio, avatarcid AS "avatarCid", email, emailverifiedat AS "emailVerifiedAt", sellerverifiedat AS "sellerVerifiedAt", sellerverifiedby AS "sellerVerifiedBy", sellertrustnote AS "sellerTrustNote", authmethod AS "authMethod", linkedwalletaddress AS "linkedWalletAddress", streetaddress1 AS "streetAddress1", streetaddress2 AS "streetAddress2", city, region, postalcode AS "postalCode", lastloginat AS "lastLoginAt", createdat AS "createdAt", updatedat AS "updatedAt" FROM users WHERE emailnormalized = $1 LIMIT 1',
+    'SELECT address, fullname AS "fullName", displayname AS "displayName", bio, avatarcid AS "avatarCid", email, phonenumber AS "phoneNumber", emailverifiedat AS "emailVerifiedAt", sellerverifiedat AS "sellerVerifiedAt", sellerverifiedby AS "sellerVerifiedBy", sellertrustnote AS "sellerTrustNote", authmethod AS "authMethod", linkedwalletaddress AS "linkedWalletAddress", streetaddress1 AS "streetAddress1", streetaddress2 AS "streetAddress2", city, region, postalcode AS "postalCode", lastloginat AS "lastLoginAt", createdat AS "createdAt", updatedat AS "updatedAt" FROM users WHERE emailnormalized = $1 LIMIT 1',
     [email]
   );
   return res.rows[0] ? toUserRow(res.rows[0]) : null;
@@ -1032,7 +1053,7 @@ export async function findUserByEmail(_db: Pool | any, email: string): Promise<U
 export async function findUserByLinkedWallet(_db: Pool | any, walletAddress: string): Promise<UserRow | null> {
   const p = ensurePool(_db);
   const res = await p.query(
-    'SELECT address, fullname AS "fullName", displayname AS "displayName", bio, avatarcid AS "avatarCid", email, emailverifiedat AS "emailVerifiedAt", sellerverifiedat AS "sellerVerifiedAt", sellerverifiedby AS "sellerVerifiedBy", sellertrustnote AS "sellerTrustNote", authmethod AS "authMethod", linkedwalletaddress AS "linkedWalletAddress", streetaddress1 AS "streetAddress1", streetaddress2 AS "streetAddress2", city, region, postalcode AS "postalCode", lastloginat AS "lastLoginAt", createdat AS "createdAt", updatedat AS "updatedAt" FROM users WHERE LOWER(linkedwalletaddress) = LOWER($1) LIMIT 1',
+    'SELECT address, fullname AS "fullName", displayname AS "displayName", bio, avatarcid AS "avatarCid", email, phonenumber AS "phoneNumber", emailverifiedat AS "emailVerifiedAt", sellerverifiedat AS "sellerVerifiedAt", sellerverifiedby AS "sellerVerifiedBy", sellertrustnote AS "sellerTrustNote", authmethod AS "authMethod", linkedwalletaddress AS "linkedWalletAddress", streetaddress1 AS "streetAddress1", streetaddress2 AS "streetAddress2", city, region, postalcode AS "postalCode", lastloginat AS "lastLoginAt", createdat AS "createdAt", updatedat AS "updatedAt" FROM users WHERE LOWER(linkedwalletaddress) = LOWER($1) LIMIT 1',
     [walletAddress]
   );
   return res.rows[0] ? toUserRow(res.rows[0]) : null;
@@ -1052,6 +1073,7 @@ export async function createEmailUser(
     passwordHash: string;
     fullName?: string | null;
     displayName?: string | null;
+    phoneNumber?: string | null;
     streetAddress1?: string | null;
     streetAddress2?: string | null;
     city?: string | null;
@@ -1062,8 +1084,8 @@ export async function createEmailUser(
 ) {
   const p = ensurePool(_db);
   await p.query(
-    `INSERT INTO users(address, fullname, displayname, email, emailnormalized, passwordhash, emailverifiedat, authmethod, streetaddress1, streetaddress2, city, region, postalcode, createdat, updatedat, lastloginat)
-     VALUES($1,$2,$3,$4,$4,$5,$6,'email',$7,$8,$9,$10,$11,$6,$6,$6)`,
+    `INSERT INTO users(address, fullname, displayname, email, emailnormalized, passwordhash, emailverifiedat, authmethod, phonenumber, streetaddress1, streetaddress2, city, region, postalcode, createdat, updatedat, lastloginat)
+     VALUES($1,$2,$3,$4,$4,$5,$6,'email',$7,$8,$9,$10,$11,$12,$6,$6,$6)`,
     [
       input.address,
       input.fullName ?? null,
@@ -1071,6 +1093,7 @@ export async function createEmailUser(
       input.email,
       input.passwordHash,
       input.createdAt,
+      input.phoneNumber ?? null,
       input.streetAddress1 ?? null,
       input.streetAddress2 ?? null,
       input.city ?? null,
@@ -1101,7 +1124,7 @@ export async function createEmailAuthToken(
     tokenHash: string;
     userAddress: string;
     email: string;
-    purpose: "login" | "verify";
+    purpose: "login" | "verify" | "reset";
     expiresAt: number;
     createdAt: number;
     metadataJson?: string;
@@ -1129,10 +1152,15 @@ export async function consumeEmailAuthToken(_db: Pool | any, tokenHash: string, 
   await p.query('UPDATE email_auth_tokens SET consumedat = $2 WHERE tokenhash = $1 AND consumedat IS NULL', [tokenHash, consumedAt]);
 }
 
+export async function updateUserPasswordHash(_db: Pool | any, address: string, passwordHash: string, updatedAt: number) {
+  const p = ensurePool(_db);
+  await p.query('UPDATE users SET passwordhash = $2, updatedat = GREATEST(updatedat, $3) WHERE address = $1', [address, passwordHash, updatedAt]);
+}
+
 export async function getUser(_db: Pool | any, address: string): Promise<UserRow | null> {
   const p = ensurePool(_db);
   const res = await p.query(
-    'SELECT address, fullname AS "fullName", displayname AS "displayName", bio, avatarcid AS "avatarCid", email, emailverifiedat AS "emailVerifiedAt", sellerverifiedat AS "sellerVerifiedAt", sellerverifiedby AS "sellerVerifiedBy", sellertrustnote AS "sellerTrustNote", authmethod AS "authMethod", linkedwalletaddress AS "linkedWalletAddress", streetaddress1 AS "streetAddress1", streetaddress2 AS "streetAddress2", city, region, postalcode AS "postalCode", lastloginat AS "lastLoginAt", createdat AS "createdAt", updatedat AS "updatedAt" FROM users WHERE address = $1',
+    'SELECT address, fullname AS "fullName", displayname AS "displayName", bio, avatarcid AS "avatarCid", email, phonenumber AS "phoneNumber", emailverifiedat AS "emailVerifiedAt", sellerverifiedat AS "sellerVerifiedAt", sellerverifiedby AS "sellerVerifiedBy", sellertrustnote AS "sellerTrustNote", authmethod AS "authMethod", linkedwalletaddress AS "linkedWalletAddress", streetaddress1 AS "streetAddress1", streetaddress2 AS "streetAddress2", city, region, postalcode AS "postalCode", lastloginat AS "lastLoginAt", createdat AS "createdAt", updatedat AS "updatedAt" FROM users WHERE address = $1',
     [address]
   );
   return res.rows[0] ? toUserRow(res.rows[0]) : null;
@@ -1249,6 +1277,7 @@ export async function updateUserProfile(
     displayName?: string | null;
     bio?: string | null;
     avatarCid?: string | null;
+    phoneNumber?: string | null;
     streetAddress1?: string | null;
     streetAddress2?: string | null;
     city?: string | null;
@@ -1259,13 +1288,14 @@ export async function updateUserProfile(
 ) {
   const p = ensurePool(_db);
   await p.query(
-    `INSERT INTO users(address, fullname, displayName, bio, avatarCid, streetaddress1, streetaddress2, city, region, postalcode, createdAt, updatedAt)
-     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$11)
+    `INSERT INTO users(address, fullname, displayName, bio, avatarCid, phonenumber, streetaddress1, streetaddress2, city, region, postalcode, createdAt, updatedAt)
+     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$12)
      ON CONFLICT (address) DO UPDATE SET
        fullName = EXCLUDED.fullName,
        displayName = EXCLUDED.displayName,
        bio = EXCLUDED.bio,
        avatarCid = EXCLUDED.avatarCid,
+       phonenumber = EXCLUDED.phonenumber,
        streetaddress1 = EXCLUDED.streetaddress1,
        streetaddress2 = EXCLUDED.streetaddress2,
        city = EXCLUDED.city,
@@ -1278,6 +1308,7 @@ export async function updateUserProfile(
       row.displayName ?? null,
       row.bio ?? null,
       row.avatarCid ?? null,
+      row.phoneNumber ?? null,
       row.streetAddress1 ?? null,
       row.streetAddress2 ?? null,
       row.city ?? null,

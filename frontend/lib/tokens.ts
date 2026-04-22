@@ -13,25 +13,53 @@ export type TokenDescriptor = {
   permitVersion?: string;
 };
 
+function normalizePublicTokenLabel(symbol: string, name: string, isStablecoin?: boolean) {
+  if (/seller\s*block\s*usd|sbusd/i.test(symbol) || /seller\s*block\s*usd|sbusd/i.test(name)) {
+    return {
+      symbol: isStablecoin ? "USD stablecoin" : symbol,
+      name: isStablecoin ? "USD stablecoin" : name,
+    };
+  }
+
+  return { symbol, name };
+}
+
+function toPublicTokenDescriptor(token: TokenDescriptor): TokenDescriptor {
+  const label = normalizePublicTokenLabel(token.symbol, token.name, token.isStablecoin);
+  return {
+    ...token,
+    symbol: label.symbol,
+    name: label.name,
+  };
+}
+
+export function getPublicNetworkLabel(chainName: string) {
+  return /(sepolia|testnet|devnet|goerli|holesky)/i.test(chainName) ? "Marketplace network" : chainName;
+}
+
 export function getTokenOptions(env: ClientEnv, chainId?: number | null): TokenDescriptor[] {
   const chain = getChainConfigById(env, chainId);
   return [
-    {
+    toPublicTokenDescriptor({
       symbol: chain.nativeCurrencySymbol,
       name: chain.nativeCurrencyName,
       address: zeroAddress,
       decimals: 18,
       isNative: true,
-    },
+    }),
     ...chain.stablecoins.map((token) => ({
-      symbol: token.symbol,
-      name: token.name,
+      ...toPublicTokenDescriptor({
+        symbol: token.symbol,
+        name: token.name,
+        address: token.address,
+        decimals: token.decimals,
+        isNative: false,
+        ...(token.isStablecoin ? { isStablecoin: true } : {}),
+        ...(token.permitName ? { permitName: token.permitName } : {}),
+        ...(token.permitVersion ? { permitVersion: token.permitVersion } : {}),
+      }),
       address: token.address,
       decimals: token.decimals,
-      isNative: false,
-      ...(token.isStablecoin ? { isStablecoin: true } : {}),
-      ...(token.permitName ? { permitName: token.permitName } : {}),
-      ...(token.permitVersion ? { permitVersion: token.permitVersion } : {}),
     })),
   ];
 }
@@ -40,7 +68,7 @@ export function getDefaultSettlementToken(env: ClientEnv, chainId?: number | nul
   const chain = getChainConfigById(env, chainId);
   const preferred = chain.stablecoins.find((token) => token.isStablecoin) ?? chain.stablecoins[0];
   if (preferred) {
-    return {
+    return toPublicTokenDescriptor({
       symbol: preferred.symbol,
       name: preferred.name,
       address: preferred.address,
@@ -49,33 +77,33 @@ export function getDefaultSettlementToken(env: ClientEnv, chainId?: number | nul
       ...(preferred.isStablecoin ? { isStablecoin: true } : {}),
       ...(preferred.permitName ? { permitName: preferred.permitName } : {}),
       ...(preferred.permitVersion ? { permitVersion: preferred.permitVersion } : {}),
-    };
+    });
   }
 
-  return {
+  return toPublicTokenDescriptor({
     symbol: chain.nativeCurrencySymbol,
     name: chain.nativeCurrencyName,
     address: zeroAddress,
     decimals: 18,
     isNative: true,
-  };
+  });
 }
 
 export function describeToken(env: ClientEnv, chainId: number | null | undefined, address: Address): TokenDescriptor {
   if (address.toLowerCase() === zeroAddress) {
     const chain = getChainConfigById(env, chainId);
-    return {
+    return toPublicTokenDescriptor({
       symbol: chain.nativeCurrencySymbol,
       name: chain.nativeCurrencyName,
       address: zeroAddress,
       decimals: 18,
       isNative: true,
-    };
+    });
   }
 
   const known = findSupportedToken(env, chainId, address);
   if (known) {
-    return {
+    return toPublicTokenDescriptor({
       symbol: known.symbol,
       name: known.name,
       address: known.address,
@@ -84,16 +112,16 @@ export function describeToken(env: ClientEnv, chainId: number | null | undefined
       ...(known.isStablecoin ? { isStablecoin: true } : {}),
       ...(known.permitName ? { permitName: known.permitName } : {}),
       ...(known.permitVersion ? { permitVersion: known.permitVersion } : {}),
-    };
+    });
   }
 
-  return {
+  return toPublicTokenDescriptor({
     symbol: "ERC20",
     name: "ERC-20 token",
     address,
     decimals: 18,
     isNative: false,
-  };
+  });
 }
 
 export function parseTokenAmount(input: string, token: TokenDescriptor) {

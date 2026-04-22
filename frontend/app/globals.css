@@ -2,8 +2,8 @@
 
 /* shadcn-style design tokens (HSL channels) */
 :root {
-  --background: 44 54% 97%;
-  --foreground: 210 25% 14%;
+  --background: 188 35% 97%;
+  --foreground: 210 30% 14%;
 
   --card: 0 0% 100%;
   --card-foreground: 210 25% 14%;
@@ -11,24 +11,24 @@
   --popover: 0 0% 100%;
   --popover-foreground: 210 25% 14%;
 
-  --primary: 22 88% 47%;
-  --primary-foreground: 42 100% 98%;
+  --primary: 187 84% 41%;
+  --primary-foreground: 0 0% 100%;
 
-  --secondary: 44 44% 93%;
-  --secondary-foreground: 210 25% 18%;
+  --secondary: 186 34% 92%;
+  --secondary-foreground: 210 28% 18%;
 
-  --muted: 40 38% 94%;
-  --muted-foreground: 210 14% 40%;
+  --muted: 188 26% 93%;
+  --muted-foreground: 204 12% 39%;
 
-  --accent: 35 75% 92%;
-  --accent-foreground: 210 25% 18%;
+  --accent: 182 55% 90%;
+  --accent-foreground: 210 28% 18%;
 
   --destructive: 0 78% 56%;
   --destructive-foreground: 0 0% 98%;
 
-  --border: 34 32% 84%;
-  --input: 34 32% 84%;
-  --ring: 22 88% 47%;
+  --border: 188 24% 82%;
+  --input: 188 24% 82%;
+  --ring: 166 76% 38%;
 
   --radius: 1rem;
 }
@@ -43,24 +43,24 @@
   --popover: 240 10% 3.9%;
   --popover-foreground: 0 0% 98%;
 
-  --primary: 0 0% 98%;
-  --primary-foreground: 240 5.9% 10%;
+  --primary: 173 71% 46%;
+  --primary-foreground: 190 45% 8%;
 
-  --secondary: 240 3.7% 15.9%;
+  --secondary: 198 20% 14%;
   --secondary-foreground: 0 0% 98%;
 
-  --muted: 240 3.7% 15.9%;
-  --muted-foreground: 240 5% 64.9%;
+  --muted: 198 18% 14%;
+  --muted-foreground: 196 13% 69%;
 
-  --accent: 240 3.7% 15.9%;
+  --accent: 191 36% 18%;
   --accent-foreground: 0 0% 98%;
 
   --destructive: 0 62.8% 30.6%;
   --destructive-foreground: 0 0% 98%;
 
-  --border: 240 3.7% 15.9%;
-  --input: 240 3.7% 15.9%;
-  --ring: 240 4.9% 83.9%;
+  --border: 192 18% 22%;
+  --input: 192 18% 22%;
+  --ring: 173 71% 46%;
 }
 
 @theme inline {
@@ -98,9 +98,9 @@
 
   body {
     background:
-      radial-gradient(circle at top left, hsla(24, 100%, 62%, 0.16), transparent 28%),
-      radial-gradient(circle at top right, hsla(196, 90%, 48%, 0.1), transparent 24%),
-      linear-gradient(180deg, hsl(var(--background)), hsl(42 42% 95%));
+      radial-gradient(circle at top left, hsla(173, 71%, 46%, 0.14), transparent 28%),
+      radial-gradient(circle at top right, hsla(197, 86%, 53%, 0.12), transparent 24%),
+      linear-gradient(180deg, hsl(var(--background)), hsl(191 34% 94%));
     color: hsl(var(--foreground));
   }
 
@@ -122,7 +122,7 @@
     position: fixed;
     inset: 0;
     pointer-events: none;
-    background-image: linear-gradient(hsla(30, 40%, 50%, 0.06) 1px, transparent 1px), linear-gradient(90deg, hsla(30, 40%, 50%, 0.06) 1px, transparent 1px);
+    background-image: linear-gradient(hsla(188, 44%, 42%, 0.07) 1px, transparent 1px), linear-gradient(90deg, hsla(188, 44%, 42%, 0.07) 1px, transparent 1px);
     background-size: 28px 28px;
     mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.4), transparent 85%);
   }
@@ -132,8 +132,8 @@
     overflow: hidden;
     border: 1px solid hsl(var(--border));
     border-radius: calc(var(--radius) + 0.5rem);
-    background: linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(255, 246, 230, 0.92));
-    box-shadow: 0 20px 50px rgba(84, 60, 24, 0.08);
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.97), rgba(233, 252, 249, 0.94));
+    box-shadow: 0 20px 50px rgba(18, 74, 77, 0.09);
   }
 
   .market-hero::after {
@@ -144,14 +144,14 @@
     width: 12rem;
     height: 12rem;
     border-radius: 9999px;
-    background: radial-gradient(circle, hsla(22, 100%, 62%, 0.2), transparent 70%);
+    background: radial-gradient(circle, hsla(186, 92%, 54%, 0.24), transparent 70%);
   }
 
   .market-panel {
     border: 1px solid hsl(var(--border));
     border-radius: calc(var(--radius) + 0.125rem);
     background: rgba(255, 255, 255, 0.88);
-    box-shadow: 0 14px 40px rgba(60, 41, 6, 0.06);
+    box-shadow: 0 14px 40px rgba(18, 57, 68, 0.08);
     backdrop-filter: blur(10px);
   }
 
@@ -186,7 +186,7 @@
   .market-note {
     border-radius: 1rem;
     border: 1px dashed hsl(var(--border));
-    background: rgba(255, 248, 238, 0.8);
+    background: rgba(235, 251, 248, 0.82);
     padding: 0.9rem 1rem;
     color: hsl(var(--muted-foreground));
   }
@@ -227,19 +227,20 @@
     background: rgba(255, 255, 255, 0.72);
     padding: 1rem 1rem 0.95rem;
     text-align: left;
-    transition: background-color 120ms ease, border-color 120ms ease, transform 120ms ease;
+    transition: background-color 120ms ease, border-color 120ms ease, transform 120ms ease, box-shadow 120ms ease;
   }
 
   .market-tab-button:hover {
-    background: rgba(255, 250, 241, 0.92);
+    background: rgba(240, 253, 251, 0.94);
     border-color: hsl(var(--ring));
+    box-shadow: 0 10px 22px rgba(18, 74, 77, 0.08);
   }
 
   .market-tab-button-active {
     border-color: hsl(var(--ring));
-    background: linear-gradient(180deg, rgba(255, 251, 245, 0.96), rgba(255, 241, 220, 0.84));
-    box-shadow: 0 10px 24px rgba(84, 60, 24, 0.08);
-    transform: translateY(-1px);
+    background: linear-gradient(180deg, rgba(242, 255, 253, 0.98), rgba(221, 247, 243, 0.9));
+    box-shadow: 0 14px 28px rgba(18, 74, 77, 0.14);
+    transform: translateY(-2px);
   }
 
   .market-details summary {

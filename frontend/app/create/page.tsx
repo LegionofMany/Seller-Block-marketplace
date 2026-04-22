@@ -21,7 +21,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 
 import { fetchJson } from "@/lib/api";
-import { describeToken, getDefaultSettlementToken, getTokenOptions, parseTokenAmount } from "@/lib/tokens";
+import { describeToken, getDefaultSettlementToken, getPublicNetworkLabel, getTokenOptions, parseTokenAmount } from "@/lib/tokens";
 import { getChainConfigById, getEnv } from "@/lib/env";
 import { buildListingHref } from "@/lib/listings";
 import { CATEGORY_TREE, subcategoriesFor } from "@/lib/categories";
@@ -117,12 +117,26 @@ type UploadResponse = {
   items: Array<{ ipfsUri: string; url: string }>;
 };
 
+type PublishRecoveryStage = "metadata-ready" | "auction-pending" | "raffle-pending";
+
+type PublishRecovery = {
+  metadataURI: string;
+  chainKey: string;
+  saleType: SaleType;
+  tokenAddress: string;
+  listingId?: Hex;
+  stage: PublishRecoveryStage;
+  updatedAt: number;
+  errorMessage?: string | null;
+};
+
 type ReceiptLogLike = {
   data: Hex;
   topics: [Hex, ...Hex[]] | [];
 };
 
 const CREATE_DRAFT_KEY = "seller-block.create-listing-draft.v1";
+const CREATE_PUBLISH_RECOVERY_KEY = "seller-block.create-listing-recovery.v1";
 
 function nowPlus(minutes: number) {
   return new Date(Date.now() + minutes * 60_000);
@@ -183,6 +197,14 @@ function getErrorMessage(error: unknown, fallback: string) {
   const candidate = error as { shortMessage?: unknown; message?: unknown } | null;
   const message = candidate?.shortMessage ?? candidate?.message;
   return typeof message === "string" && message.trim() ? message : fallback;
+}
+
+function getRecoveryActionLabel(recovery: PublishRecovery) {
+  return recovery.stage === "metadata-ready"
+    ? "Retry publish without re-uploading photos"
+    : recovery.stage === "auction-pending"
+      ? "Finish auction publish"
+      : "Finish raffle publish";
 }
 
 function mergeSelectedFiles(current: File[], incoming: File[]): File[] {
@@ -271,6 +293,7 @@ export default function CreateListingPage() {
   const [draftLoaded, setDraftLoaded] = React.useState(false);
   const [draftRestored, setDraftRestored] = React.useState(false);
   const [lastDraftSavedAt, setLastDraftSavedAt] = React.useState<number | null>(null);
+  const [publishRecovery, setPublishRecovery] = React.useState<PublishRecovery | null>(null);
 
   const envState = React.useMemo(() => {
     try {
@@ -376,6 +399,33 @@ export default function CreateListingPage() {
     }
   }, []);
 
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+    const raw = window.localStorage.getItem(CREATE_PUBLISH_RECOVERY_KEY);
+    if (!raw) return;
+
+    try {
+      const parsed = JSON.parse(raw) as Partial<PublishRecovery>;
+      if (!parsed || typeof parsed.metadataURI !== "string" || typeof parsed.chainKey !== "string") return;
+      const saleTypeValue = parsed.saleType === 1 || parsed.saleType === 2 ? parsed.saleType : 0;
+      const recovery: PublishRecovery = {
+        metadataURI: parsed.metadataURI,
+        chainKey: parsed.chainKey,
+        saleType: saleTypeValue,
+        tokenAddress: typeof parsed.tokenAddress === "string" ? parsed.tokenAddress : "",
+        ...(typeof parsed.listingId === "string" ? { listingId: parsed.listingId as Hex } : {}),
+        stage: parsed.stage === "auction-pending" || parsed.stage === "raffle-pending" ? parsed.stage : "metadata-ready",
+        updatedAt: typeof parsed.updatedAt === "number" ? parsed.updatedAt : Date.now(),
+        ...(typeof parsed.errorMessage === "string" ? { errorMessage: parsed.errorMessage } : {}),
+      };
+      setPublishRecovery(recovery);
+      setGeneratedMetadataURI(recovery.metadataURI);
+      setSaleType((current) => (current === recovery.saleType ? current : recovery.saleType));
+    } catch {
+      window.localStorage.removeItem(CREATE_PUBLISH_RECOVERY_KEY);
+    }
+  }, []);
+
   const draftSnapshot = React.useMemo<CreateListingDraft>(
     () => ({
       saleType,
@@ -447,6 +497,20 @@ export default function CreateListingPage() {
     setDraftRestored(false);
   }
 
+  function savePublishRecovery(next: PublishRecovery) {
+    setPublishRecovery(next);
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(CREATE_PUBLISH_RECOVERY_KEY, JSON.stringify(next));
+    }
+  }
+
+  function clearPublishRecovery() {
+    setPublishRecovery(null);
+    if (typeof window !== "undefined") {
+      window.localStorage.removeItem(CREATE_PUBLISH_RECOVERY_KEY);
+    }
+  }
+
   if (envState.error || !envState.env || !activeChain) {
     return (
       <Card>
@@ -456,6 +520,131 @@ export default function CreateListingPage() {
   }
 
   const env = envState.env;
+
+  async function publishFromMetadata(metadataURI: string, publishSaleType: SaleType, existingListingId?: Hex) {
+    if (tokenAddress.trim().length && !selectedToken) {
+      toast.error("Invalid token address");
+      return;
+    }
+
+    const currentChain = activeChain;
+    if (!currentChain) {
+      toast.error("Missing chain configuration");
+      return;
+    }
+
+    const token: Address = tokenAddress.trim().length ? (tokenAddress.trim() as Address) : zeroAddress;
+    const settlementToken = selectedToken ?? describeToken(env, currentChain.chainId, zeroAddress);
+    const price = publishSaleType === 0 ? parseTokenAmount(fixedPrice || "0", settlementToken) : BigInt(0);
+
+    let listingId: Hex | null = existingListingId ?? null;
+
+    try {
+      if (!publicClient) throw new Error("No public client");
+
+      if (!listingId) {
+        const toastId = toast.loading("Creating listing…");
+        const hash = await writeContractAsync({
+          address: currentChain.marketplaceRegistryAddress,
+          abi: createListingAbi,
+          functionName: "createListing",
+          args: [metadataURI, price, token, publishSaleType],
+        });
+
+        const receipt = await publicClient.waitForTransactionReceipt({ hash });
+        listingId = getListingCreatedId(receipt);
+
+        if (!listingId) throw new Error("Could not find ListingCreated event in receipt");
+
+        toast.success("Listing created", { id: toastId });
+      }
+
+      if (publishSaleType === 1) {
+        savePublishRecovery({
+          metadataURI,
+          chainKey: currentChain.key,
+          saleType: publishSaleType,
+          tokenAddress,
+          listingId,
+          stage: "auction-pending",
+          updatedAt: Date.now(),
+        });
+
+        const startTime = toUnixSeconds(auctionStart);
+        const endTime = toUnixSeconds(auctionEnd);
+        const reserve = parseTokenAmount(reservePrice || "0", settlementToken);
+        const increment = parseTokenAmount(minBidIncrement || "0", settlementToken);
+
+        const toast2 = toast.loading("Opening auction…");
+        const hash2 = await writeContractAsync({
+          address: currentChain.marketplaceRegistryAddress,
+          abi: createListingAbi,
+          functionName: "openAuction",
+          args: [
+            listingId,
+            startTime,
+            endTime,
+            reserve,
+            increment,
+            BigInt(extensionWindow),
+            BigInt(extensionSeconds),
+          ],
+        });
+
+        await publicClient.waitForTransactionReceipt({ hash: hash2 });
+        toast.success("Auction opened", { id: toast2 });
+      }
+
+      if (publishSaleType === 2) {
+        savePublishRecovery({
+          metadataURI,
+          chainKey: currentChain.key,
+          saleType: publishSaleType,
+          tokenAddress,
+          listingId,
+          stage: "raffle-pending",
+          updatedAt: Date.now(),
+        });
+
+        const startTime = toUnixSeconds(raffleStart);
+        const endTime = toUnixSeconds(raffleEnd);
+        const ticket = parseTokenAmount(ticketPrice || "0", settlementToken);
+        const target = parseTokenAmount(targetAmount || "0", settlementToken);
+        const minP = Number.parseInt(minParticipants, 10);
+        const revealBytes32 = parseBytes32(reveal);
+        const commit = keccak256(revealBytes32);
+
+        const toast2 = toast.loading("Opening raffle…");
+        const hash2 = await writeContractAsync({
+          address: currentChain.marketplaceRegistryAddress,
+          abi: createListingAbi,
+          functionName: "openRaffle",
+          args: [listingId, startTime, endTime, ticket, target, minP, commit],
+        });
+
+        await publicClient.waitForTransactionReceipt({ hash: hash2 });
+        toast.success("Raffle opened", { id: toast2 });
+      }
+
+      clearDraft();
+      clearPublishRecovery();
+      router.push(buildListingHref(listingId, currentChain.key));
+    } catch (error: unknown) {
+      const message = getErrorMessage(error, "Transaction failed");
+      setLastUploadError(message);
+      savePublishRecovery({
+        metadataURI,
+        chainKey: currentChain.key,
+        saleType: publishSaleType,
+        tokenAddress,
+        ...(listingId ? { listingId } : {}),
+        stage: publishSaleType === 1 ? "auction-pending" : publishSaleType === 2 ? "raffle-pending" : "metadata-ready",
+        updatedAt: Date.now(),
+        errorMessage: message,
+      });
+      toast.error(message);
+    }
+  }
 
   async function submitListing() {
     const currentChain = activeChain;
@@ -509,6 +698,14 @@ export default function CreateListingPage() {
 
       metadataURI = res.metadataURI;
       setGeneratedMetadataURI(res.metadataURI);
+      savePublishRecovery({
+        metadataURI: res.metadataURI,
+        chainKey: currentChain.key,
+        saleType,
+        tokenAddress,
+        stage: "metadata-ready",
+        updatedAt: Date.now(),
+      });
     } catch (error: unknown) {
       const message = getErrorMessage(error, "Failed to upload metadata");
       setLastUploadError(message);
@@ -518,91 +715,29 @@ export default function CreateListingPage() {
       return;
     }
 
-    if (tokenAddress.trim().length && !selectedToken) {
-      toast.error("Invalid token address");
+    await publishFromMetadata(metadataURI, saleType);
+    setIsSubmitting(false);
+    setUploadStage("idle");
+  }
+
+  async function continuePublishRecovery() {
+    if (!publishRecovery) return;
+    if (!activeChain) {
+      toast.error("Reconnect to the publish chain before continuing this publish attempt");
+      return;
+    }
+    if (publishRecovery.chainKey !== activeChain.key) {
+      toast.error(`Reconnect to ${publishRecovery.chainKey} before continuing this publish attempt`);
       return;
     }
 
-    const token: Address = tokenAddress.trim().length ? (tokenAddress.trim() as Address) : zeroAddress;
-  const settlementToken = selectedToken ?? describeToken(env, currentChain.chainId, zeroAddress);
-    const price = saleType === 0 ? parseTokenAmount(fixedPrice || "0", settlementToken) : BigInt(0);
-
-    let listingId: Hex | null = null;
-
-    try {
-      if (!publicClient) throw new Error("No public client");
-
-      const toastId = toast.loading("Creating listing…");
-      const hash = await writeContractAsync({
-        address: currentChain.marketplaceRegistryAddress,
-        abi: createListingAbi,
-        functionName: "createListing",
-        args: [metadataURI, price, token, saleType],
-      });
-
-      const receipt = await publicClient.waitForTransactionReceipt({ hash });
-
-      listingId = getListingCreatedId(receipt);
-
-      if (!listingId) throw new Error("Could not find ListingCreated event in receipt");
-
-      toast.success("Listing created", { id: toastId });
-
-      if (saleType === 1) {
-        const startTime = toUnixSeconds(auctionStart);
-        const endTime = toUnixSeconds(auctionEnd);
-        const reserve = parseTokenAmount(reservePrice || "0", settlementToken);
-        const increment = parseTokenAmount(minBidIncrement || "0", settlementToken);
-
-        const toast2 = toast.loading("Opening auction…");
-        const hash2 = await writeContractAsync({
-          address: currentChain.marketplaceRegistryAddress,
-          abi: createListingAbi,
-          functionName: "openAuction",
-          args: [
-            listingId,
-            startTime,
-            endTime,
-            reserve,
-            increment,
-            BigInt(extensionWindow),
-            BigInt(extensionSeconds),
-          ],
-        });
-
-        await publicClient.waitForTransactionReceipt({ hash: hash2 });
-        toast.success("Auction opened", { id: toast2 });
-      }
-
-      if (saleType === 2) {
-        const startTime = toUnixSeconds(raffleStart);
-        const endTime = toUnixSeconds(raffleEnd);
-        const ticket = parseTokenAmount(ticketPrice || "0", settlementToken);
-        const target = parseTokenAmount(targetAmount || "0", settlementToken);
-        const minP = Number.parseInt(minParticipants, 10);
-        const revealBytes32 = parseBytes32(reveal);
-        const commit = keccak256(revealBytes32);
-
-        const toast2 = toast.loading("Opening raffle…");
-        const hash2 = await writeContractAsync({
-          address: currentChain.marketplaceRegistryAddress,
-          abi: createListingAbi,
-          functionName: "openRaffle",
-          args: [listingId, startTime, endTime, ticket, target, minP, commit],
-        });
-
-        await publicClient.waitForTransactionReceipt({ hash: hash2 });
-        toast.success("Raffle opened", { id: toast2 });
-      }
-
-      clearDraft();
-      router.push(buildListingHref(listingId, currentChain.key));
-    } catch (error: unknown) {
-      toast.error(getErrorMessage(error, "Transaction failed"));
-    } finally {
-      setIsSubmitting(false);
-      setUploadStage("idle");
-    }
+    setIsSubmitting(true);
+    setUploadStage("publishing");
+    setUploadProgress(100);
+    setLastUploadError(null);
+    await publishFromMetadata(publishRecovery.metadataURI, publishRecovery.saleType, publishRecovery.listingId);
+    setIsSubmitting(false);
+    setUploadStage("idle");
   }
 
   async function onSubmit(e: React.FormEvent) {
@@ -616,6 +751,7 @@ export default function CreateListingPage() {
       : saleType === 1
         ? "Advanced format for timed bidding. Use only when the listing really needs an auction."
         : "Advanced format for community draws and limited drops.";
+  const publicNetworkLabel = getPublicNetworkLabel(activeChain.name);
 
   return (
     <div className="space-y-6">
@@ -626,7 +762,7 @@ export default function CreateListingPage() {
             <div className="space-y-2">
               <h1 className="text-2xl font-semibold tracking-tight text-slate-950 sm:text-4xl">List it like a local marketplace, not a protocol dashboard.</h1>
               <p className="max-w-2xl text-[13px] leading-6 text-slate-700 sm:text-base">
-                Add photos, location, contact details, and a clear price first. Wallet settlement still powers the listing on {activeChain.name}, but the posting flow now prioritizes what shoppers actually need to see.
+                Add photos, location, contact details, and a clear price first. Wallet settlement still powers the listing on the {publicNetworkLabel.toLowerCase()}, but the posting flow now prioritizes what shoppers actually need to see.
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -645,7 +781,7 @@ export default function CreateListingPage() {
             <div className="market-stat">
               <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Settlement</div>
               <div className="mt-2 text-lg font-semibold">{selectedToken?.symbol ?? activeChain.nativeCurrencySymbol}</div>
-              <div className="mt-1 text-sm text-muted-foreground">Choose a supported token before you publish.</div>
+              <div className="mt-1 text-sm text-muted-foreground">Choose the payment currency buyers should see before you publish.</div>
             </div>
           </div>
         </div>
@@ -663,6 +799,32 @@ export default function CreateListingPage() {
               {draftRestored ? (
                 <div className="rounded-2xl border border-amber-200/80 bg-amber-50/80 px-4 py-3 text-sm text-slate-700">
                   Draft restored. Text, pricing, and schedule details came back from local storage. Photos are not persisted, so reselect images before publishing.
+                </div>
+              ) : null}
+              {publishRecovery ? (
+                <div className="rounded-2xl border border-sky-200/80 bg-sky-50/80 px-4 py-3 text-sm text-slate-700">
+                  <div className="font-medium text-slate-950">Recovered publish session</div>
+                  <div className="mt-1">
+                    {publishRecovery.stage === "metadata-ready"
+                      ? "Images and metadata already reached the backend. Continue from the wallet publish step without uploading the photos again."
+                      : publishRecovery.stage === "auction-pending"
+                        ? "The base listing already exists. Continue from the auction setup step without recreating the ad or re-uploading photos."
+                        : "The base listing already exists. Continue from the raffle setup step without recreating the ad or re-uploading photos."}
+                  </div>
+                  {publishRecovery.errorMessage ? <div className="mt-2 text-xs text-slate-600">Last error: {publishRecovery.errorMessage}</div> : null}
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Button type="button" size="sm" variant="outline" disabled={isSubmitting} onClick={() => void continuePublishRecovery()}>
+                      {getRecoveryActionLabel(publishRecovery)}
+                    </Button>
+                    {publishRecovery.listingId ? (
+                      <Button type="button" size="sm" variant="ghost" asChild>
+                        <a href={buildListingHref(publishRecovery.listingId, publishRecovery.chainKey)}>Open current listing</a>
+                      </Button>
+                    ) : null}
+                    <Button type="button" size="sm" variant="ghost" onClick={clearPublishRecovery}>
+                      Dismiss recovery
+                    </Button>
+                  </div>
                 </div>
               ) : null}
 
@@ -771,8 +933,8 @@ export default function CreateListingPage() {
                     <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
                       <div>{lastUploadError}</div>
                       <div className="mt-3">
-                        <Button type="button" size="sm" variant="outline" disabled={isSubmitting} onClick={() => void submitListing()}>
-                          Retry upload and publish
+                        <Button type="button" size="sm" variant="outline" disabled={isSubmitting} onClick={() => void (publishRecovery ? continuePublishRecovery() : submitListing())}>
+                          {publishRecovery ? getRecoveryActionLabel(publishRecovery) : "Retry upload and publish"}
                         </Button>
                       </div>
                     </div>
@@ -857,7 +1019,7 @@ export default function CreateListingPage() {
                           variant={active ? "default" : "outline"}
                           onClick={() => setTokenAddress(value)}
                         >
-                          {tokenOption.symbol}{tokenOption.isStablecoin ? " (stablecoin)" : ""}
+                          {tokenOption.symbol}
                         </Button>
                       );
                     })}
@@ -890,7 +1052,7 @@ export default function CreateListingPage() {
                   <div className="grid gap-3 sm:grid-cols-2 sm:gap-4">
                     <div className="space-y-2"><Label>Start</Label><Input type="datetime-local" value={auctionStart} onChange={(e) => setAuctionStart(e.target.value)} /></div>
                     <div className="space-y-2"><Label>End</Label><Input type="datetime-local" value={auctionEnd} onChange={(e) => setAuctionEnd(e.target.value)} /></div>
-                    <div className="space-y-2"><Label>Reserve ({selectedToken?.symbol ?? activeChain.nativeCurrencySymbol})</Label><Input value={reservePrice} onChange={(e) => setReservePrice(e.target.value)} /></div>
+                    <div className="space-y-2"><Label>Reserve / minimum accepted ({selectedToken?.symbol ?? activeChain.nativeCurrencySymbol})</Label><Input value={reservePrice} onChange={(e) => setReservePrice(e.target.value)} /></div>
                     <div className="space-y-2"><Label>Min bid increment ({selectedToken?.symbol ?? activeChain.nativeCurrencySymbol})</Label><Input value={minBidIncrement} onChange={(e) => setMinBidIncrement(e.target.value)} /></div>
                     <div className="space-y-2"><Label>Extension window (seconds)</Label><Input value={extensionWindow} onChange={(e) => setExtensionWindow(e.target.value)} /></div>
                     <div className="space-y-2"><Label>Extension seconds</Label><Input value={extensionSeconds} onChange={(e) => setExtensionSeconds(e.target.value)} /></div>
@@ -960,6 +1122,10 @@ export default function CreateListingPage() {
                 <div className="font-medium text-foreground">Draft handling</div>
                 <div className="mt-1">Listing details auto-save on this device after edits. Photos stay local to the current session and must be reselected after a refresh.</div>
               </div>
+              <div className="rounded-xl border p-4">
+                <div className="font-medium text-foreground">Publish recovery</div>
+                <div className="mt-1">If photo upload or listing creation already succeeded and the later publish step fails, this page now keeps a recoverable publish session so you can continue without re-uploading the same images.</div>
+              </div>
               <div className="market-note">Lead with plain-language title, real photos, city/region, and one direct price.</div>
               <div className="rounded-xl border p-4">
                 <div className="font-medium text-foreground">Recommended for classifieds</div>
@@ -967,7 +1133,7 @@ export default function CreateListingPage() {
               </div>
               <div className="rounded-xl border p-4">
                 <div className="font-medium text-foreground">Network</div>
-                <div className="mt-1">This publish flow still settles through {activeChain.name}, but that is now kept as context instead of the main story.</div>
+                <div className="mt-1">This publish flow still settles through the {publicNetworkLabel.toLowerCase()}, but the listing details, location, and recovery path stay front and center instead of the chain jargon.</div>
               </div>
             </CardContent>
           </Card>

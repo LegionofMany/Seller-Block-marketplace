@@ -30,6 +30,8 @@ import { type PublicUserProfileResponse, type UserProfile } from "@/lib/auth";
 import { invalidateSellerProfile, primeSellerProfile, useSellerProfile } from "@/lib/hooks/useSellerProfile";
 import { buildListingHref } from "@/lib/listings";
 import { type ListingSummary } from "@/lib/hooks/useListings";
+import { getProfileLocationFilter } from "@/lib/location";
+import { buildMarketplaceHref } from "@/lib/marketplace";
 
 const listingCreatedEvent = parseAbiItem(
   "event ListingCreated(bytes32 indexed id, address seller, uint8 saleType, address token, uint256 price, string metadataURI)"
@@ -156,7 +158,7 @@ type AdminTrustSummaryResponse = {
   history: TrustReviewHistoryItem[];
 };
 
-type AccountTab = "profile" | "follows" | "garage" | "dealer-garage";
+type AccountTab = "profile" | "watch" | "my-listings";
 
 function formatFilters(filters: SavedSearchFilters) {
   return Object.entries(filters)
@@ -286,6 +288,21 @@ function cleanSavedSearchDraft(draft: SavedSearchDraft) {
   };
 }
 
+function buildSavedSearchHref(filters: SavedSearchFilters) {
+  return buildMarketplaceHref({
+    ...(filters.q ? { q: filters.q } : {}),
+    ...(filters.category ? { category: filters.category } : {}),
+    ...(filters.subcategory ? { subcategory: filters.subcategory } : {}),
+    ...(filters.city ? { city: filters.city } : {}),
+    ...(filters.region ? { region: filters.region } : {}),
+    ...(filters.postalCode ? { postalCode: filters.postalCode } : {}),
+    ...(filters.minPrice ? { minPrice: filters.minPrice } : {}),
+    ...(filters.maxPrice ? { maxPrice: filters.maxPrice } : {}),
+    ...(filters.type ? { type: filters.type } : {}),
+    ...(filters.sort ? { sort: filters.sort } : {}),
+  });
+}
+
 export default function DashboardPage() {
   const { address } = useAccount();
   const publicClient = usePublicClient();
@@ -301,6 +318,7 @@ export default function DashboardPage() {
   const [displayName, setDisplayName] = React.useState("");
   const [bio, setBio] = React.useState("");
   const [avatarCid, setAvatarCid] = React.useState("");
+  const [phoneNumber, setPhoneNumber] = React.useState("");
   const [streetAddress1, setStreetAddress1] = React.useState("");
   const [streetAddress2, setStreetAddress2] = React.useState("");
   const [city, setCity] = React.useState("");
@@ -354,6 +372,8 @@ export default function DashboardPage() {
   const [verifiedSellers, setVerifiedSellers] = React.useState<PublicUserProfileResponse[]>([]);
   const [trustHistory, setTrustHistory] = React.useState<TrustReviewHistoryItem[]>([]);
   const [isLoadingTrustAdmin, setIsLoadingTrustAdmin] = React.useState(false);
+  const profileLocationFilter = React.useMemo(() => getProfileLocationFilter(auth.user), [auth.user]);
+  const watchBrowseHref = React.useMemo(() => buildMarketplaceHref(profileLocationFilter), [profileLocationFilter]);
 
   const envState = React.useMemo(() => {
     try {
@@ -376,6 +396,7 @@ export default function DashboardPage() {
     setDisplayName(auth.user?.displayName ?? "");
     setBio(auth.user?.bio ?? "");
     setAvatarCid(auth.user?.avatarCid ?? "");
+    setPhoneNumber(auth.user?.phoneNumber ?? "");
     setStreetAddress1(auth.user?.streetAddress1 ?? "");
     setStreetAddress2(auth.user?.streetAddress2 ?? "");
     setCity(auth.user?.city ?? "");
@@ -427,7 +448,7 @@ export default function DashboardPage() {
 
   React.useEffect(() => {
     const requestedTab = searchParams.get("tab");
-    const nextTab: AccountTab = requestedTab === "follows" || requestedTab === "garage" || requestedTab === "dealer-garage" ? requestedTab : "profile";
+    const nextTab: AccountTab = requestedTab === "watch" || requestedTab === "my-listings" ? requestedTab : "profile";
     setAccountTab((current) => (current === nextTab ? current : nextTab));
   }, [searchParams]);
 
@@ -623,11 +644,10 @@ export default function DashboardPage() {
   const accountTabs = React.useMemo(
     () => [
       { key: "profile" as const, label: "Profile", description: "Identity, address, and account settings", count: auth.user?.postalCode?.trim() ? auth.user.postalCode.trim() : auth.user?.email?.trim() || "Setup" },
-      { key: "follows" as const, label: "Follows", description: "Seller profiles you want to revisit", count: String(followedSellers.length) },
-      { key: "garage" as const, label: "Garage", description: "Favorite listings saved for later", count: String(favoriteListings.length) },
-      { key: "dealer-garage" as const, label: "Dealer Garage", description: "Listings connected to your seller wallet", count: Array.isArray(myListingIds) ? String(myListingIds.length) : "-" },
+      { key: "watch" as const, label: "Watch", description: "Followed sellers, saved ads, alerts, and search watches", count: String(followedSellers.length + favoriteListings.length + savedSearches.length + notificationUnreadCount) },
+      { key: "my-listings" as const, label: "My listings", description: "Ads connected to your current seller wallet", count: Array.isArray(myListingIds) ? String(myListingIds.length) : "-" },
     ],
-    [auth.user?.email, auth.user?.postalCode, favoriteListings.length, followedSellers.length, myListingIds]
+    [auth.user?.email, auth.user?.postalCode, favoriteListings.length, followedSellers.length, myListingIds, notificationUnreadCount, savedSearches.length]
   );
 
   const activeTabMeta = accountTabs.find((tab) => tab.key === accountTab) ?? accountTabs[0];
@@ -824,7 +844,7 @@ export default function DashboardPage() {
             <div className="market-section-title">Your account</div>
             <div className="space-y-2">
               <h1 className="text-2xl font-semibold tracking-tight text-slate-950 sm:text-4xl">Run your account like a local marketplace hub.</h1>
-              <p className="max-w-2xl text-[13px] leading-6 text-muted-foreground sm:text-base">Profile, follows, saved garage items, and dealer inventory now sit behind a clearer account shell. Wallet and owner utilities still exist, but they no longer compete with the main account flow.</p>
+              <p className="max-w-2xl text-[13px] leading-6 text-muted-foreground sm:text-base">Profile, watch activity, and your live ads now sit behind a clearer account shell. Followed sellers, favorites, alerts, and saved searches are grouped together instead of scattered across separate tabs.</p>
             </div>
           </div>
 
@@ -834,7 +854,7 @@ export default function DashboardPage() {
               <div className="mt-2 text-2xl font-semibold">{followedSellers.length}</div>
             </div>
             <div className="market-stat">
-              <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Garage saves</div>
+              <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Saved ads</div>
               <div className="mt-2 text-2xl font-semibold">{favoriteListings.length}</div>
             </div>
             <div className="market-stat">
@@ -842,7 +862,7 @@ export default function DashboardPage() {
               <div className="mt-2 text-2xl font-semibold">{notificationUnreadCount}</div>
             </div>
             <div className="market-stat">
-              <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Dealer garage</div>
+              <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">My listings</div>
               <div className="mt-2 text-2xl font-semibold">{Array.isArray(myListingIds) ? myListingIds.length : "—"}</div>
               <div className="mt-1 text-sm text-muted-foreground">Listings tied to your current seller wallet.</div>
             </div>
@@ -868,7 +888,7 @@ export default function DashboardPage() {
       </div>
 
       <div className="market-tab-affordance sm:hidden" aria-hidden="true">
-        Swipe to see Garage and Dealer Garage.
+        Swipe to see Watch and My listings.
       </div>
 
       <Card className="market-panel border-slate-200/80 bg-white/78">
@@ -878,17 +898,12 @@ export default function DashboardPage() {
             <div className="mt-1 text-sm text-muted-foreground">{activeTabMeta.description}</div>
           </div>
           <div className="flex flex-wrap gap-2">
-            {accountTab === "garage" ? (
+            {accountTab === "watch" ? (
               <Button asChild variant="outline" size="sm">
-                <Link href="/marketplace">Browse listings</Link>
+                <Link href="/marketplace">Browse marketplace</Link>
               </Button>
             ) : null}
-            {accountTab === "follows" ? (
-              <Button asChild variant="outline" size="sm">
-                <Link href="/marketplace">Find sellers</Link>
-              </Button>
-            ) : null}
-            {accountTab === "dealer-garage" ? (
+            {accountTab === "my-listings" ? (
               <Button asChild variant="outline" size="sm">
                 <Link href="/create">Create listing</Link>
               </Button>
@@ -900,7 +915,7 @@ export default function DashboardPage() {
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px] xl:gap-6">
         <div className="space-y-4 sm:space-y-6">
           {accountTab === "profile" ? (
-            <>
+            <React.Fragment>
               <Card className="market-panel">
                 <CardHeader>
                   <div className="market-section-title">Public profile</div>
@@ -1040,9 +1055,21 @@ export default function DashboardPage() {
                         </div>
                       </div>
                       {auth.user?.email ? (
+                        <div className="grid gap-4 sm:grid-cols-2">
+                          <div className="space-y-2">
+                            <Label>Email</Label>
+                            <Input value={auth.user.email} disabled />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>Phone number</Label>
+                            <Input value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} placeholder="+234 800 000 0000" />
+                          </div>
+                        </div>
+                      ) : null}
+                      {!auth.user?.email ? (
                         <div className="space-y-2">
-                          <Label>Email</Label>
-                          <Input value={auth.user.email} disabled />
+                          <Label>Phone number</Label>
+                          <Input value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} placeholder="+234 800 000 0000" />
                         </div>
                       ) : null}
                       <div className="space-y-2">
@@ -1088,6 +1115,7 @@ export default function DashboardPage() {
                               body: JSON.stringify({
                                 fullName,
                                 displayName,
+                                phoneNumber,
                                 streetAddress1,
                                 streetAddress2,
                                 city,
@@ -1585,431 +1613,467 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
               ) : null}
+            </React.Fragment>
+              ) : null}
+
+          {accountTab === "watch" ? (
+            <React.Fragment>
+              <Card className="market-panel">
+                <CardHeader>
+                  <div className="market-section-title">Watch center</div>
+                  <CardTitle>Watch activity</CardTitle>
+                  <CardDescription>Followed sellers, saved ads, saved searches, and alerts are grouped here so repeat browsing feels like one flow instead of four separate tools.</CardDescription>
+                </CardHeader>
+                <CardContent className="grid gap-3 p-4 pt-0 sm:grid-cols-2 sm:p-6 sm:pt-0 xl:grid-cols-4">
+                  <div className="market-stat bg-white/85">
+                    <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Followed sellers</div>
+                    <div className="mt-2 text-2xl font-semibold">{followedSellers.length}</div>
+                    <div className="mt-1 text-sm text-muted-foreground">Profiles you want to revisit first.</div>
+                  </div>
+                  <div className="market-stat bg-white/85">
+                    <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Saved ads</div>
+                    <div className="mt-2 text-2xl font-semibold">{favoriteListings.length}</div>
+                    <div className="mt-1 text-sm text-muted-foreground">Listings kept for comparison or follow-up.</div>
+                  </div>
+                  <div className="market-stat bg-white/85">
+                    <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Saved searches</div>
+                    <div className="mt-2 text-2xl font-semibold">{savedSearches.length}</div>
+                    <div className="mt-1 text-sm text-muted-foreground">Search watches that keep bringing inventory back.</div>
+                  </div>
+                  <div className="market-stat bg-white/85">
+                    <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Unread alerts</div>
+                    <div className="mt-2 text-2xl font-semibold">{notificationUnreadCount}</div>
+                    <div className="mt-1 text-sm text-muted-foreground">Signals worth checking before you browse again.</div>
+                  </div>
+                </CardContent>
+              </Card>
 
               <Card className="market-panel">
-        <CardHeader>
-          <div className="market-section-title">Discovery</div>
-          <CardTitle>Saved searches</CardTitle>
-          <CardDescription>Review, edit, and remove the alert searches you saved from the listings page.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3 p-4 pt-0 sm:p-6 sm:pt-0">
-          {!auth.isAuthenticated ? (
-            <div className="text-sm text-muted-foreground">Sign in to manage saved search alerts.</div>
-          ) : savedSearches.length === 0 ? (
-            <div className="text-sm text-muted-foreground">No saved searches yet.</div>
-          ) : (
-            savedSearches.map((item) => (
-              <div key={item.id} className="rounded-md border p-3 sm:p-4">
-                <div className="space-y-4">
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                    <div className="space-y-1">
-                      <div className="font-medium">{item.name}</div>
-                      <div className="text-xs text-muted-foreground">{formatFilters(item.filters)}</div>
-                      {item.email ? <div className="text-xs text-muted-foreground">Email: {item.email}</div> : null}
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          setEditingSavedSearchId(item.id);
-                          setSavedSearchDraft(toSavedSearchDraft(item));
-                        }}
-                      >
-                        Edit
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={async () => {
-                          try {
-                            await fetchJson(`/saved-searches/${item.id}`, { method: "DELETE" });
-                            setSavedSearches((current) => current.filter((entry) => entry.id !== item.id));
-                            if (editingSavedSearchId === item.id) {
-                              setEditingSavedSearchId(null);
-                              setSavedSearchDraft(null);
-                            }
-                            toast.success("Saved search removed");
-                          } catch (error: unknown) {
-                            toast.error(getErrorMessage(error, "Failed to remove saved search"));
-                          }
-                        }}
-                      >
-                        Delete
+                <CardHeader>
+                  <div className="market-section-title">Network</div>
+                  <CardTitle>Followed sellers</CardTitle>
+                  <CardDescription>People and seller pages you chose to keep in your repeat-buying circle.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3 p-4 pt-0 sm:p-6 sm:pt-0">
+                  {!auth.isAuthenticated ? (
+                    <div className="space-y-3 text-sm text-muted-foreground">
+                      <div>Sign in to manage the seller profiles you follow.</div>
+                      <Button asChild variant="outline" size="sm">
+                        <Link href="/sign-in">Sign in</Link>
                       </Button>
                     </div>
-                  </div>
-
-                  {editingSavedSearchId === item.id && savedSearchDraft ? (
-                    <div className="grid gap-3 rounded-md border bg-muted/20 p-3 sm:gap-4 sm:p-4 lg:grid-cols-3">
-                      <div className="space-y-2">
-                        <Label>Name</Label>
-                        <Input
-                          value={savedSearchDraft.name}
-                          onChange={(e) => setSavedSearchDraft((current) => (current ? { ...current, name: e.target.value } : current))}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Email</Label>
-                        <Input
-                          value={savedSearchDraft.email}
-                          onChange={(e) => setSavedSearchDraft((current) => (current ? { ...current, email: e.target.value } : current))}
-                          placeholder="name@example.com"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Keywords</Label>
-                        <Input
-                          value={savedSearchDraft.filters.q ?? ""}
-                          onChange={(e) => setSavedSearchDraft((current) => current ? { ...current, filters: { ...current.filters, q: e.target.value } } : current)}
-                          placeholder="Search title or description"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Category</Label>
-                        <select
-                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                          value={savedSearchDraft.filters.category ?? ""}
-                          onChange={(e) => setSavedSearchDraft((current) => current ? {
-                            ...current,
-                            filters: {
-                              ...current.filters,
-                              category: e.target.value || undefined,
-                              subcategory: undefined,
-                            },
-                          } : current)}
-                        >
-                          <option value="">All</option>
-                          {Object.keys(CATEGORY_TREE).map((category) => (
-                            <option key={category} value={category}>{category}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Subcategory</Label>
-                        <select
-                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                          value={savedSearchDraft.filters.subcategory ?? ""}
-                          onChange={(e) => setSavedSearchDraft((current) => current ? { ...current, filters: { ...current.filters, subcategory: e.target.value || undefined } } : current)}
-                          disabled={!savedSearchDraft.filters.category}
-                        >
-                          <option value="">All</option>
-                          {activeSavedSearchSubcategories.map((subcategory) => (
-                            <option key={subcategory} value={subcategory}>{subcategory}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Sale type</Label>
-                        <select
-                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                          value={savedSearchDraft.filters.type ?? ""}
-                          onChange={(e) => setSavedSearchDraft((current) => current ? { ...current, filters: { ...current.filters, type: (e.target.value || undefined) as SavedSearchFilters["type"] } } : current)}
-                        >
-                          <option value="">All</option>
-                          <option value="fixed">Fixed</option>
-                          <option value="auction">Auction</option>
-                          <option value="raffle">Raffle</option>
-                        </select>
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Sort</Label>
-                        <select
-                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                          value={savedSearchDraft.filters.sort ?? "newest"}
-                          onChange={(e) => setSavedSearchDraft((current) => current ? { ...current, filters: { ...current.filters, sort: e.target.value as SavedSearchFilters["sort"] } } : current)}
-                        >
-                          <option value="newest">Newest</option>
-                          <option value="price_asc">Price low to high</option>
-                          <option value="price_desc">Price high to low</option>
-                        </select>
-                      </div>
-                      <div className="space-y-2">
-                        <Label>City</Label>
-                        <Input
-                          value={savedSearchDraft.filters.city ?? ""}
-                          onChange={(e) => setSavedSearchDraft((current) => current ? { ...current, filters: { ...current.filters, city: e.target.value } } : current)}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Region/State</Label>
-                        <Input
-                          value={savedSearchDraft.filters.region ?? ""}
-                          onChange={(e) => setSavedSearchDraft((current) => current ? { ...current, filters: { ...current.filters, region: e.target.value } } : current)}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Postal code</Label>
-                        <Input
-                          value={savedSearchDraft.filters.postalCode ?? ""}
-                          onChange={(e) => setSavedSearchDraft((current) => current ? { ...current, filters: { ...current.filters, postalCode: e.target.value } } : current)}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Min price</Label>
-                        <Input
-                          value={savedSearchDraft.filters.minPrice ?? ""}
-                          onChange={(e) => setSavedSearchDraft((current) => current ? { ...current, filters: { ...current.filters, minPrice: e.target.value } } : current)}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Max price</Label>
-                        <Input
-                          value={savedSearchDraft.filters.maxPrice ?? ""}
-                          onChange={(e) => setSavedSearchDraft((current) => current ? { ...current, filters: { ...current.filters, maxPrice: e.target.value } } : current)}
-                        />
-                      </div>
-                      <div className="flex flex-wrap items-end gap-2 lg:col-span-3">
-                        <Button
-                          type="button"
-                          disabled={isSavingSavedSearch}
-                          onClick={async () => {
-                            if (!savedSearchDraft) return;
-
-                            const cleaned = cleanSavedSearchDraft(savedSearchDraft);
-                            if (!cleaned.name) {
-                              toast.error("Saved search name is required");
-                              return;
-                            }
-                            if (Object.keys(cleaned.filters).length === 0) {
-                              toast.error("Add at least one saved-search filter");
-                              return;
-                            }
-
-                            try {
-                              setIsSavingSavedSearch(true);
-                              const res = await fetchJson<{ item: SavedSearch }>(`/saved-searches/${item.id}`, {
-                                method: "PUT",
-                                headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify({
-                                  name: cleaned.name,
-                                  email: cleaned.email,
-                                  filters: cleaned.filters,
-                                }),
-                              });
-                              setSavedSearches((current) => current.map((entry) => (entry.id === item.id ? res.item : entry)));
-                              setEditingSavedSearchId(null);
-                              setSavedSearchDraft(null);
-                              toast.success("Saved search updated");
-                            } catch (error: unknown) {
-                              toast.error(getErrorMessage(error, "Failed to update saved search"));
-                            } finally {
-                              setIsSavingSavedSearch(false);
-                            }
-                          }}
-                        >
-                          Save changes
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          disabled={isSavingSavedSearch}
-                          onClick={() => {
-                            setEditingSavedSearchId(null);
-                            setSavedSearchDraft(null);
-                          }}
-                        >
-                          Cancel
-                        </Button>
-                      </div>
+                  ) : followedError ? (
+                    <div className="text-sm text-muted-foreground">{followedError}</div>
+                  ) : followedSellers.length === 0 ? (
+                    <div className="space-y-3 text-sm text-muted-foreground">
+                      <div>You are not following any sellers yet.</div>
+                      <Button asChild variant="outline" size="sm">
+                        <Link href={watchBrowseHref}>Browse marketplace</Link>
+                      </Button>
                     </div>
-                  ) : null}
-                </div>
-              </div>
-            ))
-          )}
-        </CardContent>
-      </Card>
+                  ) : (
+                    followedSellers.map((sellerAddress) => (
+                      <Link key={sellerAddress} href={`/seller/${sellerAddress}`} className="flex items-center justify-between rounded-2xl border px-4 py-3 text-sm transition-colors hover:bg-accent/30">
+                        <div>
+                          <div className="font-medium">Seller profile</div>
+                          <div className="text-xs text-muted-foreground">{sellerAddress}</div>
+                        </div>
+                        <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Open</div>
+                      </Link>
+                    ))
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card className="market-panel">
+                <CardHeader>
+                  <div className="market-section-title">Saved inventory</div>
+                  <CardTitle>Favorite ads</CardTitle>
+                  <CardDescription>Listings you saved for later comparison, follow-up, or local pickup planning.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3 p-4 pt-0 sm:p-6 sm:pt-0">
+                  {!auth.isAuthenticated ? (
+                    <div className="space-y-3 text-sm text-muted-foreground">
+                      <div>Sign in to keep favorite listings in your watch flow.</div>
+                      <Button asChild variant="outline" size="sm">
+                        <Link href="/sign-in?mode=register">Create account</Link>
+                      </Button>
+                    </div>
+                  ) : favoriteError ? (
+                    <div className="text-sm text-muted-foreground">{favoriteError}</div>
+                  ) : favoriteListings.length === 0 ? (
+                    <div className="space-y-3 text-sm text-muted-foreground">
+                      <div>Your saved-ads list is empty. Save a listing from any detail page to see it here.</div>
+                      <Button asChild variant="outline" size="sm">
+                        <Link href={watchBrowseHref}>Browse listings</Link>
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                      {favoriteListings.map((listing) => (
+                        <ListingCard key={`${listing.chainKey}-${listing.id}`} row={listing} />
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card className="market-panel">
+                <CardHeader>
+                  <div className="market-section-title">Discovery</div>
+                  <CardTitle>Saved searches</CardTitle>
+                  <CardDescription>Review, edit, and remove the alert searches you saved from the listings page.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3 p-4 pt-0 sm:p-6 sm:pt-0">
+                  {!auth.isAuthenticated ? (
+                    <div className="text-sm text-muted-foreground">Sign in to manage saved search alerts.</div>
+                  ) : savedSearches.length === 0 ? (
+                    <div className="text-sm text-muted-foreground">No saved searches yet.</div>
+                  ) : (
+                    savedSearches.map((item) => (
+                      <div key={item.id} className="rounded-md border p-3 sm:p-4">
+                        <div className="space-y-4">
+                          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                            <div className="space-y-1">
+                              <div className="font-medium">{item.name}</div>
+                              <div className="text-xs text-muted-foreground">{formatFilters(item.filters)}</div>
+                              {item.email ? <div className="text-xs text-muted-foreground">Email: {item.email}</div> : null}
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                              <Button asChild type="button" variant="outline" size="sm">
+                                <Link href={buildSavedSearchHref(item.filters)}>Open in marketplace</Link>
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  setEditingSavedSearchId(item.id);
+                                  setSavedSearchDraft(toSavedSearchDraft(item));
+                                }}
+                              >
+                                Edit
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={async () => {
+                                  try {
+                                    await fetchJson(`/saved-searches/${item.id}`, { method: "DELETE" });
+                                    setSavedSearches((current) => current.filter((entry) => entry.id !== item.id));
+                                    if (editingSavedSearchId === item.id) {
+                                      setEditingSavedSearchId(null);
+                                      setSavedSearchDraft(null);
+                                    }
+                                    toast.success("Saved search removed");
+                                  } catch (error: unknown) {
+                                    toast.error(getErrorMessage(error, "Failed to remove saved search"));
+                                  }
+                                }}
+                              >
+                                Delete
+                              </Button>
+                            </div>
+                          </div>
+
+                          {editingSavedSearchId === item.id && savedSearchDraft ? (
+                            <div className="grid gap-3 rounded-md border bg-muted/20 p-3 sm:gap-4 sm:p-4 lg:grid-cols-3">
+                              <div className="space-y-2">
+                                <Label>Name</Label>
+                                <Input
+                                  value={savedSearchDraft.name}
+                                  onChange={(e) => setSavedSearchDraft((current) => (current ? { ...current, name: e.target.value } : current))}
+                                />
+                              </div>
+                              <div className="space-y-2">
+                                <Label>Email</Label>
+                                <Input
+                                  value={savedSearchDraft.email}
+                                  onChange={(e) => setSavedSearchDraft((current) => (current ? { ...current, email: e.target.value } : current))}
+                                  placeholder="name@example.com"
+                                />
+                              </div>
+                              <div className="space-y-2">
+                                <Label>Keywords</Label>
+                                <Input
+                                  value={savedSearchDraft.filters.q ?? ""}
+                                  onChange={(e) => setSavedSearchDraft((current) => current ? { ...current, filters: { ...current.filters, q: e.target.value } } : current)}
+                                  placeholder="Search title or description"
+                                />
+                              </div>
+                              <div className="space-y-2">
+                                <Label>Category</Label>
+                                <select
+                                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                                  value={savedSearchDraft.filters.category ?? ""}
+                                  onChange={(e) => setSavedSearchDraft((current) => current ? {
+                                    ...current,
+                                    filters: {
+                                      ...current.filters,
+                                      category: e.target.value || undefined,
+                                      subcategory: undefined,
+                                    },
+                                  } : current)}
+                                >
+                                  <option value="">All</option>
+                                  {Object.keys(CATEGORY_TREE).map((category) => (
+                                    <option key={category} value={category}>{category}</option>
+                                  ))}
+                                </select>
+                              </div>
+                              <div className="space-y-2">
+                                <Label>Subcategory</Label>
+                                <select
+                                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                                  value={savedSearchDraft.filters.subcategory ?? ""}
+                                  onChange={(e) => setSavedSearchDraft((current) => current ? { ...current, filters: { ...current.filters, subcategory: e.target.value || undefined } } : current)}
+                                  disabled={!savedSearchDraft.filters.category}
+                                >
+                                  <option value="">All</option>
+                                  {activeSavedSearchSubcategories.map((subcategory) => (
+                                    <option key={subcategory} value={subcategory}>{subcategory}</option>
+                                  ))}
+                                </select>
+                              </div>
+                              <div className="space-y-2">
+                                <Label>Sale type</Label>
+                                <select
+                                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                                  value={savedSearchDraft.filters.type ?? ""}
+                                  onChange={(e) => setSavedSearchDraft((current) => current ? { ...current, filters: { ...current.filters, type: (e.target.value || undefined) as SavedSearchFilters["type"] } } : current)}
+                                >
+                                  <option value="">All</option>
+                                  <option value="fixed">Fixed</option>
+                                  <option value="auction">Auction</option>
+                                  <option value="raffle">Raffle</option>
+                                </select>
+                              </div>
+                              <div className="space-y-2">
+                                <Label>Sort</Label>
+                                <select
+                                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                                  value={savedSearchDraft.filters.sort ?? "newest"}
+                                  onChange={(e) => setSavedSearchDraft((current) => current ? { ...current, filters: { ...current.filters, sort: e.target.value as SavedSearchFilters["sort"] } } : current)}
+                                >
+                                  <option value="newest">Newest</option>
+                                  <option value="price_asc">Price low to high</option>
+                                  <option value="price_desc">Price high to low</option>
+                                </select>
+                              </div>
+                              <div className="space-y-2">
+                                <Label>City</Label>
+                                <Input
+                                  value={savedSearchDraft.filters.city ?? ""}
+                                  onChange={(e) => setSavedSearchDraft((current) => current ? { ...current, filters: { ...current.filters, city: e.target.value } } : current)}
+                                />
+                              </div>
+                              <div className="space-y-2">
+                                <Label>Region/State</Label>
+                                <Input
+                                  value={savedSearchDraft.filters.region ?? ""}
+                                  onChange={(e) => setSavedSearchDraft((current) => current ? { ...current, filters: { ...current.filters, region: e.target.value } } : current)}
+                                />
+                              </div>
+                              <div className="space-y-2">
+                                <Label>Postal code</Label>
+                                <Input
+                                  value={savedSearchDraft.filters.postalCode ?? ""}
+                                  onChange={(e) => setSavedSearchDraft((current) => current ? { ...current, filters: { ...current.filters, postalCode: e.target.value } } : current)}
+                                />
+                              </div>
+                              <div className="space-y-2">
+                                <Label>Min price</Label>
+                                <Input
+                                  value={savedSearchDraft.filters.minPrice ?? ""}
+                                  onChange={(e) => setSavedSearchDraft((current) => current ? { ...current, filters: { ...current.filters, minPrice: e.target.value } } : current)}
+                                />
+                              </div>
+                              <div className="space-y-2">
+                                <Label>Max price</Label>
+                                <Input
+                                  value={savedSearchDraft.filters.maxPrice ?? ""}
+                                  onChange={(e) => setSavedSearchDraft((current) => current ? { ...current, filters: { ...current.filters, maxPrice: e.target.value } } : current)}
+                                />
+                              </div>
+                              <div className="flex flex-wrap items-end gap-2 lg:col-span-3">
+                                <Button
+                                  type="button"
+                                  disabled={isSavingSavedSearch}
+                                  onClick={async () => {
+                                    if (!savedSearchDraft) return;
+
+                                    const cleaned = cleanSavedSearchDraft(savedSearchDraft);
+                                    if (!cleaned.name) {
+                                      toast.error("Saved search name is required");
+                                      return;
+                                    }
+                                    if (Object.keys(cleaned.filters).length === 0) {
+                                      toast.error("Add at least one saved-search filter");
+                                      return;
+                                    }
+
+                                    try {
+                                      setIsSavingSavedSearch(true);
+                                      const res = await fetchJson<{ item: SavedSearch }>(`/saved-searches/${item.id}`, {
+                                        method: "PUT",
+                                        headers: { "Content-Type": "application/json" },
+                                        body: JSON.stringify({
+                                          name: cleaned.name,
+                                          email: cleaned.email,
+                                          filters: cleaned.filters,
+                                        }),
+                                      });
+                                      setSavedSearches((current) => current.map((entry) => (entry.id === item.id ? res.item : entry)));
+                                      setEditingSavedSearchId(null);
+                                      setSavedSearchDraft(null);
+                                      toast.success("Saved search updated");
+                                    } catch (error: unknown) {
+                                      toast.error(getErrorMessage(error, "Failed to update saved search"));
+                                    } finally {
+                                      setIsSavingSavedSearch(false);
+                                    }
+                                  }}
+                                >
+                                  Save changes
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  disabled={isSavingSavedSearch}
+                                  onClick={() => {
+                                    setEditingSavedSearchId(null);
+                                    setSavedSearchDraft(null);
+                                  }}
+                                >
+                                  Cancel
+                                </Button>
+                              </div>
+                            </div>
+                          ) : null}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </CardContent>
+              </Card>
 
               <Card id="notifications" className="market-panel">
-        <CardHeader>
-          <div className="market-section-title">Alerts</div>
-          <CardTitle>Notifications</CardTitle>
-          <CardDescription>In-app alerts for saved-search matches and marketplace activity.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3 p-4 pt-0 sm:p-6 sm:pt-0">
-          <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
-            <div>Unread: {notificationUnreadCount}</div>
-            {auth.isAuthenticated && notificationUnreadCount > 0 ? (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={async () => {
-                  try {
-                    await fetchJson("/notifications/read-all", { method: "POST" });
-                    setNotifications((current) => current.map((item) => ({ ...item, readAt: item.readAt ?? Date.now() })));
-                    setNotificationUnreadCount(0);
-                  } catch (error: unknown) {
-                    toast.error(getErrorMessage(error, "Failed to mark notifications as read"));
-                  }
-                }}
-              >
-                Mark all read
-              </Button>
-            ) : null}
-          </div>
-
-          {!auth.isAuthenticated ? (
-            <div className="text-sm text-muted-foreground">Sign in to view alerts.</div>
-          ) : notifications.length === 0 ? (
-            <div className="text-sm text-muted-foreground">No notifications yet.</div>
-          ) : (
-            notifications.map((item) => {
-              const listingId = typeof item.payload.listingId === "string" ? item.payload.listingId : null;
-              const listingChainKey = typeof item.payload.chainKey === "string" ? item.payload.chainKey : null;
-              return (
-                <div key={item.id} className={item.readAt ? "rounded-md border p-3 sm:p-4" : "rounded-md border border-primary/40 bg-primary/5 p-3 sm:p-4"}>
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                    <div className="space-y-1">
-                      <div className="font-medium">{item.title}</div>
-                      <div className="text-sm text-muted-foreground">{item.body}</div>
-                      <div className="text-xs text-muted-foreground">{formatDateTime(item.createdAt)}</div>
-                      {listingId ? <Link className="text-sm underline" href={buildListingHref(listingId, listingChainKey)}>Open listing</Link> : null}
-                    </div>
-                    {!item.readAt ? (
+                <CardHeader>
+                  <div className="market-section-title">Alerts</div>
+                  <CardTitle>Notifications</CardTitle>
+                  <CardDescription>In-app alerts for saved-search matches and marketplace activity.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3 p-4 pt-0 sm:p-6 sm:pt-0">
+                  <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+                    <div>Unread: {notificationUnreadCount}</div>
+                    {auth.isAuthenticated && notificationUnreadCount > 0 ? (
                       <Button
                         type="button"
                         variant="outline"
                         size="sm"
                         onClick={async () => {
                           try {
-                            await fetchJson(`/notifications/${item.id}/read`, { method: "POST" });
-                            setNotifications((current) => current.map((entry) => (entry.id === item.id ? { ...entry, readAt: Date.now() } : entry)));
-                            setNotificationUnreadCount((current) => Math.max(0, current - 1));
+                            await fetchJson("/notifications/read-all", { method: "POST" });
+                            setNotifications((current) => current.map((item) => ({ ...item, readAt: item.readAt ?? Date.now() })));
+                            setNotificationUnreadCount(0);
                           } catch (error: unknown) {
-                            toast.error(getErrorMessage(error, "Failed to mark notification as read"));
+                            toast.error(getErrorMessage(error, "Failed to mark notifications as read"));
                           }
                         }}
                       >
-                        Mark read
+                        Mark all read
                       </Button>
                     ) : null}
                   </div>
-                </div>
-              );
-            })
-          )}
-        </CardContent>
-      </Card>
 
-            </>
+                  {!auth.isAuthenticated ? (
+                    <div className="text-sm text-muted-foreground">Sign in to keep saved-search alerts and marketplace updates in one watch inbox.</div>
+                  ) : notifications.length === 0 ? (
+                    <div className="text-sm text-muted-foreground">Your alert inbox is clear for now. New saved-search matches and marketplace updates will appear here.</div>
+                  ) : (
+                    notifications.map((item) => {
+                      const listingId = typeof item.payload.listingId === "string" ? item.payload.listingId : null;
+                      const listingChainKey = typeof item.payload.chainKey === "string" ? item.payload.chainKey : null;
+                      const marketplaceHref = typeof item.payload.marketplaceHref === "string" ? item.payload.marketplaceHref : null;
+                      return (
+                        <div key={item.id} className={item.readAt ? "rounded-md border p-3 sm:p-4" : "rounded-md border border-primary/40 bg-primary/5 p-3 sm:p-4"}>
+                          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                            <div className="space-y-1">
+                              <div className="font-medium">{item.title}</div>
+                              <div className="text-sm text-muted-foreground">{item.body}</div>
+                              <div className="text-xs text-muted-foreground">{formatDateTime(item.createdAt)}</div>
+                              <div className="flex flex-wrap gap-3 pt-1">
+                                {listingId ? <Link className="text-sm underline" href={buildListingHref(listingId, listingChainKey)}>Open listing</Link> : null}
+                                {marketplaceHref ? <Link className="text-sm underline" href={marketplaceHref}>Open matching results</Link> : null}
+                              </div>
+                            </div>
+                            {!item.readAt ? (
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={async () => {
+                                  try {
+                                    await fetchJson(`/notifications/${item.id}/read`, { method: "POST" });
+                                    setNotifications((current) => current.map((entry) => (entry.id === item.id ? { ...entry, readAt: Date.now() } : entry)));
+                                    setNotificationUnreadCount((current) => Math.max(0, current - 1));
+                                  } catch (error: unknown) {
+                                    toast.error(getErrorMessage(error, "Failed to mark notification as read"));
+                                  }
+                                }}
+                              >
+                                Mark read
+                              </Button>
+                            ) : null}
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </CardContent>
+              </Card>
+            </React.Fragment>
           ) : null}
 
-          {accountTab === "follows" ? (
+          {accountTab === "my-listings" ? (
             <Card className="market-panel">
               <CardHeader>
-                <div className="market-section-title">Network</div>
-                <CardTitle>Follows</CardTitle>
-                <CardDescription>People and seller pages you chose to keep in your repeat-buying circle.</CardDescription>
+                <div className="market-section-title">Listings</div>
+                <CardTitle>My listings</CardTitle>
+                <CardDescription>Listings you created, surfaced in a simpler classifieds-oriented seller inventory view.</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-3 p-4 pt-0 sm:p-6 sm:pt-0">
-                {!auth.isAuthenticated ? (
-                  <div className="space-y-3 text-sm text-muted-foreground">
-                    <div>Sign in to manage the seller profiles you follow.</div>
-                    <Button asChild variant="outline" size="sm">
-                      <Link href="/sign-in">Sign in</Link>
-                    </Button>
+              <CardContent className="p-4 pt-0 sm:p-6 sm:pt-0">
+                {myListingIds === null || myListings === null ? (
+                  <div className="space-y-2">
+                    <Skeleton className="h-4 w-64" />
+                    <Skeleton className="h-4 w-56" />
+                    <Skeleton className="h-4 w-72" />
                   </div>
-                ) : followedError ? (
-                  <div className="text-sm text-muted-foreground">{followedError}</div>
-                ) : followedSellers.length === 0 ? (
+                ) : myListingIds.length === 0 ? (
                   <div className="space-y-3 text-sm text-muted-foreground">
-                    <div>You are not following any sellers yet.</div>
+                    <div>No listings found.</div>
                     <Button asChild variant="outline" size="sm">
-                      <Link href="/marketplace">Browse marketplace</Link>
+                      <Link href="/create">Create your first listing</Link>
                     </Button>
                   </div>
                 ) : (
-                  followedSellers.map((sellerAddress) => (
-                    <Link key={sellerAddress} href={`/seller/${sellerAddress}`} className="flex items-center justify-between rounded-2xl border px-4 py-3 text-sm transition-colors hover:bg-accent/30">
-                      <div>
-                        <div className="font-medium">Seller profile</div>
-                        <div className="text-xs text-muted-foreground">{sellerAddress}</div>
-                      </div>
-                      <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Open</div>
-                    </Link>
-                  ))
-                )}
-              </CardContent>
-            </Card>
-          ) : null}
-
-          {accountTab === "garage" ? (
-            <Card className="market-panel">
-              <CardHeader>
-                <div className="market-section-title">Saved inventory</div>
-                <CardTitle>Garage</CardTitle>
-                <CardDescription>Listings you saved for later comparison, follow-up, or local pickup planning.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3 p-4 pt-0 sm:p-6 sm:pt-0">
-                {!auth.isAuthenticated ? (
-                  <div className="space-y-3 text-sm text-muted-foreground">
-                    <div>Sign in to keep favorite listings in your garage.</div>
-                    <Button asChild variant="outline" size="sm">
-                      <Link href="/sign-in?mode=register">Create account</Link>
-                    </Button>
-                  </div>
-                ) : favoriteError ? (
-                  <div className="text-sm text-muted-foreground">{favoriteError}</div>
-                ) : favoriteListings.length === 0 ? (
-                  <div className="space-y-3 text-sm text-muted-foreground">
-                    <div>Your garage is empty. Save a listing from any detail page to see it here.</div>
-                    <Button asChild variant="outline" size="sm">
-                      <Link href="/marketplace">Browse listings</Link>
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-                    {favoriteListings.map((listing) => (
-                      <ListingCard key={`${listing.chainKey}-${listing.id}`} row={listing} />
+                  <div className="space-y-2">
+                    {(myListings ?? []).map((row) => (
+                      <Link key={row.id} href={buildListingHref(String(row.id), defaultChainKey)} className="block rounded-2xl border px-3 py-3 text-sm transition-colors hover:bg-accent/30 sm:px-4">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="break-all font-medium">{row.id}</div>
+                          <div className="text-xs text-muted-foreground">{statusLabel(row.status)}</div>
+                        </div>
+                        {row.buyer && row.buyer !== zeroAddress ? (
+                          <div className="mt-1 text-xs text-muted-foreground">Buyer: {shortenHex(row.buyer)}</div>
+                        ) : null}
+                      </Link>
                     ))}
                   </div>
                 )}
               </CardContent>
             </Card>
-          ) : null}
-
-          {accountTab === "dealer-garage" ? (
-            <Card className="market-panel">
-        <CardHeader>
-          <div className="market-section-title">Listings</div>
-          <CardTitle>Dealer Garage</CardTitle>
-          <CardDescription>Listings you created, surfaced in a simple buyer and seller inventory view.</CardDescription>
-        </CardHeader>
-        <CardContent className="p-4 pt-0 sm:p-6 sm:pt-0">
-          {myListingIds === null || myListings === null ? (
-            <div className="space-y-2">
-              <Skeleton className="h-4 w-64" />
-              <Skeleton className="h-4 w-56" />
-              <Skeleton className="h-4 w-72" />
-            </div>
-          ) : myListingIds.length === 0 ? (
-            <div className="space-y-3 text-sm text-muted-foreground">
-              <div>No listings found.</div>
-              <Button asChild variant="outline" size="sm">
-                <Link href="/create">Create your first listing</Link>
-              </Button>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {(myListings ?? []).map((row) => (
-                <Link key={row.id} href={buildListingHref(String(row.id), defaultChainKey)} className="block rounded-2xl border px-3 py-3 text-sm transition-colors hover:bg-accent/30 sm:px-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="break-all font-medium">{row.id}</div>
-                    <div className="text-xs text-muted-foreground">{statusLabel(row.status)}</div>
-                  </div>
-                  {row.buyer && row.buyer !== zeroAddress ? (
-                    <div className="mt-1 text-xs text-muted-foreground">Buyer: {shortenHex(row.buyer)}</div>
-                  ) : null}
-                </Link>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
           ) : null}
         </div>
 

@@ -179,7 +179,7 @@ export default function SellerListingsPage({ params }: { params: Promise<{ addre
         } catch (e) {
           if (isRateLimitError(e)) {
             throw new Error(
-              "RPC rate limited (429). Configure a higher-limit RPC in NEXT_PUBLIC_CHAIN_CONFIG_JSON, or update the legacy NEXT_PUBLIC_SEPOLIA_RPC_URL / NEXT_PUBLIC_SEPOLIA_RPC_FALLBACK_URL values, and restart the dev server."
+              "Marketplace activity is temporarily rate limited. Refresh in a moment and try again."
             );
           }
           throw e;
@@ -351,7 +351,7 @@ export default function SellerListingsPage({ params }: { params: Promise<{ addre
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-2">
-        <h1 className="text-2xl font-semibold tracking-tight">Seller</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Seller profile</h1>
         <p className="text-sm text-muted-foreground break-all">{seller ? seller : address}</p>
       </div>
 
@@ -415,13 +415,16 @@ export default function SellerListingsPage({ params }: { params: Promise<{ addre
 
       {error ? (
         <Card>
-          <CardContent className="p-6 text-sm text-destructive">{error}</CardContent>
+          <CardContent className="p-6 space-y-2">
+            <div className="text-sm font-semibold text-destructive">Seller activity could not be loaded</div>
+            <div className="text-sm text-muted-foreground break-words">{error}</div>
+          </CardContent>
         </Card>
       ) : null}
 
       {!isLoading && !error && listings.length === 0 ? (
         <Card>
-          <CardContent className="p-6 text-sm text-muted-foreground">No listings found for this seller.</CardContent>
+          <CardContent className="p-6 text-sm text-muted-foreground">This seller does not have any active listings right now. Check back later or return to the marketplace to browse other ads.</CardContent>
         </Card>
       ) : null}
 

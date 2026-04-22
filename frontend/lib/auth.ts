@@ -5,6 +5,7 @@ export type UserProfile = {
   bio?: string | null;
   avatarCid?: string | null;
   email?: string | null;
+  phoneNumber?: string | null;
   emailVerifiedAt?: number | null;
   sellerVerifiedAt?: number | null;
   sellerVerifiedBy?: string | null;

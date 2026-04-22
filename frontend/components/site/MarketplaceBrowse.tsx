@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useAccount } from "wagmi";
 import { toast } from "sonner";
 
@@ -14,30 +15,96 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { getBlockedSellers } from "@/lib/blocks";
 import { CATEGORY_TREE, subcategoriesFor } from "@/lib/categories";
 import { getEnv } from "@/lib/env";
+import { formatLocationLabel, getProfileLocationFilter } from "@/lib/location";
 import { fetchJson, type ApiError } from "@/lib/api";
 import { useListings } from "@/lib/hooks/useListings";
 
+function normalizeSearchValue(value: string | null) {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : "";
+}
+
+function parseSort(value: string | null): "newest" | "price_asc" | "price_desc" {
+  return value === "price_asc" || value === "price_desc" ? value : "newest";
+}
+
+function parseSaleType(value: string | null): "" | "fixed" | "auction" | "raffle" {
+  return value === "fixed" || value === "auction" || value === "raffle" ? value : "";
+}
+
 export function MarketplaceBrowse() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { address } = useAccount();
   const auth = useAuth();
   const env = getEnv();
 
-  const [q, setQ] = React.useState("");
-  const [category, setCategory] = React.useState("");
-  const [subcategory, setSubcategory] = React.useState("");
-  const [city, setCity] = React.useState("");
-  const [region, setRegion] = React.useState("");
-  const [postalCode, setPostalCode] = React.useState("");
-  const [minPrice, setMinPrice] = React.useState("");
-  const [maxPrice, setMaxPrice] = React.useState("");
-  const [type, setType] = React.useState<"" | "fixed" | "auction" | "raffle">("");
-  const [sort, setSort] = React.useState<"newest" | "price_asc" | "price_desc">("newest");
+  const [q, setQ] = React.useState(() => normalizeSearchValue(searchParams.get("q")));
+  const [category, setCategory] = React.useState(() => normalizeSearchValue(searchParams.get("category")));
+  const [subcategory, setSubcategory] = React.useState(() => normalizeSearchValue(searchParams.get("subcategory")));
+  const [city, setCity] = React.useState(() => normalizeSearchValue(searchParams.get("city")));
+  const [region, setRegion] = React.useState(() => normalizeSearchValue(searchParams.get("region")));
+  const [postalCode, setPostalCode] = React.useState(() => normalizeSearchValue(searchParams.get("postalCode")));
+  const [minPrice, setMinPrice] = React.useState(() => normalizeSearchValue(searchParams.get("minPrice")));
+  const [maxPrice, setMaxPrice] = React.useState(() => normalizeSearchValue(searchParams.get("maxPrice")));
+  const [type, setType] = React.useState<"" | "fixed" | "auction" | "raffle">(() => parseSaleType(searchParams.get("type")));
+  const [sort, setSort] = React.useState<"newest" | "price_asc" | "price_desc">(() => parseSort(searchParams.get("sort")));
 
-  const [offset, setOffset] = React.useState(0);
+  const [offset, setOffset] = React.useState(() => {
+    const raw = Number.parseInt(searchParams.get("offset") ?? "0", 10);
+    return Number.isFinite(raw) && raw > 0 ? raw : 0;
+  });
   const [savedSearchName, setSavedSearchName] = React.useState("");
   const [savedSearchEmail, setSavedSearchEmail] = React.useState("");
   const [isSavingSearch, setIsSavingSearch] = React.useState(false);
   const limit = 24;
+  const savedLocation = React.useMemo(() => getProfileLocationFilter(auth.user), [auth.user]);
+  const savedLocationLabel = React.useMemo(() => formatLocationLabel(savedLocation), [savedLocation]);
+
+  React.useEffect(() => {
+    setQ(normalizeSearchValue(searchParams.get("q")));
+    setCategory(normalizeSearchValue(searchParams.get("category")));
+    setSubcategory(normalizeSearchValue(searchParams.get("subcategory")));
+    setCity(normalizeSearchValue(searchParams.get("city")));
+    setRegion(normalizeSearchValue(searchParams.get("region")));
+    setPostalCode(normalizeSearchValue(searchParams.get("postalCode")));
+    setMinPrice(normalizeSearchValue(searchParams.get("minPrice")));
+    setMaxPrice(normalizeSearchValue(searchParams.get("maxPrice")));
+    setType(parseSaleType(searchParams.get("type")));
+    setSort(parseSort(searchParams.get("sort")));
+    const nextOffset = Number.parseInt(searchParams.get("offset") ?? "0", 10);
+    setOffset(Number.isFinite(nextOffset) && nextOffset > 0 ? nextOffset : 0);
+  }, [searchParams]);
+
+  const syncUrl = React.useCallback((next: {
+    q?: string;
+    category?: string;
+    subcategory?: string;
+    city?: string;
+    region?: string;
+    postalCode?: string;
+    minPrice?: string;
+    maxPrice?: string;
+    type?: "" | "fixed" | "auction" | "raffle";
+    sort?: "newest" | "price_asc" | "price_desc";
+    offset?: number;
+  }) => {
+    const sp = new URLSearchParams();
+    if (next.q?.trim()) sp.set("q", next.q.trim());
+    if (next.category?.trim()) sp.set("category", next.category.trim());
+    if (next.subcategory?.trim()) sp.set("subcategory", next.subcategory.trim());
+    if (next.city?.trim()) sp.set("city", next.city.trim());
+    if (next.region?.trim()) sp.set("region", next.region.trim());
+    if (next.postalCode?.trim()) sp.set("postalCode", next.postalCode.trim());
+    if (next.minPrice?.trim()) sp.set("minPrice", next.minPrice.trim());
+    if (next.maxPrice?.trim()) sp.set("maxPrice", next.maxPrice.trim());
+    if (next.type) sp.set("type", next.type);
+    if (next.sort && next.sort !== "newest") sp.set("sort", next.sort);
+    if ((next.offset ?? 0) > 0) sp.set("offset", String(next.offset));
+    const query = sp.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  }, [pathname, router]);
 
   const params = {
     ...(q.trim() ? { q: q.trim() } : {}),
@@ -69,6 +136,7 @@ export function MarketplaceBrowse() {
   function applyFilters(e: React.FormEvent) {
     e.preventDefault();
     setOffset(0);
+    syncUrl({ q, category, subcategory, city, region, postalCode, minPrice, maxPrice, type, sort, offset: 0 });
   }
 
   async function saveCurrentSearch() {
@@ -122,6 +190,59 @@ export function MarketplaceBrowse() {
         <p className="text-sm text-muted-foreground">Browse live classifieds and on-chain listings created on {env.defaultChain.name}.</p>
       </div>
 
+      {savedLocation ? (
+        <Card className="market-panel">
+          <CardHeader>
+            <CardTitle>Nearby discovery</CardTitle>
+            <CardDescription>Use your saved profile area to narrow the marketplace without retyping filters each visit.</CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="market-note text-sm">
+              {savedLocationLabel ? `Saved area: ${savedLocationLabel}.` : "Your profile has location data ready for local browsing."}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                onClick={() => {
+                  setCity(savedLocation.city ?? "");
+                  setRegion(savedLocation.region ?? "");
+                  setPostalCode(savedLocation.postalCode ?? "");
+                  setOffset(0);
+                  syncUrl({
+                    q,
+                    category,
+                    subcategory,
+                    city: savedLocation.city ?? "",
+                    region: savedLocation.region ?? "",
+                    postalCode: savedLocation.postalCode ?? "",
+                    minPrice,
+                    maxPrice,
+                    type,
+                    sort,
+                    offset: 0,
+                  });
+                }}
+              >
+                Use saved area
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setCity("");
+                  setRegion("");
+                  setPostalCode("");
+                  setOffset(0);
+                  syncUrl({ q, category, subcategory, city: "", region: "", postalCode: "", minPrice, maxPrice, type, sort, offset: 0 });
+                }}
+              >
+                Clear area
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
+
       <Card>
         <CardHeader>
           <CardTitle>Categories</CardTitle>
@@ -139,6 +260,7 @@ export function MarketplaceBrowse() {
                   setCategory(entry);
                   setSubcategory("");
                   setOffset(0);
+                  syncUrl({ q, category: entry, subcategory: "", city, region, postalCode, minPrice, maxPrice, type, sort, offset: 0 });
                 }}
               >
                 {entry}
@@ -152,6 +274,7 @@ export function MarketplaceBrowse() {
                 setCategory("");
                 setSubcategory("");
                 setOffset(0);
+                syncUrl({ q, category: "", subcategory: "", city, region, postalCode, minPrice, maxPrice, type, sort, offset: 0 });
               }}
             >
               All
@@ -169,6 +292,7 @@ export function MarketplaceBrowse() {
                   onClick={() => {
                     setSubcategory(entry);
                     setOffset(0);
+                    syncUrl({ q, category, subcategory: entry, city, region, postalCode, minPrice, maxPrice, type, sort, offset: 0 });
                   }}
                 >
                   {entry}
@@ -181,6 +305,7 @@ export function MarketplaceBrowse() {
                 onClick={() => {
                   setSubcategory("");
                   setOffset(0);
+                    syncUrl({ q, category, subcategory: "", city, region, postalCode, minPrice, maxPrice, type, sort, offset: 0 });
                 }}
               >
                 All {category}
@@ -193,7 +318,7 @@ export function MarketplaceBrowse() {
       <Card>
         <CardHeader>
           <CardTitle>Search</CardTitle>
-          <CardDescription>Filter by sale type, location, price, and sort order.</CardDescription>
+          <CardDescription>Filter by sale type, location, price, and sort order. Signed-in shoppers can also load their saved profile area.</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={applyFilters} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -256,6 +381,7 @@ export function MarketplaceBrowse() {
                   setType("");
                   setSort("newest");
                   setOffset(0);
+                  syncUrl({ q: "", category: "", subcategory: "", city: "", region: "", postalCode: "", minPrice: "", maxPrice: "", type: "", sort: "newest", offset: 0 });
                 }}
               >
                 Reset
@@ -284,7 +410,7 @@ export function MarketplaceBrowse() {
               Save search
             </Button>
           </div>
-          {!auth.isAuthenticated ? <div className="text-sm text-muted-foreground lg:col-span-3">Sign in with your wallet to save alerts for the current filters.</div> : null}
+          {!auth.isAuthenticated ? <div className="text-sm text-muted-foreground lg:col-span-3">Sign in to save alerts for the filters you want to revisit.</div> : null}
         </CardContent>
       </Card>
 
@@ -296,7 +422,7 @@ export function MarketplaceBrowse() {
 
       {!isLoading && !error && listings.length === 0 ? (
         <Card>
-          <CardContent className="p-6 text-sm text-muted-foreground">No listings found yet.</CardContent>
+          <CardContent className="p-6 text-sm text-muted-foreground">No listings match this view yet. Try widening the location, category, or price filters.</CardContent>
         </Card>
       ) : null}
 
@@ -318,11 +444,29 @@ export function MarketplaceBrowse() {
       </div>
 
       <div className="flex items-center justify-between">
-        <Button type="button" variant="outline" disabled={offset === 0 || isLoading} onClick={() => setOffset(Math.max(0, offset - limit))}>
+        <Button
+          type="button"
+          variant="outline"
+          disabled={offset === 0 || isLoading}
+          onClick={() => {
+            const nextOffset = Math.max(0, offset - limit);
+            setOffset(nextOffset);
+            syncUrl({ q, category, subcategory, city, region, postalCode, minPrice, maxPrice, type, sort, offset: nextOffset });
+          }}
+        >
           Previous
         </Button>
         <div className="text-xs text-muted-foreground">Showing {offset + 1}–{offset + visibleListings.length}</div>
-        <Button type="button" variant="outline" disabled={visibleListings.length < limit || isLoading} onClick={() => setOffset(offset + limit)}>
+        <Button
+          type="button"
+          variant="outline"
+          disabled={visibleListings.length < limit || isLoading}
+          onClick={() => {
+            const nextOffset = offset + limit;
+            setOffset(nextOffset);
+            syncUrl({ q, category, subcategory, city, region, postalCode, minPrice, maxPrice, type, sort, offset: nextOffset });
+          }}
+        >
           Next
         </Button>
       </div>

@@ -31,7 +31,7 @@ import { useToastTx } from "@/lib/hooks/useToastTx";
 import { fetchMetadataById, fetchMetadataByUri, getRenderableListingImage, hasCompleteMarketplaceMetadata, isSmokeMetadataUri, LISTING_FALLBACK_IMAGE, metadataIdFromUri, type MarketplaceMetadata } from "@/lib/metadata";
 import { fetchJson, type ApiError } from "@/lib/api";
 import { addBlockedSeller } from "@/lib/blocks";
-import { describeToken } from "@/lib/tokens";
+import { describeToken, getPublicNetworkLabel } from "@/lib/tokens";
 import {
   fetchLatestSellerOrder,
   prepareBuyerAcceptance,
@@ -160,6 +160,7 @@ export default function ListingDetailPage() {
   const activeChainId = activeChain?.chainId ?? envState.env?.defaultChain.chainId ?? 11155111;
   const activeChainKey = activeChain?.key ?? envState.env?.defaultChain.key ?? "sepolia";
   const activeChainNativeCurrencySymbol = activeChain?.nativeCurrencySymbol ?? envState.env?.defaultChain.nativeCurrencySymbol ?? "ETH";
+  const publicNetworkLabel = getPublicNetworkLabel(activeChain?.name ?? envState.env?.defaultChain.name ?? "Marketplace network");
   const registryAddress = activeChain?.marketplaceRegistryAddress ?? zeroAddress;
   const settlementAddress = activeChain?.marketplaceSettlementV2Address ?? zeroAddress;
   const auctionModuleAddress = activeChain?.auctionModuleAddress ?? zeroAddress;
@@ -860,7 +861,10 @@ export default function ListingDetailPage() {
   if (!listingId) {
     return (
       <Card>
-        <CardContent className="p-6 text-sm text-destructive">Invalid listing id.</CardContent>
+        <CardContent className="p-6 space-y-2">
+          <div className="text-sm font-semibold text-destructive">Listing link is incomplete</div>
+          <div className="text-sm text-muted-foreground">This listing page opened without a valid listing reference. Return to the marketplace and open the ad again.</div>
+        </CardContent>
       </Card>
     );
   }
@@ -874,8 +878,7 @@ export default function ListingDetailPage() {
             {listingReadError?.shortMessage ?? listingReadError?.message ?? "RPC request failed"}
           </div>
           <div className="text-xs text-muted-foreground break-words">
-            This is commonly caused by a rate-limited RPC URL. Update the RPC in NEXT_PUBLIC_CHAIN_CONFIG_JSON,
-            or set a higher-limit legacy NEXT_PUBLIC_SEPOLIA_RPC_URL, and restart npm run dev.
+            Marketplace data is temporarily being rate limited on the {publicNetworkLabel.toLowerCase()}. Try again shortly.
           </div>
         </CardContent>
       </Card>
@@ -888,7 +891,7 @@ export default function ListingDetailPage() {
         <CardContent className="p-6 space-y-2">
           <div className="text-sm font-semibold">Listing not found</div>
           <div className="text-sm text-muted-foreground break-words">
-            The listing could not be loaded from the registry.
+            This ad is no longer available, or the marketplace could not find it on the selected network.
           </div>
           <div className="text-xs text-muted-foreground break-words">Listing id: {listingId}</div>
         </CardContent>
@@ -902,7 +905,7 @@ export default function ListingDetailPage() {
         <CardContent className="p-6 space-y-2">
           <div className="text-sm font-semibold">Listing not found</div>
           <div className="text-sm text-muted-foreground break-words">
-            The listing could not be loaded from the registry.
+            This ad is no longer available, or the marketplace could not find it on the selected network.
           </div>
           <div className="text-xs text-muted-foreground break-words">Listing id: {listingId}</div>
         </CardContent>

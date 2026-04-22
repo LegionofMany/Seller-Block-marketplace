@@ -89,6 +89,7 @@ export async function updateMyProfile(req: Request, res: Response) {
     displayName: z.string().max(80).optional(),
     bio: z.string().max(1000).optional(),
     avatarCid: z.string().max(2048).optional(),
+    phoneNumber: z.string().max(32).optional(),
     streetAddress1: z.string().max(160).optional(),
     streetAddress2: z.string().max(160).optional(),
     city: z.string().max(80).optional(),
@@ -101,6 +102,7 @@ export async function updateMyProfile(req: Request, res: Response) {
   const displayName = parsed.data.displayName?.trim() ? parsed.data.displayName.trim() : null;
   const bio = parsed.data.bio?.trim() ? parsed.data.bio.trim() : null;
   const avatarCid = parsed.data.avatarCid?.trim() ? parsed.data.avatarCid.trim() : null;
+  const phoneNumber = parsed.data.phoneNumber?.trim() ? parsed.data.phoneNumber.trim() : null;
   const streetAddress1 = parsed.data.streetAddress1?.trim() ? parsed.data.streetAddress1.trim() : null;
   const streetAddress2 = parsed.data.streetAddress2?.trim() ? parsed.data.streetAddress2.trim() : null;
   const city = parsed.data.city?.trim() ? parsed.data.city.trim() : null;
@@ -119,6 +121,9 @@ export async function updateMyProfile(req: Request, res: Response) {
   if (avatarCid && !isAvatarValue(avatarCid)) {
     throw new HttpError(400, "Avatar must be an ipfs:// or http(s) URL", "INVALID_PROFILE");
   }
+  if (phoneNumber && !/^[0-9+()\-\s]{7,32}$/.test(phoneNumber)) {
+    throw new HttpError(400, "Phone number format is invalid", "INVALID_PROFILE");
+  }
 
   await ensureUser(db, address, Date.now());
   await updateUserProfile(db, {
@@ -127,6 +132,7 @@ export async function updateMyProfile(req: Request, res: Response) {
     displayName,
     bio,
     avatarCid,
+    phoneNumber,
     streetAddress1,
     streetAddress2,
     city,

@@ -5,15 +5,16 @@ import { verifyMessage } from "ethers";
 import { HttpError } from "../middlewares/errors";
 import { requireAuthAddress } from "../middlewares/auth";
 import { getContext } from "../services/context";
-import { buildAuthMessage, buildEmailSubject, buildMagicLinkEmail, buildVerificationEmail, buildWalletLinkMessage, generateEmailAuthToken, generateNonce, hashEmailAuthToken, hashPassword, isAdminSubject, issueAuthToken, verifyPassword } from "../services/auth";
-import { consumeAuthNonce, consumeEmailAuthToken, createAuthNonce, createEmailAuthToken, createEmailUser, ensureUser, findAuthNonce, findEmailAuthToken, findUserByEmail, findUserByLinkedWallet, getUser, getUserPasswordHash, updateUserEmailVerifiedAt, updateUserLastLogin, updateUserLinkedWallet } from "../services/db";
+import { buildAuthMessage, buildEmailSubject, buildMagicLinkEmail, buildPasswordResetEmail, buildVerificationEmail, buildWalletLinkMessage, generateEmailAuthToken, generateNonce, hashEmailAuthToken, hashPassword, isAdminSubject, issueAuthToken, verifyPassword } from "../services/auth";
+import { consumeAuthNonce, consumeEmailAuthToken, createAuthNonce, createEmailAuthToken, createEmailUser, ensureUser, findAuthNonce, findEmailAuthToken, findUserByEmail, findUserByLinkedWallet, getUser, getUserPasswordHash, updateUserEmailVerifiedAt, updateUserLastLogin, updateUserLinkedWallet, updateUserPasswordHash } from "../services/db";
 import { sendTransactionalEmail, transactionalEmailAvailable } from "../services/email";
 import { normalizeEmail, requireAddress } from "../utils/validation";
 
 const MAGIC_LINK_TTL_MS = 20 * 60 * 1000;
 const EMAIL_VERIFY_TTL_MS = 24 * 60 * 60 * 1000;
+const PASSWORD_RESET_TTL_MS = 20 * 60 * 1000;
 
-async function issueEmailTokenEmail(input: { userAddress: string; email: string; purpose: "login" | "verify" }) {
+async function issueEmailTokenEmail(input: { userAddress: string; email: string; purpose: "login" | "verify" | "reset" }) {
   const { db, env } = getContext();
   if (!transactionalEmailAvailable() || !env.frontendAppUrl) {
     throw new HttpError(503, "Email delivery is not configured", "EMAIL_DELIVERY_UNAVAILABLE");
@@ -22,7 +23,7 @@ async function issueEmailTokenEmail(input: { userAddress: string; email: string;
   const rawToken = generateEmailAuthToken();
   const tokenHash = hashEmailAuthToken(rawToken);
   const createdAt = Date.now();
-  const expiresAt = createdAt + (input.purpose === "verify" ? EMAIL_VERIFY_TTL_MS : MAGIC_LINK_TTL_MS);
+  const expiresAt = createdAt + (input.purpose === "verify" ? EMAIL_VERIFY_TTL_MS : input.purpose === "reset" ? PASSWORD_RESET_TTL_MS : MAGIC_LINK_TTL_MS);
   await createEmailAuthToken(db, {
     tokenHash,
     userAddress: input.userAddress,
@@ -33,7 +34,11 @@ async function issueEmailTokenEmail(input: { userAddress: string; email: string;
   });
 
   const linkUrl = `${env.frontendAppUrl.replace(/\/$/, "")}/sign-in?email_token=${encodeURIComponent(rawToken)}&email_intent=${input.purpose}`;
-  const message = input.purpose === "verify" ? buildVerificationEmail(input.email, linkUrl) : buildMagicLinkEmail(input.email, linkUrl);
+  const message = input.purpose === "verify"
+    ? buildVerificationEmail(input.email, linkUrl)
+    : input.purpose === "reset"
+      ? buildPasswordResetEmail(input.email, linkUrl)
+      : buildMagicLinkEmail(input.email, linkUrl);
   const delivered = await sendTransactionalEmail(input.email, message.subject, message.html, message.text);
   if (!delivered) {
     throw new HttpError(502, "Failed to send email", "EMAIL_DELIVERY_FAILED");
@@ -112,6 +117,7 @@ export async function registerWithEmail(req: Request, res: Response) {
       password: z.string().min(8).max(128),
       fullName: z.string().max(120).optional(),
       displayName: z.string().max(80).optional(),
+      phoneNumber: z.string().max(32).optional(),
       streetAddress1: z.string().max(160).optional(),
       streetAddress2: z.string().max(160).optional(),
       city: z.string().max(80).optional(),
@@ -138,6 +144,7 @@ export async function registerWithEmail(req: Request, res: Response) {
     passwordHash,
     fullName: parsed.data.fullName?.trim() ? parsed.data.fullName.trim() : null,
     displayName: parsed.data.displayName?.trim() ? parsed.data.displayName.trim() : null,
+    phoneNumber: parsed.data.phoneNumber?.trim() ? parsed.data.phoneNumber.trim() : null,
     streetAddress1: parsed.data.streetAddress1?.trim() ? parsed.data.streetAddress1.trim() : null,
     streetAddress2: parsed.data.streetAddress2?.trim() ? parsed.data.streetAddress2.trim() : null,
     city: parsed.data.city?.trim() ? parsed.data.city.trim() : null,
@@ -311,6 +318,57 @@ export async function requestMagicLink(req: Request, res: Response) {
   return res.status(202).json({ ok: true });
 }
 
+export async function requestPasswordReset(req: Request, res: Response) {
+  const parsed = z.object({ email: z.string().min(3).max(320) }).safeParse(req.body);
+  if (!parsed.success) throw new HttpError(400, "Invalid password-reset payload", "INVALID_EMAIL_AUTH");
+
+  const { db } = getContext();
+  const email = normalizeEmail(parsed.data.email);
+  const user = await findUserByEmail(db, email);
+  if (user && user.authMethod === "email") {
+    await issueEmailTokenEmail({ userAddress: user.address, email, purpose: "reset" });
+  }
+
+  return res.status(202).json({ ok: true });
+}
+
+export async function resetPasswordWithEmailToken(req: Request, res: Response) {
+  const parsed = z.object({ token: z.string().min(16).max(512), password: z.string().min(8).max(128) }).safeParse(req.body);
+  if (!parsed.success) throw new HttpError(400, "Invalid password-reset token payload", "INVALID_EMAIL_AUTH");
+
+  const { db, env } = getContext();
+  const tokenHash = hashEmailAuthToken(parsed.data.token.trim());
+  const row = await findEmailAuthToken(db, tokenHash);
+  if (!row || row.consumedAt) {
+    throw new HttpError(401, "This password reset link is invalid or has already been used", "INVALID_EMAIL_TOKEN");
+  }
+  if (row.expiresAt < Date.now()) {
+    throw new HttpError(401, "This password reset link has expired", "EXPIRED_EMAIL_TOKEN");
+  }
+  if (row.purpose !== "reset") {
+    throw new HttpError(401, "This email link cannot reset a password", "INVALID_EMAIL_TOKEN");
+  }
+
+  const user = await getUser(db, row.userAddress);
+  if (!user || user.authMethod !== "email") {
+    throw new HttpError(404, "Email account not found", "EMAIL_ACCOUNT_NOT_FOUND");
+  }
+
+  const nextPasswordHash = await hashPassword(parsed.data.password);
+  const now = Date.now();
+  await consumeEmailAuthToken(db, tokenHash, now);
+  await updateUserPasswordHash(db, user.address, nextPasswordHash, now);
+  await updateUserLastLogin(db, user.address, now);
+  const refreshedUser = await getUser(db, user.address);
+
+  return res.json({
+    token: issueAuthToken(user.address, env),
+    address: user.address,
+    user: refreshedUser,
+    isAdmin: isAdminSubject(user.address, env),
+  });
+}
+
 export async function consumeEmailToken(req: Request, res: Response) {
   const parsed = z.object({ token: z.string().min(16).max(512) }).safeParse(req.body);
   if (!parsed.success) throw new HttpError(400, "Invalid email token payload", "INVALID_EMAIL_AUTH");
@@ -323,6 +381,9 @@ export async function consumeEmailToken(req: Request, res: Response) {
   }
   if (row.expiresAt < Date.now()) {
     throw new HttpError(401, "This email link has expired", "EXPIRED_EMAIL_TOKEN");
+  }
+  if (row.purpose === "reset") {
+    throw new HttpError(401, "This email link must be used from the password reset flow", "INVALID_EMAIL_TOKEN");
   }
 
   const user = await getUser(db, row.userAddress);

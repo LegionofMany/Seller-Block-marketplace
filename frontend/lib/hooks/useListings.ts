@@ -225,7 +225,7 @@ export function useListings(params?: ListingsParams) {
           }
 
           if (!allowOnchainFallback) {
-            throw new Error("Backend is unavailable for filtered search. Start the backend and try again.");
+            throw new Error("Filtered marketplace results are temporarily unavailable. Refresh in a moment and try again.");
           }
 
           if (!publicClient) throw new Error("No public client");
@@ -248,7 +248,7 @@ export function useListings(params?: ListingsParams) {
           } catch (e) {
             if (isRateLimitError(e)) {
               throw new Error(
-                "RPC rate limited (429). Set NEXT_PUBLIC_CHAIN_CONFIG_JSON with a higher-limit RPC, or update the legacy NEXT_PUBLIC_SEPOLIA_RPC_URL / NEXT_PUBLIC_SEPOLIA_RPC_FALLBACK_URL values, then restart npm run dev."
+                "Marketplace activity is temporarily rate limited. Refresh in a moment and try again."
               );
             }
             throw e;
@@ -300,7 +300,7 @@ export function useListings(params?: ListingsParams) {
         if (!cancelled) setData(listings);
         return;
       } catch (e: unknown) {
-        if (!cancelled) setError((e as ApiError | null)?.message ?? "Failed to load listings");
+        if (!cancelled) setError((e as ApiError | null)?.message ?? "Marketplace results could not be loaded right now.");
       } finally {
         inflightByKey.delete(cacheKey);
         if (!cancelled) setIsLoading(false);

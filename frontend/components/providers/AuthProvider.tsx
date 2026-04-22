@@ -17,13 +17,16 @@ type AuthContextValue = {
   signIn: () => Promise<void>;
   signInWithEmail: (input: { email: string; password: string }) => Promise<void>;
   requestMagicLink: (input: { email: string }) => Promise<void>;
+  requestPasswordReset: (input: { email: string }) => Promise<void>;
   consumeEmailToken: (input: { token: string }) => Promise<void>;
+  resetPasswordWithEmailToken: (input: { token: string; password: string }) => Promise<void>;
   sendVerificationEmail: () => Promise<void>;
   registerWithEmail: (input: {
     email: string;
     password: string;
     fullName?: string;
     displayName?: string;
+    phoneNumber?: string;
     streetAddress1?: string;
     streetAddress2?: string;
     city?: string;
@@ -185,6 +188,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  const requestPasswordReset = React.useCallback(async ({ email }: { email: string }) => {
+    try {
+      setIsLoading(true);
+      await fetchJson<{ ok: true }>("/auth/email/password-reset/request", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      toast.success("If the account exists, a password reset link has been sent");
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error, "Failed to send password reset email"));
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
   const consumeEmailToken = React.useCallback(async ({ token }: { token: string }) => {
     try {
       setIsLoading(true);
@@ -198,6 +218,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       toast.success("Email link accepted");
     } catch (error: unknown) {
       toast.error(getErrorMessage(error, "Email link sign in failed"));
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [applySession]);
+
+  const resetPasswordWithEmailToken = React.useCallback(async ({ token, password }: { token: string; password: string }) => {
+    try {
+      setIsLoading(true);
+      const verified = await fetchJson<AuthSessionResponse>("/auth/email/password-reset/consume", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, password }),
+        timeoutMs: 10_000,
+      });
+      applySession(verified);
+      toast.success("Password updated");
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error, "Password reset failed"));
       throw error;
     } finally {
       setIsLoading(false);
@@ -223,6 +262,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       password,
       fullName,
       displayName,
+      phoneNumber,
       streetAddress1,
       streetAddress2,
       city,
@@ -233,6 +273,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       password: string;
       fullName?: string;
       displayName?: string;
+      phoneNumber?: string;
       streetAddress1?: string;
       streetAddress2?: string;
       city?: string;
@@ -245,7 +286,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const verified = await fetchJson<AuthSessionResponse>("/auth/email/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password, fullName, displayName, streetAddress1, streetAddress2, city, region, postalCode }),
+        body: JSON.stringify({ email, password, fullName, displayName, phoneNumber, streetAddress1, streetAddress2, city, region, postalCode }),
       });
       applySession(verified);
       toast.success(verified.emailVerificationSent ? "Account created. Verification email sent." : "Account created");
@@ -268,14 +309,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       signIn,
       signInWithEmail,
       requestMagicLink,
+      requestPasswordReset,
       consumeEmailToken,
+      resetPasswordWithEmailToken,
       sendVerificationEmail,
       registerWithEmail,
       signOut,
       refresh,
       setUser,
     }),
-    [token, address, user, isAdmin, isLoading, signIn, signInWithEmail, requestMagicLink, consumeEmailToken, sendVerificationEmail, registerWithEmail, refresh, signOut]
+    [token, address, user, isAdmin, isLoading, signIn, signInWithEmail, requestMagicLink, requestPasswordReset, consumeEmailToken, resetPasswordWithEmailToken, sendVerificationEmail, registerWithEmail, refresh, signOut]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

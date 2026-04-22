@@ -52,6 +52,14 @@ export function buildVerificationEmail(email: string, linkUrl: string) {
   };
 }
 
+export function buildPasswordResetEmail(email: string, linkUrl: string) {
+  return {
+    subject: "Reset your Seller Block password",
+    html: `<p>Use this secure link to reset your Seller Block password.</p><p><a href="${linkUrl}">Reset password</a></p><p>This link expires in 20 minutes and can only be used once.</p>`,
+    text: `Use this secure link to reset your Seller Block password: ${linkUrl}\n\nThis link expires in 20 minutes and can only be used once.`,
+  };
+}
+
 const EMAIL_SUBJECT_PREFIX = "email:";
 
 export function buildEmailSubject(email: string): string {

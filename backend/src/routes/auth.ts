@@ -2,7 +2,7 @@ import { Router } from "express";
 
 import { asyncHandler } from "../middlewares/async";
 import { authenticate } from "../middlewares/auth";
-import { consumeEmailToken, getMe, issueNonce, issueWalletLinkNonce, loginWithEmail, registerWithEmail, requestMagicLink, sendVerificationEmail, unlinkWallet, verifyNonce, verifyWalletLink } from "../controllers/authController";
+import { consumeEmailToken, getMe, issueNonce, issueWalletLinkNonce, loginWithEmail, registerWithEmail, requestMagicLink, requestPasswordReset, resetPasswordWithEmailToken, sendVerificationEmail, unlinkWallet, verifyNonce, verifyWalletLink } from "../controllers/authController";
 
 export function authRouter() {
   const router = Router();
@@ -12,6 +12,8 @@ export function authRouter() {
   router.post("/auth/email/register", asyncHandler(registerWithEmail));
   router.post("/auth/email/login", asyncHandler(loginWithEmail));
   router.post("/auth/email/magic-link/request", asyncHandler(requestMagicLink));
+  router.post("/auth/email/password-reset/request", asyncHandler(requestPasswordReset));
+  router.post("/auth/email/password-reset/consume", asyncHandler(resetPasswordWithEmailToken));
   router.post("/auth/email/token/consume", asyncHandler(consumeEmailToken));
   router.get("/auth/me", authenticate, asyncHandler(getMe));
   router.post("/auth/email/verify/send", authenticate, asyncHandler(sendVerificationEmail));

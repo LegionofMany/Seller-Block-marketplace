@@ -8,7 +8,10 @@ import { useAuth } from "@/components/providers/AuthProvider";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { fetchJson, type ApiError } from "@/lib/api";
+import { CATEGORY_TREE } from "@/lib/categories";
 import { type ListingSummary, useListings } from "@/lib/hooks/useListings";
+import { formatLocationLabel, getProfileLocationFilter } from "@/lib/location";
+import { buildMarketplaceHref } from "@/lib/marketplace";
 
 type FavoriteListing = {
   listingChainKey: string;
@@ -53,23 +56,23 @@ function toListingSummary(row: BackendListingRow): ListingSummary {
 
 const spotlightRules = [
   {
-    title: "Curated spotlight placements",
-    detail: "Homepage spotlight inventory is scheduled by admins and partner campaigns, separate from the open marketplace feed.",
+    title: "Sign in before you manage anything",
+    detail: "Account creation, watch activity, alerts, and saved seller flow should feel obvious before advanced seller tools show up.",
   },
   {
-    title: "Profile favorites",
-    detail: "Favorite-driven placements are reserved for members saving trusted sellers and recurring ads they want to revisit.",
+    title: "Browse by category",
+    detail: "Antiques & Collectibles, Housewares, and everyday classifieds categories need to be visible from the first screen.",
   },
   {
-    title: "Followed profiles",
-    detail: "Followed sellers earn priority visibility on the landing page so repeat buyers can pick up where they left off.",
+    title: "Top ads stay visible",
+    detail: "Popular and curated inventory can still lead the page, but the language should read like consumer classifieds rather than ad-tech placement rules.",
   },
 ];
 
 const ecosystemSignals = [
-  "Homepage spotlight is a curated placement layer for featured listings and partner campaigns.",
-  "BlockPages increases seller verification, social trust, and partner visibility.",
-  "Trusted seller badges and response signals will sit beside profile reputation, not inside random listing tiles.",
+  "Create an account, then land in a watch-first signed-in view for followed sellers, saved ads, saved searches, and alerts.",
+  "Wallet linking stays available after profile setup instead of blocking the first session.",
+  "Public launch stays focused on classifieds flow first, with dealer and subscription complexity deferred.",
 ];
 
 const safetyWarnings = [
@@ -89,6 +92,11 @@ export default function HomePage() {
   const [sponsoredError, setSponsoredError] = React.useState<string | null>(null);
   const [mostViewedListings, setMostViewedListings] = React.useState<Array<{ listing: ListingSummary; viewCount: number }>>([]);
   const [mostViewedError, setMostViewedError] = React.useState<string | null>(null);
+  const [localListings, setLocalListings] = React.useState<ListingSummary[]>([]);
+  const [localError, setLocalError] = React.useState<string | null>(null);
+  const [isLoadingLocal, setIsLoadingLocal] = React.useState(false);
+  const savedLocation = React.useMemo(() => getProfileLocationFilter(auth.user), [auth.user]);
+  const savedLocationLabel = React.useMemo(() => formatLocationLabel(savedLocation), [savedLocation]);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -200,6 +208,49 @@ export default function HomePage() {
     let cancelled = false;
 
     async function run() {
+      if (!auth.isAuthenticated || !savedLocation) {
+        setLocalListings([]);
+        setLocalError(null);
+        setIsLoadingLocal(false);
+        return;
+      }
+
+      try {
+        setIsLoadingLocal(true);
+        const sp = new URLSearchParams();
+        sp.set("limit", "4");
+        sp.set("sort", "newest");
+        if (savedLocation.city) sp.set("city", savedLocation.city);
+        if (savedLocation.region) sp.set("region", savedLocation.region);
+        if (savedLocation.postalCode) sp.set("postalCode", savedLocation.postalCode);
+
+        const res = await fetchJson<{ items: BackendListingRow[] }>(`/listings?${sp.toString()}`, { timeoutMs: 5_000 });
+        if (!cancelled) {
+          setLocalListings((res.items ?? []).map((item) => toListingSummary(item)));
+          setLocalError(null);
+        }
+      } catch (e: unknown) {
+        if (!cancelled) {
+          setLocalListings([]);
+          setLocalError((e as ApiError | null)?.message ?? "Could not load nearby listings");
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoadingLocal(false);
+        }
+      }
+    }
+
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [auth.isAuthenticated, savedLocation]);
+
+  React.useEffect(() => {
+    let cancelled = false;
+
+    async function run() {
       try {
         const res = await fetchJson<{ items: BackendListingRow[] }>("/listings/most-viewed?limit=4&windowDays=30", { timeoutMs: 5_000 });
         if (!cancelled) {
@@ -241,10 +292,10 @@ export default function HomePage() {
             <div className="market-section-title">Zonycs marketplace</div>
             <div className="space-y-3">
               <h1 className="max-w-3xl text-3xl font-semibold tracking-tight text-slate-950 sm:text-5xl">
-                Local classifieds first, trust and curated spotlight layered in with discipline.
+                Buy, sell, and watch local ads from one clear entry point.
               </h1>
               <p className="max-w-2xl text-sm leading-7 text-slate-700 sm:text-base">
-                The landing page now behaves like a consumer marketplace entry point instead of a protocol dashboard. Buyers land on curated inventory, seller trust signals, and a clear path into the live marketplace.
+                The landing page now puts sign-in, categories, top ads, and live marketplace inventory ahead of protocol language. Buyers can start with real classifieds navigation, then move into saved ads, followed sellers, and account tools only when they need them.
               </p>
             </div>
             <div className="flex flex-wrap gap-3">
@@ -259,24 +310,24 @@ export default function HomePage() {
               </Button>
             </div>
             <div className="flex flex-wrap gap-2">
-              <div className="market-chip border-amber-200/80 bg-white/95 text-slate-900 shadow-sm">Desktop-first for power sellers</div>
-              <div className="market-chip border-amber-200/80 bg-white/95 text-slate-900 shadow-sm">Tablet/mobile support for camera uploads</div>
-              <div className="market-chip border-amber-200/80 bg-white/95 text-slate-900 shadow-sm">Wallet settlement stays available when needed</div>
+              <div className="market-chip border-amber-200/80 bg-white/95 text-slate-900 shadow-sm">Antiques & Collectibles ready</div>
+              <div className="market-chip border-amber-200/80 bg-white/95 text-slate-900 shadow-sm">Housewares added to public launch</div>
+              <div className="market-chip border-amber-200/80 bg-white/95 text-slate-900 shadow-sm">Watch-first account flow for signed-in members</div>
             </div>
           </div>
 
           <div className="space-y-3">
             <div className="market-stat bg-white/85">
-              <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Front-page rules</div>
-              <div className="mt-2 text-xl font-semibold text-slate-950">Homepage placements are curated, not open feed inventory.</div>
+              <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Landing page priorities</div>
+              <div className="mt-2 text-xl font-semibold text-slate-950">Sign in, categories, top ads, then the live marketplace.</div>
               <div className="mt-2 text-sm text-slate-700">
-                The marketplace feed lives under Browse. The landing page is reserved for curated spotlight inventory, favorite-driven visibility, and followed-profile discovery.
+                The marketplace feed still lives under Browse, but this entry surface now clearly explains where to sign in, where to browse by category, and which top ads deserve attention right now.
               </div>
             </div>
             <div className="market-note text-sm">
               {auth.isAuthenticated
-                ? "Signed-in members now get followed-seller inventory first. Favorites and curated spotlight slots are staged directly underneath it."
-                : "Sign-in and personalized landing inventory expand here, but raw browsing remains available now through the marketplace route."}
+                ? "Signed-in members now get a watch-first account flow with followed sellers, saved ads, and alerts grouped together."
+                : "Sign in to unlock watch activity and personalized order, or keep browsing the public marketplace right away."}
             </div>
           </div>
         </div>
@@ -336,19 +387,19 @@ export default function HomePage() {
 
           <Card className="market-panel">
             <CardHeader>
-              <CardTitle>Homepage spotlight</CardTitle>
-              <CardDescription>Curated placements remain a dedicated layer after followed sellers and favorites.</CardDescription>
+              <CardTitle>Top ads</CardTitle>
+              <CardDescription>Featured listings still have a dedicated layer after followed sellers and favorites, but the surface now reads like top marketplace ads instead of an internal placement console.</CardDescription>
             </CardHeader>
             <CardContent>
               {sponsoredError ? <div className="market-note text-sm">{sponsoredError}</div> : null}
               {sponsoredListings.length === 0 ? (
-                <div className="market-note text-sm">No spotlight placements are active right now. Featured inventory will appear here as soon as an admin activates a campaign window.</div>
+                  <div className="market-note text-sm">No featured top ads are active right now. As campaign windows or featured listings go live, they will appear here.</div>
               ) : (
                 <div className="grid gap-4">
                   {sponsoredListings.map((item) => (
                     <div key={`${item.listing.chainKey}-${item.listing.id}`} className="space-y-2">
                       <div className="flex flex-wrap items-center gap-2 text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                        <span>{item.sponsorLabel || "Spotlight placement"}</span>
+                          <span>{item.sponsorLabel || "Top ad"}</span>
                         {item.campaignName ? <span>{item.campaignName}</span> : null}
                       </div>
                       <ListingCard row={item.listing} />
@@ -364,10 +415,26 @@ export default function HomePage() {
       <section className="grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
         <Card className="market-panel">
           <CardHeader>
-            <CardTitle>Homepage spotlight policy</CardTitle>
-            <CardDescription>Only curated placement categories belong on the landing page.</CardDescription>
+            <CardTitle>Browse by category</CardTitle>
+            <CardDescription>Category entry points now reflect the public-launch classifieds focus, including antiques and housewares.</CardDescription>
           </CardHeader>
-          <CardContent className="grid gap-3 sm:grid-cols-3">
+          <CardContent className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {Object.entries(CATEGORY_TREE).map(([category, subcategories]) => (
+              <Link key={category} href={buildMarketplaceHref({ category })} className="market-stat h-full bg-white/85 transition-colors hover:bg-accent/20">
+                <div className="text-sm font-semibold text-slate-950">{category}</div>
+                <div className="mt-2 text-sm leading-6 text-slate-700">{subcategories.slice(0, 3).join(" • ")}</div>
+                <div className="mt-3 text-xs uppercase tracking-[0.16em] text-muted-foreground">Open category</div>
+              </Link>
+            ))}
+          </CardContent>
+        </Card>
+
+        <Card className="market-panel">
+          <CardHeader>
+            <CardTitle>Account flow</CardTitle>
+            <CardDescription>Keep the public homepage simple, then let sign-in unlock the watch and profile tools.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
             {spotlightRules.map((rule) => (
               <div key={rule.title} className="market-stat h-full bg-white/85">
                 <div className="text-sm font-semibold text-slate-950">{rule.title}</div>
@@ -376,28 +443,57 @@ export default function HomePage() {
             ))}
           </CardContent>
         </Card>
-
-        <Card className="market-panel">
-          <CardHeader>
-            <CardTitle>BlockPages partnership</CardTitle>
-            <CardDescription>Verification and online presence grow through partner trust layers.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {ecosystemSignals.map((signal) => (
-              <div key={signal} className="market-note text-sm leading-6">
-                {signal}
-              </div>
-            ))}
-          </CardContent>
-        </Card>
       </section>
+
+      {auth.isAuthenticated && savedLocation ? (
+        <section className="space-y-4">
+          <div className="flex items-end justify-between gap-4">
+            <div>
+              <div className="market-section-title">Nearby inventory</div>
+              <h2 className="text-2xl font-semibold tracking-tight text-slate-950">Fresh ads around {savedLocationLabel || "your area"}</h2>
+              <p className="mt-1 text-sm text-muted-foreground">Signed-in discovery now uses your saved profile location so local inventory can surface before generic marketplace results.</p>
+            </div>
+            <Button asChild variant="outline" className="rounded-full">
+              <Link href={buildMarketplaceHref(savedLocation ?? {})}>Refine local search</Link>
+            </Button>
+          </div>
+
+          {localError ? <div className="market-note text-sm">{localError}</div> : null}
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            {isLoadingLocal
+              ? Array.from({ length: 4 }).map((_, index) => (
+                  <Card key={index}>
+                    <CardHeader>
+                      <div className="h-5 w-40 rounded bg-muted" />
+                      <div className="h-4 w-56 rounded bg-muted" />
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      <div className="h-40 rounded bg-muted" />
+                      <div className="h-4 w-32 rounded bg-muted" />
+                      <div className="h-4 w-24 rounded bg-muted" />
+                    </CardContent>
+                  </Card>
+                ))
+              : localListings.length > 0
+                ? localListings.map((listing) => <ListingCard key={`${listing.chainKey}-${listing.id}`} row={listing} />)
+                : (
+                  <Card className="sm:col-span-2 xl:col-span-4">
+                    <CardContent className="p-6 text-sm text-muted-foreground">
+                      No nearby listings are active for your saved area yet. Open the marketplace to broaden the search or update your profile location.
+                    </CardContent>
+                  </Card>
+                )}
+          </div>
+        </section>
+      ) : null}
 
       <section className="space-y-4">
         <div className="flex items-end justify-between gap-4">
           <div>
             <div className="market-section-title">Live marketplace</div>
             <h2 className="text-2xl font-semibold tracking-tight text-slate-950">Fresh ads now</h2>
-            <p className="mt-1 text-sm text-muted-foreground">Recent inventory stays visible here after followed sellers, favorites, and sponsored placement layers are handled above.</p>
+            <p className="mt-1 text-sm text-muted-foreground">Recent inventory stays visible here after sign-in prompts, category entry points, and top ads are handled above.</p>
           </div>
           <Button asChild variant="outline" className="rounded-full">
             <Link href="/marketplace">Open full marketplace</Link>
@@ -486,12 +582,12 @@ export default function HomePage() {
       <section className="grid gap-4 lg:grid-cols-[1fr_1fr]">
         <Card className="market-panel">
           <CardHeader>
-            <CardTitle>Mobile and tablet sign-in</CardTitle>
-            <CardDescription>WalletConnect is the current mobile bridge for users outside wallet browsers.</CardDescription>
+            <CardTitle>Sign in on any device</CardTitle>
+            <CardDescription>Email-first access now sits alongside wallet connection so phones and tablets are not blocked by desktop wallet assumptions.</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="market-note text-sm">
-              Use the sign-in surface to connect a wallet on tablet/mobile and review the planned non-wallet sign-in flow.
+                Use the sign-in surface to create an account, recover a password, connect a wallet later, and move into the watch-first signed-in flow.
             </div>
             <Button asChild className="rounded-full">
               <Link href="/sign-in">Open sign-in</Link>

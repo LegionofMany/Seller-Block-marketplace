@@ -9,6 +9,59 @@ export type NotificationsWorkerStatus = {
   lastError?: string;
 };
 
+function formatLocationLabel(input: { city?: string | null; region?: string | null; postalCode?: string | null }) {
+  return [input.city, input.region, input.postalCode].filter(Boolean).join(", ");
+}
+
+function formatSavedSearchAlert(row: {
+  id: string;
+  title?: string | null;
+  category?: string | null;
+  subcategory?: string | null;
+  city?: string | null;
+  region?: string | null;
+  postalCode?: string | null;
+}, searchName: string) {
+  const listingTitle = row.title?.trim() || "New listing";
+  const locationLabel = formatLocationLabel(row);
+  const categoryLabel = [row.category, row.subcategory].filter(Boolean).join(" • ");
+
+  const title = row.title?.trim()
+    ? `${listingTitle} matched ${searchName}`
+    : `New match for ${searchName}`;
+
+  const detailParts = [categoryLabel, locationLabel].filter(Boolean);
+  const body = detailParts.length > 0
+    ? `${listingTitle} matched your saved search. ${detailParts.join(". ")}.`
+    : `${listingTitle} matched your saved search.`;
+
+  const emailSubject = `${title} | Seller Block alerts`;
+  const emailIntro = body;
+  const emailHtml = [
+    `<p>${emailIntro}</p>`,
+    `<p>Saved search: <strong>${searchName}</strong></p>`,
+  ].join("");
+  const emailText = `${emailIntro}\nSaved search: ${searchName}`;
+
+  return { title, body, emailSubject, emailHtml, emailText };
+}
+
+function buildMarketplacePath(filters: SavedSearchFilters) {
+  const sp = new URLSearchParams();
+  if (filters.q?.trim()) sp.set("q", filters.q.trim());
+  if (filters.category?.trim()) sp.set("category", filters.category.trim());
+  if (filters.subcategory?.trim()) sp.set("subcategory", filters.subcategory.trim());
+  if (filters.city?.trim()) sp.set("city", filters.city.trim());
+  if (filters.region?.trim()) sp.set("region", filters.region.trim());
+  if (filters.postalCode?.trim()) sp.set("postalCode", filters.postalCode.trim());
+  if (filters.minPrice?.trim()) sp.set("minPrice", filters.minPrice.trim());
+  if (filters.maxPrice?.trim()) sp.set("maxPrice", filters.maxPrice.trim());
+  if (filters.type) sp.set("type", filters.type);
+  if (filters.sort && filters.sort !== "newest") sp.set("sort", filters.sort);
+  const query = sp.toString();
+  return query ? `/marketplace?${query}` : "/marketplace";
+}
+
 function parseOptionalBigInt(value: string | undefined): bigint | undefined {
   if (!value) return undefined;
   const trimmed = value.trim();
@@ -53,27 +106,37 @@ async function processSavedSearches() {
     });
 
     for (const row of rows) {
+      const marketplacePath = buildMarketplacePath(search.filters);
+      const alertCopy = formatSavedSearchAlert(row, search.name);
       const notification = await createNotification(db, {
         userAddress: search.userAddress,
         type: "saved_search_match",
-        title: `New match for ${search.name}`,
-        body: `Listing ${row.id} matched your saved search.` ,
+        title: alertCopy.title,
+        body: alertCopy.body,
         dedupeKey: `saved-search:${search.id}:listing:${row.chainKey}:${row.id}`,
         payload: {
           savedSearchId: search.id,
+          savedSearchName: search.name,
+          marketplaceHref: marketplacePath,
+          filters: search.filters,
           listingId: row.id,
           chainKey: row.chainKey,
+          listingTitle: row.title ?? null,
+          category: row.category ?? null,
+          city: row.city ?? null,
+          region: row.region ?? null,
         },
         createdAt: now,
       });
 
       if (notification && search.email && env.frontendAppUrl) {
         const listingUrl = `${env.frontendAppUrl.replace(/\/$/, "")}/listing/${row.id}?chain=${encodeURIComponent(row.chainKey)}`;
+        const marketplaceUrl = `${env.frontendAppUrl.replace(/\/$/, "")}${marketplacePath}`;
         await sendTransactionalEmail(
           search.email,
-          `Seller Block alert: ${search.name}`,
-          `<p>A new listing matched your saved search <strong>${search.name}</strong>.</p><p><a href="${listingUrl}">Open listing</a></p>`,
-          `A new listing matched your saved search ${search.name}: ${listingUrl}`
+          alertCopy.emailSubject,
+          `${alertCopy.emailHtml}<p><a href="${listingUrl}">Open listing</a></p><p><a href="${marketplaceUrl}">Open matching marketplace results</a></p>`,
+          `${alertCopy.emailText}\nOpen listing: ${listingUrl}\nMatching results: ${marketplaceUrl}`
         );
       }
     }

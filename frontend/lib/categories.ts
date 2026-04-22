@@ -1,9 +1,7 @@
 export type CategoryTree = Record<string, string[]>;
 
-// Minimal initial category tree for Kijiji-style navigation.
-// Values are stored as plain strings in metadata for now.
 export const CATEGORY_TREE: CategoryTree = {
-  "Buy & Sell": ["Electronics", "Furniture", "Home & Garden", "Clothing", "Sporting Goods"],
+  "Buy & Sell": ["Antiques & Collectibles", "Housewares", "Electronics", "Furniture", "Home & Garden", "Clothing", "Sporting Goods"],
   "Cars & Vehicles": ["Cars & Trucks", "Motorcycles", "Auto Parts", "Other"],
   "Real Estate": ["For Rent", "For Sale", "Room Rental", "Commercial"],
   "Jobs": ["General Labour", "Customer Service", "Skilled Trades", "Office", "Other"],
