@@ -1653,25 +1653,25 @@ export default function DashboardPage() {
                   <CardDescription>Follows, saved ads, alerts, and search watches stay together here for faster repeat browsing.</CardDescription>
                 </CardHeader>
                 <CardContent className="grid gap-3 p-4 pt-0 sm:grid-cols-2 sm:p-6 sm:pt-0 xl:grid-cols-4">
-                  <div className="market-stat bg-white/85">
-                    <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Followed sellers</div>
-                    <div className="mt-2 text-2xl font-semibold">{followedSellers.length}</div>
-                    <div className="mt-1 text-sm text-muted-foreground">Profiles you want to revisit first.</div>
+                  <div className="market-stat border-emerald-200/80 bg-[linear-gradient(180deg,rgba(238,255,250,0.98),rgba(255,255,255,0.94))] shadow-sm">
+                    <div className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">Followed sellers</div>
+                    <div className="mt-2 text-3xl font-semibold text-slate-950">{followedSellers.length}</div>
+                    <div className="mt-1 text-sm leading-6 text-slate-600">Profiles you want to revisit first.</div>
                   </div>
-                  <div className="market-stat bg-white/85">
-                    <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Saved ads</div>
-                    <div className="mt-2 text-2xl font-semibold">{favoriteListings.length}</div>
-                    <div className="mt-1 text-sm text-muted-foreground">Listings kept for comparison or follow-up.</div>
+                  <div className="market-stat border-sky-200/80 bg-[linear-gradient(180deg,rgba(240,248,255,0.99),rgba(255,255,255,0.94))] shadow-sm">
+                    <div className="text-xs font-semibold uppercase tracking-[0.18em] text-sky-700">Saved ads</div>
+                    <div className="mt-2 text-3xl font-semibold text-slate-950">{favoriteListings.length}</div>
+                    <div className="mt-1 text-sm leading-6 text-slate-600">Listings kept for comparison or follow-up.</div>
                   </div>
-                  <div className="market-stat bg-white/85">
-                    <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Saved searches</div>
-                    <div className="mt-2 text-2xl font-semibold">{savedSearches.length}</div>
-                    <div className="mt-1 text-sm text-muted-foreground">Search watches that keep bringing inventory back.</div>
+                  <div className="market-stat border-cyan-200/80 bg-[linear-gradient(180deg,rgba(238,252,255,0.99),rgba(255,255,255,0.94))] shadow-sm">
+                    <div className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-700">Saved searches</div>
+                    <div className="mt-2 text-3xl font-semibold text-slate-950">{savedSearches.length}</div>
+                    <div className="mt-1 text-sm leading-6 text-slate-600">Search watches that keep bringing inventory back.</div>
                   </div>
-                  <div className="market-stat bg-white/85">
-                    <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Unread alerts</div>
-                    <div className="mt-2 text-2xl font-semibold">{notificationUnreadCount}</div>
-                    <div className="mt-1 text-sm text-muted-foreground">Signals worth checking before you browse again.</div>
+                  <div className="market-stat border-amber-200/80 bg-[linear-gradient(180deg,rgba(255,249,235,0.99),rgba(255,255,255,0.94))] shadow-sm">
+                    <div className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-700">Unread alerts</div>
+                    <div className="mt-2 text-3xl font-semibold text-slate-950">{notificationUnreadCount}</div>
+                    <div className="mt-1 text-sm leading-6 text-slate-600">Signals worth checking before you browse again.</div>
                   </div>
                 </CardContent>
               </Card>
