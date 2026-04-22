@@ -1146,8 +1146,8 @@ export default function DashboardPage() {
                 </CardContent>
               </Card>
 
-              {auth.isAdmin ? (
-        <Card className="market-panel border-amber-300/60 bg-[linear-gradient(180deg,rgba(255,252,244,0.92),rgba(255,255,255,0.98))]">
+                {auth.isAdmin ? (
+              <Card className="market-panel market-panel-spotlight market-panel-spotlight-amber border-amber-300/60 bg-[linear-gradient(180deg,rgba(255,252,244,0.92),rgba(255,255,255,0.98))]">
           <CardHeader>
             <div className="market-section-title">Homepage admin</div>
             <CardTitle>Spotlight placements</CardTitle>
