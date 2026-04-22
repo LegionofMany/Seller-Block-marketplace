@@ -892,7 +892,7 @@ export default function DashboardPage() {
         Swipe to see Watch and My listings.
       </div>
 
-      <Card className="market-panel border-slate-200/80 bg-white/78">
+      <Card className="market-panel market-panel-spotlight market-panel-spotlight-blue border-slate-200/80 bg-white/78">
         <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
           <div>
             <div className="market-section-title">{activeTabMeta.label}</div>
@@ -917,7 +917,7 @@ export default function DashboardPage() {
         <div className="space-y-4 sm:space-y-6">
           {accountTab === "profile" ? (
             <React.Fragment>
-              <Card className="market-panel">
+              <Card className="market-panel market-panel-spotlight market-panel-spotlight-mint">
                 <CardHeader>
                   <div className="market-section-title">Public profile</div>
                   <CardTitle>Profile</CardTitle>
@@ -925,17 +925,24 @@ export default function DashboardPage() {
                 </CardHeader>
                 <CardContent className="space-y-4 p-4 pt-0 sm:p-6 sm:pt-0">
                   {!auth.isAuthenticated ? (
-                    <div className="space-y-3 text-sm">
-                      <div className="text-muted-foreground">Sign in with email or wallet to edit your profile and location settings.</div>
-                      {address && !auth.isAuthenticated ? (
-                        <Button type="button" variant="outline" size="lg" className="w-full sm:w-auto" disabled={auth.isLoading} onClick={() => void auth.signIn()}>
-                          Sign in with wallet
-                        </Button>
-                      ) : null}
-                      <Button asChild type="button" variant="outline" size="lg" className="w-full sm:w-auto">
-                        <Link href="/sign-in">Open sign-in</Link>
-                      </Button>
-                    </div>
+                    <AccentCallout
+                      label="Open your profile"
+                      tone="mint"
+                      actions={
+                        <>
+                          {address && !auth.isAuthenticated ? (
+                            <Button type="button" variant="outline" size="lg" className="w-full sm:w-auto" disabled={auth.isLoading} onClick={() => void auth.signIn()}>
+                              Sign in with wallet
+                            </Button>
+                          ) : null}
+                          <Button asChild type="button" variant="outline" size="lg" className="w-full sm:w-auto">
+                            <Link href="/sign-in">Open sign-in</Link>
+                          </Button>
+                        </>
+                      }
+                    >
+                      Sign in with email or wallet to edit your profile, identity, and location settings.
+                    </AccentCallout>
                   ) : (
                     <div className="grid gap-4">
                       <div className="flex flex-wrap gap-2 text-xs">
@@ -946,14 +953,10 @@ export default function DashboardPage() {
                         {auth.user?.linkedWalletAddress ? <span className="market-chip">Linked wallet {shortenHex(auth.user.linkedWalletAddress)}</span> : null}
                       </div>
                       {auth.user?.authMethod === "email" && !auth.user?.emailVerifiedAt ? (
-                        <div className="rounded-2xl border border-amber-200/80 bg-amber-50/80 p-4">
-                          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                            <div className="space-y-1">
-                              <div className="text-sm font-semibold text-slate-950">Verify your email</div>
-                              <div className="text-sm text-muted-foreground">
-                                Verification unlocks a confirmed account state for sign-in links, notifications, and account recovery.
-                              </div>
-                            </div>
+                        <AccentCallout
+                          label="Verify your email"
+                          tone="amber"
+                          actions={
                             <Button
                               type="button"
                               variant="outline"
@@ -964,11 +967,13 @@ export default function DashboardPage() {
                             >
                               Send verification email
                             </Button>
-                          </div>
-                        </div>
+                          }
+                        >
+                          Verification unlocks a confirmed account state for sign-in links, notifications, and account recovery.
+                        </AccentCallout>
                       ) : null}
                       {auth.user?.authMethod === "email" ? (
-                        <div className="rounded-2xl border border-slate-200/80 bg-slate-50/90 p-4">
+                        <div className="rounded-2xl border border-slate-200/80 bg-slate-50/90 p-4 shadow-sm">
                           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                             <div className="space-y-1">
                               <div className="text-sm font-semibold text-slate-950">Wallet link</div>
@@ -1631,7 +1636,7 @@ export default function DashboardPage() {
 
           {accountTab === "watch" ? (
             <React.Fragment>
-              <Card className="market-panel">
+              <Card className="market-panel market-panel-spotlight market-panel-spotlight-blue">
                 <CardHeader>
                   <div className="market-section-title">Watch center</div>
                   <CardTitle>Watch activity</CardTitle>
@@ -2124,20 +2129,20 @@ export default function DashboardPage() {
         </div>
 
         <aside className={auth.isAuthenticated ? "space-y-3 sm:space-y-4" : "hidden xl:block xl:space-y-4"}>
-      <Card className="market-panel">
+      <Card className="market-panel market-panel-spotlight market-panel-spotlight-amber">
         <CardHeader>
           <div className="market-section-title">Scope</div>
           <CardTitle>Settlement scope</CardTitle>
           <CardDescription>Account tools stay aligned to wallet connection and on-chain settlement only.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4 p-4 pt-0 sm:p-6 sm:pt-0">
-          <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
+          <AccentCallout label="In scope" tone="amber">
             Wallet connection, escrow, and chain settlement remain in scope. Subscription billing and off-chain placement checkout are intentionally out of the product until they are fully implemented.
-          </div>
+          </AccentCallout>
         </CardContent>
       </Card>
 
-      <Card className="market-panel">
+      <Card className="market-panel market-panel-spotlight market-panel-spotlight-blue">
         <CardHeader>
           <div className="market-section-title">Wallet</div>
           <CardTitle>Wallet</CardTitle>
