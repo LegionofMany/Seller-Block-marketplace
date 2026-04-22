@@ -43,6 +43,14 @@ const listingCreatedEvent = parseAbiItem(
 
 const SAFE_LOG_SCAN_BLOCKS = 25_000n;
 
+const FALLBACK_PROFILE_STATS = {
+  listingCount: 0,
+  location: null,
+  followerCount: 0,
+  responseRate: null,
+  reputation: null,
+} as const;
+
 type LogArgsLike = {
   seller?: Address;
   id?: Hex;
@@ -323,11 +331,12 @@ export default function SellerListingsPage({ params }: { params: Promise<{ addre
         const next = !current;
         setProfile((prev) => {
           if (!prev) return prev;
+          const stats = prev.stats ?? FALLBACK_PROFILE_STATS;
           return {
             ...prev,
             stats: {
-              ...prev.stats,
-              followerCount: Math.max(0, prev.stats.followerCount + (next ? 1 : -1)),
+              ...stats,
+              followerCount: Math.max(0, stats.followerCount + (next ? 1 : -1)),
             },
           };
         });
@@ -347,6 +356,8 @@ export default function SellerListingsPage({ params }: { params: Promise<{ addre
       </Card>
     );
   }
+
+  const profileStats = profile?.stats ?? FALLBACK_PROFILE_STATS;
 
   return (
     <div className="space-y-6">
@@ -387,11 +398,11 @@ export default function SellerListingsPage({ params }: { params: Promise<{ addre
           <CardContent className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
             <div>
               <div className="text-muted-foreground">Listings</div>
-              <div className="font-medium">{profile.stats.listingCount}</div>
+              <div className="font-medium">{profileStats.listingCount}</div>
             </div>
             <div>
               <div className="text-muted-foreground">Location</div>
-              <div className="font-medium">{[profile.stats.location?.city, profile.stats.location?.region, profile.stats.location?.postalCode].filter(Boolean).join(", ") || "—"}</div>
+              <div className="font-medium">{[profileStats.location?.city, profileStats.location?.region, profileStats.location?.postalCode].filter(Boolean).join(", ") || "—"}</div>
             </div>
             <div>
               <div className="text-muted-foreground">Joined</div>
@@ -399,15 +410,15 @@ export default function SellerListingsPage({ params }: { params: Promise<{ addre
             </div>
             <div>
               <div className="text-muted-foreground">Follower count</div>
-              <div className="font-medium">{profile.stats.followerCount}</div>
+              <div className="font-medium">{profileStats.followerCount}</div>
             </div>
             <div>
               <div className="text-muted-foreground">Response rate</div>
-              <div className="font-medium">{formatPercent(profile.stats.responseRate)}</div>
+              <div className="font-medium">{formatPercent(profileStats.responseRate)}</div>
             </div>
             <div>
               <div className="text-muted-foreground">Reputation</div>
-              <div className="font-medium">{formatReputation(profile.stats.reputation)}</div>
+              <div className="font-medium">{formatReputation(profileStats.reputation)}</div>
             </div>
           </CardContent>
         </Card>
