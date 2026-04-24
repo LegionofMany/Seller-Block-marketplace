@@ -354,6 +354,8 @@ export default function DashboardPage() {
   const [creditAmount, setCreditAmount] = React.useState<bigint | null>(null);
   const [myListingIds, setMyListingIds] = React.useState<Hex[] | null>(null);
   const [myListings, setMyListings] = React.useState<Array<{ id: Hex; status: Parameters<typeof statusLabel>[0]; buyer: Address }> | null>(null);
+  const [deletingListingId, setDeletingListingId] = React.useState<string | null>(null);
+  const [pendingDeleteListingId, setPendingDeleteListingId] = React.useState<Hex | null>(null);
   const [savedSearches, setSavedSearches] = React.useState<SavedSearch[]>([]);
   const [notifications, setNotifications] = React.useState<NotificationItem[]>([]);
   const [notificationUnreadCount, setNotificationUnreadCount] = React.useState(0);
@@ -385,6 +387,7 @@ export default function DashboardPage() {
   }, []);
   const envReady = Boolean(envState.env);
   const defaultChainKey = envState.env?.defaultChain.key ?? "sepolia";
+  const defaultChainId = envState.env?.defaultChain.chainId;
   const defaultNativeCurrencySymbol = envState.env?.defaultChain.nativeCurrencySymbol ?? "ETH";
   const marketplaceRegistryAddress = envState.env?.marketplaceRegistryAddress ?? zeroAddress;
   const escrowVaultAddress = envState.env?.escrowVaultAddress ?? zeroAddress;
@@ -501,6 +504,42 @@ export default function DashboardPage() {
       router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
     },
     [pathname, router, searchParams]
+  );
+
+  const deleteListingFromDashboard = React.useCallback(
+    async (listingId: Hex) => {
+      try {
+        setDeletingListingId(listingId);
+
+        const listingRow = myListings?.find((row) => row.id === listingId) ?? null;
+        if (listingRow?.status === 1) {
+          if (!publicClient || !defaultChainId || marketplaceRegistryAddress === zeroAddress) {
+            throw new Error("Wallet or chain configuration is not ready for listing cancellation");
+          }
+
+          toast.info("Waiting for wallet confirmation to cancel the blockchain listing");
+          const hash = await writeContractAsync({
+            address: marketplaceRegistryAddress,
+            chainId: defaultChainId,
+            abi: marketplaceRegistryAbi,
+            functionName: "cancelListing",
+            args: [listingId],
+          });
+          await publicClient.waitForTransactionReceipt({ hash });
+        }
+
+        await fetchJson<{ ok: true }>(`/listings/${listingId}?chain=${encodeURIComponent(defaultChainKey)}`, { method: "DELETE" });
+        setMyListings((current) => current?.filter((row) => row.id !== listingId) ?? current);
+        setMyListingIds((current) => current?.filter((rowId) => rowId !== listingId) ?? current);
+        toast.success("Listing deleted");
+      } catch (error: unknown) {
+        toast.error(getErrorMessage(error, "Failed to delete listing"));
+      } finally {
+        setDeletingListingId(null);
+        setPendingDeleteListingId(null);
+      }
+    },
+    [defaultChainId, defaultChainKey, marketplaceRegistryAddress, myListings, publicClient, writeContractAsync]
   );
 
   React.useEffect(() => {
@@ -658,6 +697,11 @@ export default function DashboardPage() {
       : activeTabMeta.tone === "amber"
         ? "market-panel market-panel-spotlight market-panel-spotlight-amber border-slate-200/80 bg-white/78"
         : "market-panel market-panel-spotlight market-panel-spotlight-blue border-slate-200/80 bg-white/78";
+  const pendingDeleteListing = React.useMemo(
+    () => myListings?.find((row) => row.id === pendingDeleteListingId) ?? null,
+    [myListings, pendingDeleteListingId]
+  );
+  const pendingDeleteRequiresChainCancel = pendingDeleteListing?.status === 1;
 
   const { data: lastListingId } = useReadContract({
     address: marketplaceRegistryAddress,
@@ -2121,15 +2165,32 @@ export default function DashboardPage() {
                 ) : (
                   <div className="space-y-2">
                     {(myListings ?? []).map((row) => (
-                      <Link key={row.id} href={buildListingHref(String(row.id), defaultChainKey)} className="block rounded-2xl border px-3 py-3 text-sm transition-colors hover:bg-accent/30 sm:px-4">
-                        <div className="flex items-center justify-between gap-3">
-                          <div className="break-all font-medium">{row.id}</div>
-                          <div className="text-xs text-muted-foreground">{statusLabel(row.status)}</div>
+                      <div key={row.id} className="rounded-2xl border bg-white/80 px-3 py-3 text-sm shadow-sm sm:px-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0 flex-1">
+                            <div className="break-all font-medium text-slate-950">{row.id}</div>
+                            <div className="mt-1 text-xs text-muted-foreground">{statusLabel(row.status)}</div>
+                          </div>
+                          <div className="flex shrink-0 flex-col gap-2 sm:flex-row">
+                            <Button asChild variant="outline" size="sm" className="w-full sm:w-auto">
+                              <Link href={buildListingHref(String(row.id), defaultChainKey)}>Open</Link>
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="destructive"
+                              size="sm"
+                              className="w-full sm:w-auto"
+                              disabled={deletingListingId === row.id}
+                              onClick={() => setPendingDeleteListingId(row.id)}
+                            >
+                              {deletingListingId === row.id ? "Deleting..." : "Delete listing"}
+                            </Button>
+                          </div>
                         </div>
                         {row.buyer && row.buyer !== zeroAddress ? (
                           <div className="mt-1 text-xs text-muted-foreground">Buyer: {shortenHex(row.buyer)}</div>
                         ) : null}
-                      </Link>
+                      </div>
                     ))}
                   </div>
                 )}
@@ -2137,6 +2198,52 @@ export default function DashboardPage() {
             </Card>
           ) : null}
         </div>
+
+        {pendingDeleteListingId ? (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 px-4 py-6">
+            <div className="w-full max-w-md rounded-3xl border border-slate-200/80 bg-white p-5 shadow-2xl sm:p-6">
+              <div className="space-y-3">
+                <div className="market-section-title">Confirm delete</div>
+                <div className="text-xl font-semibold text-slate-950">Delete this listing?</div>
+                <div className="text-sm leading-6 text-slate-600">
+                  {pendingDeleteRequiresChainCancel
+                    ? "This listing is still active on-chain. Seller Block will cancel the blockchain listing first, then remove the indexed database copy from your dashboard and public marketplace views."
+                    : "This listing is already inactive on-chain, so Seller Block will remove the indexed database copy from your dashboard and public marketplace views."}
+                </div>
+                {pendingDeleteRequiresChainCancel ? (
+                  <div className="rounded-2xl border border-amber-200/80 bg-amber-50/85 px-4 py-3 text-sm leading-6 text-amber-900">
+                    Step 1: confirm the wallet transaction to cancel the blockchain listing.
+                    <br />
+                    Step 2: after the transaction confirms, Seller Block will delete the marketplace database record.
+                  </div>
+                ) : null}
+                <div className="rounded-2xl border border-slate-200/80 bg-slate-50/90 px-4 py-3 text-xs text-slate-600 break-all">
+                  {pendingDeleteListingId}
+                </div>
+              </div>
+              <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full sm:w-auto"
+                  disabled={Boolean(deletingListingId)}
+                  onClick={() => setPendingDeleteListingId(null)}
+                >
+                  Keep listing
+                </Button>
+                <Button
+                  type="button"
+                  variant="destructive"
+                  className="w-full sm:w-auto"
+                  disabled={deletingListingId === pendingDeleteListingId}
+                  onClick={() => void deleteListingFromDashboard(pendingDeleteListingId)}
+                >
+                  {deletingListingId === pendingDeleteListingId ? "Deleting..." : "Delete listing"}
+                </Button>
+              </div>
+            </div>
+          </div>
+        ) : null}
 
         <aside className={auth.isAuthenticated ? "space-y-3 sm:space-y-4" : "hidden xl:block xl:space-y-4"}>
       <Card className="market-panel market-panel-spotlight market-panel-spotlight-amber">

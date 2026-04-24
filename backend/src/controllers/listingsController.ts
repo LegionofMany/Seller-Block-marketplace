@@ -1,11 +1,15 @@
 import { createHash } from "node:crypto";
 
 import type { Request, Response } from "express";
+import { requireAuthAddress } from "../middlewares/auth";
+import { HttpError } from "../middlewares/errors";
 import { getContext } from "../services/context";
 import {
+  deleteListingRecord,
   findAuction,
   findListing,
   findRaffle,
+  getUser,
   listMostViewedListings,
   queryListings,
   recordListingView,
@@ -272,4 +276,35 @@ export async function getListingsBySeller(req: Request, res: Response) {
   const body = { items: rows, limit, offset };
   cache.set(cacheKey, body);
   return res.json(body);
+}
+
+export async function deleteListingAction(req: Request, res: Response) {
+  const { db, cache } = getContext();
+  const subject = requireAuthAddress(req);
+  const id = requireBytes32(String(req.params.id ?? ""), "listing id");
+  const chainKey = normalizeChainKey(req.query.chainKey ?? req.query.chain);
+
+  const listing = await findListing(db, id, chainKey);
+  if (!listing) {
+    throw new HttpError(404, "Listing not found", "LISTING_NOT_FOUND");
+  }
+
+  const user = await getUser(db, subject);
+  const ownedAddresses = new Set(
+    [subject, user?.linkedWalletAddress ?? null]
+      .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+      .map((value) => value.toLowerCase())
+  );
+
+  if (!ownedAddresses.has(listing.seller.toLowerCase())) {
+    throw new HttpError(403, "You can only delete your own listings", "LISTING_DELETE_FORBIDDEN");
+  }
+
+  const deleted = await deleteListingRecord(db, listing.id, listing.chainKey);
+  if (!deleted) {
+    throw new HttpError(404, "Listing not found", "LISTING_NOT_FOUND");
+  }
+
+  cache.clear();
+  return res.json({ ok: true });
 }

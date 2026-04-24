@@ -461,6 +461,53 @@ export async function setListingActive(_db: Pool | any, listingId: string, chain
   await p.query("UPDATE listings SET active = $1 WHERE chainkey = $2 AND id = $3", [active, chainKey, listingId]);
 }
 
+export async function deleteListingRecord(_db: Pool | any, listingId: string, chainKey: string): Promise<boolean> {
+  const p = ensurePool(_db);
+  const client = await p.connect();
+
+  try {
+    await client.query("BEGIN");
+
+    const existing = await client.query(
+      'SELECT metadatauri AS "metadataURI" FROM listings WHERE chainkey = $1 AND id = $2 LIMIT 1',
+      [chainKey, listingId]
+    );
+    if (!existing.rows[0]) {
+      await client.query("ROLLBACK");
+      return false;
+    }
+
+    const metadataURI = typeof existing.rows[0].metadataURI === "string" ? existing.rows[0].metadataURI : null;
+    const reportTargetId = `${chainKey}:${listingId}`;
+
+    await client.query('DELETE FROM promotions WHERE listingchainkey = $1 AND listingid = $2', [chainKey, listingId]);
+    await client.query('DELETE FROM user_favorite_listings WHERE listingchainkey = $1 AND listingid = $2', [chainKey, listingId]);
+    await client.query('DELETE FROM listing_comments WHERE listingchainkey = $1 AND listingid = $2', [chainKey, listingId]);
+    await client.query('DELETE FROM listing_order_intents WHERE chainkey = $1 AND listingid = $2', [chainKey, listingId]);
+    await client.query('DELETE FROM listing_views WHERE listingchainkey = $1 AND listingid = $2', [chainKey, listingId]);
+    await client.query("DELETE FROM reports WHERE targettype = 'listing' AND targetid = $1", [reportTargetId]);
+    await client.query('DELETE FROM auctions WHERE chainkey = $1 AND listingid = $2', [chainKey, listingId]);
+    await client.query('DELETE FROM raffles WHERE chainkey = $1 AND listingid = $2', [chainKey, listingId]);
+
+    const deleted = await client.query('DELETE FROM listings WHERE chainkey = $1 AND id = $2', [chainKey, listingId]);
+
+    if (metadataURI) {
+      const remaining = await client.query('SELECT 1 FROM listings WHERE metadatauri = $1 LIMIT 1', [metadataURI]);
+      if (!remaining.rows[0]) {
+        await client.query('DELETE FROM metadata WHERE uri = $1', [metadataURI]);
+      }
+    }
+
+    await client.query("COMMIT");
+    return Number(deleted.rowCount ?? 0) > 0;
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 export async function upsertAuction(_db: Pool | any, row: AuctionRow) {
   const p = ensurePool(_db);
   await p.query(

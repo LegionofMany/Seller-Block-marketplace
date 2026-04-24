@@ -252,14 +252,14 @@ export default function SignInPage() {
                     : "This email link has been processed."}
             </AccentCallout>
           ) : null}
-          <div className="grid grid-cols-3 gap-2">
-            <Button type="button" variant={mode === "login" ? "default" : "outline"} onClick={() => setModeWithQuery("login")} disabled={emailDisabled} className="w-full">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+            <Button type="button" variant={mode === "login" ? "default" : "outline"} onClick={() => setModeWithQuery("login")} disabled={emailDisabled} className="h-auto min-h-11 w-full whitespace-normal px-3 py-2 text-center leading-5">
               Sign in
             </Button>
-            <Button type="button" variant={mode === "register" ? "default" : "outline"} onClick={() => setModeWithQuery("register")} disabled={emailDisabled} className="w-full">
+            <Button type="button" variant={mode === "register" ? "default" : "outline"} onClick={() => setModeWithQuery("register")} disabled={emailDisabled} className="h-auto min-h-11 w-full whitespace-normal px-3 py-2 text-center leading-5">
               Create account
             </Button>
-            <Button type="button" variant={mode === "reset" ? "default" : "outline"} onClick={() => setModeWithQuery("reset")} disabled={emailDisabled} className="w-full">
+            <Button type="button" variant={mode === "reset" ? "default" : "outline"} onClick={() => setModeWithQuery("reset")} disabled={emailDisabled} className="h-auto min-h-11 w-full whitespace-normal px-3 py-2 text-center leading-5">
               Reset password
             </Button>
           </div>
