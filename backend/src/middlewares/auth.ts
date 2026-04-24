@@ -55,3 +55,7 @@ export function requireAdmin(req: Request): string {
   }
   return subject;
 }
+
+export function isAdminRequest(req: Request): boolean {
+  return Boolean((req as any)[AUTH_ADMIN_KEY]);
+}

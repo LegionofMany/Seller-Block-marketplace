@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 
 import type { Request, Response } from "express";
-import { requireAuthAddress } from "../middlewares/auth";
+import { isAdminRequest, requireAuthAddress } from "../middlewares/auth";
 import { HttpError } from "../middlewares/errors";
 import { getContext } from "../services/context";
 import {
@@ -295,9 +295,10 @@ export async function deleteListingAction(req: Request, res: Response) {
       .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
       .map((value) => value.toLowerCase())
   );
+  const canDeleteAsAdmin = isAdminRequest(req);
 
-  if (!ownedAddresses.has(listing.seller.toLowerCase())) {
-    throw new HttpError(403, "You can only delete your own listings", "LISTING_DELETE_FORBIDDEN");
+  if (!canDeleteAsAdmin && !ownedAddresses.has(listing.seller.toLowerCase())) {
+    throw new HttpError(403, "You can only delete your own listings unless you are an admin", "LISTING_DELETE_FORBIDDEN");
   }
 
   const deleted = await deleteListingRecord(db, listing.id, listing.chainKey);

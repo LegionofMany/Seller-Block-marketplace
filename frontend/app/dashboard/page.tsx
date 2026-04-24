@@ -102,6 +102,15 @@ type BackendListingRow = {
   active: 0 | 1;
 };
 
+type DashboardListingRow = {
+  id: Hex;
+  chainKey: string;
+  chainId: number;
+  seller: Address;
+  status: Parameters<typeof statusLabel>[0];
+  buyer: Address;
+};
+
 type NotificationItem = {
   id: number;
   title: string;
@@ -353,9 +362,12 @@ export default function DashboardPage() {
   const [creditToken, setCreditToken] = React.useState<string>("");
   const [creditAmount, setCreditAmount] = React.useState<bigint | null>(null);
   const [myListingIds, setMyListingIds] = React.useState<Hex[] | null>(null);
-  const [myListings, setMyListings] = React.useState<Array<{ id: Hex; status: Parameters<typeof statusLabel>[0]; buyer: Address }> | null>(null);
+  const [myListings, setMyListings] = React.useState<DashboardListingRow[] | null>(null);
+  const [adminListings, setAdminListings] = React.useState<DashboardListingRow[]>([]);
+  const [isLoadingAdminListings, setIsLoadingAdminListings] = React.useState(false);
+  const [adminListingsError, setAdminListingsError] = React.useState<string | null>(null);
   const [deletingListingId, setDeletingListingId] = React.useState<string | null>(null);
-  const [pendingDeleteListingId, setPendingDeleteListingId] = React.useState<Hex | null>(null);
+  const [pendingDeleteListing, setPendingDeleteListing] = React.useState<DashboardListingRow | null>(null);
   const [savedSearches, setSavedSearches] = React.useState<SavedSearch[]>([]);
   const [notifications, setNotifications] = React.useState<NotificationItem[]>([]);
   const [notificationUnreadCount, setNotificationUnreadCount] = React.useState(0);
@@ -507,39 +519,41 @@ export default function DashboardPage() {
   );
 
   const deleteListingFromDashboard = React.useCallback(
-    async (listingId: Hex) => {
+    async (listing: DashboardListingRow) => {
       try {
-        setDeletingListingId(listingId);
+        const listingKey = `${listing.chainKey}:${listing.id}`;
+        setDeletingListingId(listingKey);
 
-        const listingRow = myListings?.find((row) => row.id === listingId) ?? null;
-        if (listingRow?.status === 1) {
-          if (!publicClient || !defaultChainId || marketplaceRegistryAddress === zeroAddress) {
+        if (listing.status === 1) {
+          const targetChain = envState.env?.chains.find((chain) => chain.key === listing.chainKey) ?? null;
+          if (!publicClient || !targetChain || targetChain.marketplaceRegistryAddress === zeroAddress) {
             throw new Error("Wallet or chain configuration is not ready for listing cancellation");
           }
 
           toast.info("Waiting for wallet confirmation to cancel the blockchain listing");
           const hash = await writeContractAsync({
-            address: marketplaceRegistryAddress,
-            chainId: defaultChainId,
+            address: targetChain.marketplaceRegistryAddress,
+            chainId: targetChain.chainId,
             abi: marketplaceRegistryAbi,
             functionName: "cancelListing",
-            args: [listingId],
+            args: [listing.id],
           });
           await publicClient.waitForTransactionReceipt({ hash });
         }
 
-        await fetchJson<{ ok: true }>(`/listings/${listingId}?chain=${encodeURIComponent(defaultChainKey)}`, { method: "DELETE" });
-        setMyListings((current) => current?.filter((row) => row.id !== listingId) ?? current);
-        setMyListingIds((current) => current?.filter((rowId) => rowId !== listingId) ?? current);
-        toast.success("Listing deleted");
+        await fetchJson<{ ok: true }>(`/listings/${listing.id}?chain=${encodeURIComponent(listing.chainKey)}`, { method: "DELETE" });
+        setMyListings((current) => current?.filter((row) => !(row.id === listing.id && row.chainKey === listing.chainKey)) ?? current);
+        setAdminListings((current) => current.filter((row) => !(row.id === listing.id && row.chainKey === listing.chainKey)));
+        setMyListingIds((current) => current?.filter((rowId) => rowId !== listing.id) ?? current);
+        toast.success(auth.isAdmin ? "Listing removed" : "Listing deleted");
       } catch (error: unknown) {
         toast.error(getErrorMessage(error, "Failed to delete listing"));
       } finally {
         setDeletingListingId(null);
-        setPendingDeleteListingId(null);
+        setPendingDeleteListing(null);
       }
     },
-    [defaultChainId, defaultChainKey, marketplaceRegistryAddress, myListings, publicClient, writeContractAsync]
+    [auth.isAdmin, envState.env, publicClient, writeContractAsync]
   );
 
   React.useEffect(() => {
@@ -676,6 +690,47 @@ export default function DashboardPage() {
     };
   }, [auth.isAuthenticated, auth.isAdmin, dashboardRefreshKey, defaultChainKey]);
 
+  React.useEffect(() => {
+    let cancelled = false;
+
+    async function run() {
+      if (!auth.isAuthenticated || !auth.isAdmin) {
+        setAdminListings([]);
+        setAdminListingsError(null);
+        return;
+      }
+
+      try {
+        setIsLoadingAdminListings(true);
+        setAdminListingsError(null);
+        const res = await fetchJson<{ items: BackendListingRow[] }>("/listings?limit=12&offset=0&sort=newest", { timeoutMs: 7_000 });
+        if (cancelled) return;
+        setAdminListings(
+          (res.items ?? []).map((row) => ({
+            id: row.id as Hex,
+            chainKey: row.chainKey,
+            chainId: row.chainId,
+            seller: row.seller as Address,
+            status: (row.active ? 1 : 2) as Parameters<typeof statusLabel>[0],
+            buyer: zeroAddress,
+          }))
+        );
+      } catch (error: unknown) {
+        if (!cancelled) {
+          setAdminListings([]);
+          setAdminListingsError(getErrorMessage(error, "Failed to load admin listings"));
+        }
+      } finally {
+        if (!cancelled) setIsLoadingAdminListings(false);
+      }
+    }
+
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [auth.isAuthenticated, auth.isAdmin, dashboardRefreshKey]);
+
   const activeSavedSearchSubcategories = React.useMemo(() => {
     if (!savedSearchDraft?.filters.category) return [];
     return subcategoriesFor(savedSearchDraft.filters.category);
@@ -697,11 +752,14 @@ export default function DashboardPage() {
       : activeTabMeta.tone === "amber"
         ? "market-panel market-panel-spotlight market-panel-spotlight-amber border-slate-200/80 bg-white/78"
         : "market-panel market-panel-spotlight market-panel-spotlight-blue border-slate-200/80 bg-white/78";
-  const pendingDeleteListing = React.useMemo(
-    () => myListings?.find((row) => row.id === pendingDeleteListingId) ?? null,
-    [myListings, pendingDeleteListingId]
-  );
   const pendingDeleteRequiresChainCancel = pendingDeleteListing?.status === 1;
+  const pendingDeleteTitle = auth.isAdmin ? "Remove this listing as admin?" : "Delete this listing?";
+  const pendingDeleteDescription = pendingDeleteRequiresChainCancel
+    ? "This listing is still active on-chain. Seller Block will ask the connected wallet to cancel the blockchain listing first, then remove the indexed database copy from dashboard and public marketplace views."
+    : "This listing is already inactive on-chain, so Seller Block will remove the indexed database copy from dashboard and public marketplace views.";
+  const pendingDeleteNotice = auth.isAdmin
+    ? "You are performing this removal with admin access."
+    : "This action removes the listing from your seller surfaces after the delete completes.";
 
   const { data: lastListingId } = useReadContract({
     address: marketplaceRegistryAddress,
@@ -863,9 +921,16 @@ export default function DashboardPage() {
             const r = results[i];
             if (!r || r.status !== "success") return null;
             const parsed = parseListing(r.result);
-            return { id, status: Number(parsed.status), buyer: parsed.buyer };
+            return {
+              id,
+              chainKey: defaultChainKey,
+              chainId: defaultChainId ?? 0,
+              seller: (address ?? zeroAddress) as Address,
+              status: Number(parsed.status),
+              buyer: parsed.buyer,
+            };
           })
-          .filter(Boolean) as Array<{ id: Hex; status: Parameters<typeof statusLabel>[0]; buyer: Address }>;
+          .filter(Boolean) as DashboardListingRow[];
 
         if (!cancelled) setMyListings(rows);
       } catch {
@@ -2137,6 +2202,7 @@ export default function DashboardPage() {
           ) : null}
 
           {accountTab === "my-listings" ? (
+            <React.Fragment>
             <Card className="market-panel market-panel-spotlight market-panel-spotlight-mint">
               <CardHeader>
                 <div className="market-section-title">Listings</div>
@@ -2173,17 +2239,17 @@ export default function DashboardPage() {
                           </div>
                           <div className="flex shrink-0 flex-col gap-2 sm:flex-row">
                             <Button asChild variant="outline" size="sm" className="w-full sm:w-auto">
-                              <Link href={buildListingHref(String(row.id), defaultChainKey)}>Open</Link>
+                              <Link href={buildListingHref(String(row.id), row.chainKey)}>Open</Link>
                             </Button>
                             <Button
                               type="button"
                               variant="destructive"
                               size="sm"
                               className="w-full sm:w-auto"
-                              disabled={deletingListingId === row.id}
-                              onClick={() => setPendingDeleteListingId(row.id)}
+                              disabled={deletingListingId === `${row.chainKey}:${row.id}`}
+                              onClick={() => setPendingDeleteListing(row)}
                             >
-                              {deletingListingId === row.id ? "Deleting..." : "Delete listing"}
+                              {deletingListingId === `${row.chainKey}:${row.id}` ? "Deleting..." : "Delete listing"}
                             </Button>
                           </div>
                         </div>
@@ -2196,19 +2262,82 @@ export default function DashboardPage() {
                 )}
               </CardContent>
             </Card>
+
+            {auth.isAdmin ? (
+              <Card className="market-panel market-panel-spotlight market-panel-spotlight-amber border-amber-300/60 bg-[linear-gradient(180deg,rgba(255,252,244,0.92),rgba(255,255,255,0.98))]">
+                <CardHeader>
+                  <div className="market-section-title">Admin listings</div>
+                  <CardTitle>Listing removal panel</CardTitle>
+                  <CardDescription>Review recently indexed marketplace listings and remove them without relying on the seller-scoped inventory tab.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4 p-4 pt-0 sm:p-6 sm:pt-0">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="text-sm text-muted-foreground">Latest indexed inventory across the marketplace.</div>
+                    <Button type="button" variant="outline" size="sm" disabled={isLoadingAdminListings} onClick={() => setDashboardRefreshKey((current) => current + 1)}>
+                      {isLoadingAdminListings ? "Refreshing..." : "Refresh listings"}
+                    </Button>
+                  </div>
+
+                  {isLoadingAdminListings ? (
+                    <div className="space-y-2">
+                      <Skeleton className="h-16 w-full" />
+                      <Skeleton className="h-16 w-full" />
+                      <Skeleton className="h-16 w-full" />
+                    </div>
+                  ) : adminListingsError ? (
+                    <AccentCallout label="Inventory unavailable" tone="amber">
+                      {adminListingsError}
+                    </AccentCallout>
+                  ) : adminListings.length === 0 ? (
+                    <AccentCallout label="No indexed listings" tone="mint">
+                      The index is not returning any listings right now, so there is nothing to review here yet.
+                    </AccentCallout>
+                  ) : (
+                    <div className="space-y-2">
+                      {adminListings.map((row) => (
+                        <div key={`${row.chainKey}:${row.id}`} className="rounded-2xl border bg-white/85 px-4 py-3 text-sm shadow-sm">
+                          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                            <div className="min-w-0 flex-1 space-y-1">
+                              <div className="break-all font-medium text-slate-950">{row.id}</div>
+                              <div className="text-xs text-muted-foreground">{statusLabel(row.status)} on {row.chainKey}</div>
+                              <div className="text-xs text-muted-foreground break-all">Seller: {row.seller}</div>
+                            </div>
+                            <div className="flex shrink-0 flex-col gap-2 sm:flex-row">
+                              <Button asChild variant="outline" size="sm" className="w-full sm:w-auto">
+                                <Link href={buildListingHref(String(row.id), row.chainKey)}>Open</Link>
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="destructive"
+                                size="sm"
+                                className="w-full sm:w-auto"
+                                disabled={deletingListingId === `${row.chainKey}:${row.id}`}
+                                onClick={() => setPendingDeleteListing(row)}
+                              >
+                                {deletingListingId === `${row.chainKey}:${row.id}` ? "Deleting..." : "Remove listing"}
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            ) : null}
+            </React.Fragment>
           ) : null}
         </div>
 
-        {pendingDeleteListingId ? (
+        {pendingDeleteListing ? (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 px-4 py-6">
             <div className="w-full max-w-md rounded-3xl border border-slate-200/80 bg-white p-5 shadow-2xl sm:p-6">
               <div className="space-y-3">
                 <div className="market-section-title">Confirm delete</div>
-                <div className="text-xl font-semibold text-slate-950">Delete this listing?</div>
-                <div className="text-sm leading-6 text-slate-600">
-                  {pendingDeleteRequiresChainCancel
-                    ? "This listing is still active on-chain. Seller Block will cancel the blockchain listing first, then remove the indexed database copy from your dashboard and public marketplace views."
-                    : "This listing is already inactive on-chain, so Seller Block will remove the indexed database copy from your dashboard and public marketplace views."}
+                <div className="text-xl font-semibold text-slate-950">{pendingDeleteTitle}</div>
+                <div className="text-sm leading-6 text-slate-600">{pendingDeleteDescription}</div>
+                <div className="rounded-2xl border border-slate-200/80 bg-slate-50/90 px-4 py-3 text-xs font-medium uppercase tracking-[0.14em] text-slate-600">
+                  {pendingDeleteNotice}
                 </div>
                 {pendingDeleteRequiresChainCancel ? (
                   <div className="rounded-2xl border border-amber-200/80 bg-amber-50/85 px-4 py-3 text-sm leading-6 text-amber-900">
@@ -2218,7 +2347,7 @@ export default function DashboardPage() {
                   </div>
                 ) : null}
                 <div className="rounded-2xl border border-slate-200/80 bg-slate-50/90 px-4 py-3 text-xs text-slate-600 break-all">
-                  {pendingDeleteListingId}
+                  {pendingDeleteListing.id}
                 </div>
               </div>
               <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
@@ -2227,7 +2356,7 @@ export default function DashboardPage() {
                   variant="outline"
                   className="w-full sm:w-auto"
                   disabled={Boolean(deletingListingId)}
-                  onClick={() => setPendingDeleteListingId(null)}
+                  onClick={() => setPendingDeleteListing(null)}
                 >
                   Keep listing
                 </Button>
@@ -2235,10 +2364,10 @@ export default function DashboardPage() {
                   type="button"
                   variant="destructive"
                   className="w-full sm:w-auto"
-                  disabled={deletingListingId === pendingDeleteListingId}
-                  onClick={() => void deleteListingFromDashboard(pendingDeleteListingId)}
+                  disabled={deletingListingId === `${pendingDeleteListing.chainKey}:${pendingDeleteListing.id}`}
+                  onClick={() => void deleteListingFromDashboard(pendingDeleteListing)}
                 >
-                  {deletingListingId === pendingDeleteListingId ? "Deleting..." : "Delete listing"}
+                  {deletingListingId === `${pendingDeleteListing.chainKey}:${pendingDeleteListing.id}` ? "Deleting..." : auth.isAdmin ? "Remove listing" : "Delete listing"}
                 </Button>
               </div>
             </div>
