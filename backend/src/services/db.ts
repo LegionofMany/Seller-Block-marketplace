@@ -740,7 +740,9 @@ export async function queryListings(_db: Pool | any, q: ListingsQuery) {
     params.push(q.postalCode);
   }
   if (q.q) {
-    where.push(`(m.title ILIKE $${params.length + 1} OR m.description ILIKE $${params.length + 1})`);
+    where.push(
+      `(m.title ILIKE $${params.length + 1} OR m.description ILIKE $${params.length + 1} OR listings.id ILIKE $${params.length + 1} OR listings.seller ILIKE $${params.length + 1})`
+    );
     params.push(`%${q.q}%`);
   }
 

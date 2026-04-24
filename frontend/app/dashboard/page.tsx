@@ -38,6 +38,8 @@ const listingCreatedEvent = parseAbiItem(
   "event ListingCreated(bytes32 indexed id, address seller, uint8 saleType, address token, uint256 price, string metadataURI)"
 );
 
+const ADMIN_LISTINGS_PAGE_SIZE = 50;
+
 type ListingCreatedLogArgs = {
   seller?: Address;
   id?: Hex;
@@ -366,6 +368,13 @@ export default function DashboardPage() {
   const [adminListings, setAdminListings] = React.useState<DashboardListingRow[]>([]);
   const [isLoadingAdminListings, setIsLoadingAdminListings] = React.useState(false);
   const [adminListingsError, setAdminListingsError] = React.useState<string | null>(null);
+  const [adminListingSearch, setAdminListingSearch] = React.useState("");
+  const [adminListingChainFilter, setAdminListingChainFilter] = React.useState("all");
+  const [adminListingStatusFilter, setAdminListingStatusFilter] = React.useState<"all" | "active" | "inactive">("all");
+  const deferredAdminListingSearch = React.useDeferredValue(adminListingSearch.trim());
+  const [adminListingsOffset, setAdminListingsOffset] = React.useState(0);
+  const [adminListingsHasMore, setAdminListingsHasMore] = React.useState(false);
+  const [isLoadingMoreAdminListings, setIsLoadingMoreAdminListings] = React.useState(false);
   const [deletingListingId, setDeletingListingId] = React.useState<string | null>(null);
   const [pendingDeleteListing, setPendingDeleteListing] = React.useState<DashboardListingRow | null>(null);
   const [savedSearches, setSavedSearches] = React.useState<SavedSearch[]>([]);
@@ -701,27 +710,47 @@ export default function DashboardPage() {
       }
 
       try {
-        setIsLoadingAdminListings(true);
+        if (adminListingsOffset === 0) {
+          setIsLoadingAdminListings(true);
+        } else {
+          setIsLoadingMoreAdminListings(true);
+        }
         setAdminListingsError(null);
-        const res = await fetchJson<{ items: BackendListingRow[] }>("/listings?limit=12&offset=0&sort=newest", { timeoutMs: 7_000 });
+        const params = new URLSearchParams();
+        params.set("limit", String(ADMIN_LISTINGS_PAGE_SIZE));
+        params.set("offset", String(adminListingsOffset));
+        params.set("sort", "newest");
+        if (deferredAdminListingSearch) params.set("q", deferredAdminListingSearch);
+        if (adminListingChainFilter !== "all") params.set("chain", adminListingChainFilter);
+        if (adminListingStatusFilter !== "all") params.set("active", adminListingStatusFilter === "active" ? "true" : "false");
+
+        const res = await fetchJson<{ items: BackendListingRow[] }>(`/listings?${params.toString()}`, { timeoutMs: 7_000 });
         if (cancelled) return;
-        setAdminListings(
-          (res.items ?? []).map((row) => ({
+        const nextItems = (res.items ?? []).map((row) => ({
             id: row.id as Hex,
             chainKey: row.chainKey,
             chainId: row.chainId,
             seller: row.seller as Address,
             status: (row.active ? 1 : 2) as Parameters<typeof statusLabel>[0],
             buyer: zeroAddress,
-          }))
-        );
+          }));
+        setAdminListings((current) => {
+          if (adminListingsOffset === 0) return nextItems;
+          const seen = new Set(current.map((row) => `${row.chainKey}:${row.id}`));
+          return [...current, ...nextItems.filter((row) => !seen.has(`${row.chainKey}:${row.id}`))];
+        });
+        setAdminListingsHasMore(nextItems.length === ADMIN_LISTINGS_PAGE_SIZE);
       } catch (error: unknown) {
         if (!cancelled) {
           setAdminListings([]);
+          setAdminListingsHasMore(false);
           setAdminListingsError(getErrorMessage(error, "Failed to load admin listings"));
         }
       } finally {
-        if (!cancelled) setIsLoadingAdminListings(false);
+        if (!cancelled) {
+          setIsLoadingAdminListings(false);
+          setIsLoadingMoreAdminListings(false);
+        }
       }
     }
 
@@ -729,12 +758,21 @@ export default function DashboardPage() {
     return () => {
       cancelled = true;
     };
-  }, [auth.isAuthenticated, auth.isAdmin, dashboardRefreshKey]);
+  }, [adminListingChainFilter, adminListingStatusFilter, adminListingsOffset, auth.isAuthenticated, auth.isAdmin, dashboardRefreshKey, deferredAdminListingSearch]);
+
+  React.useEffect(() => {
+    setAdminListingsOffset(0);
+  }, [adminListingChainFilter, adminListingStatusFilter, deferredAdminListingSearch]);
 
   const activeSavedSearchSubcategories = React.useMemo(() => {
     if (!savedSearchDraft?.filters.category) return [];
     return subcategoriesFor(savedSearchDraft.filters.category);
   }, [savedSearchDraft?.filters.category]);
+
+  const adminListingChainOptions = React.useMemo(
+    () => (envState.env?.chains ?? []).map((chain) => chain.key).sort((left, right) => left.localeCompare(right)),
+    [envState.env]
+  );
 
   const accountTabs = React.useMemo(
     () => [
@@ -2278,6 +2316,65 @@ export default function DashboardPage() {
                     </Button>
                   </div>
 
+                  <div className="grid gap-3 rounded-2xl border bg-white/85 p-4 sm:grid-cols-2 xl:grid-cols-[minmax(0,1.4fr)_180px_180px]">
+                    <div className="space-y-2">
+                      <Label htmlFor="admin-listing-search">Listing or seller</Label>
+                      <Input
+                        id="admin-listing-search"
+                        value={adminListingSearch}
+                        onChange={(event) => setAdminListingSearch(event.target.value)}
+                        placeholder="Search by listing id or seller address"
+                      />
+                      <div className="text-xs text-muted-foreground">Server search checks title, description, seller address, and listing id.</div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="admin-listing-chain-filter">Chain</Label>
+                      <select
+                        id="admin-listing-chain-filter"
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                        value={adminListingChainFilter}
+                        onChange={(event) => setAdminListingChainFilter(event.target.value)}
+                      >
+                        <option value="all">All chains</option>
+                        {adminListingChainOptions.map((chainKey) => (
+                          <option key={chainKey} value={chainKey}>{chainKey}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="admin-listing-status-filter">Status</Label>
+                      <select
+                        id="admin-listing-status-filter"
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                        value={adminListingStatusFilter}
+                        onChange={(event) => setAdminListingStatusFilter(event.target.value as "all" | "active" | "inactive")}
+                      >
+                        <option value="all">All statuses</option>
+                        <option value="active">Active</option>
+                        <option value="inactive">Inactive</option>
+                      </select>
+                    </div>
+                    <div className="sm:col-span-2 xl:col-span-3 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+                      <div>Showing {adminListings.length} indexed listings for the current server query.</div>
+                      {adminListingSearch || adminListingChainFilter !== "all" || adminListingStatusFilter !== "all" ? (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-auto px-0 text-xs text-muted-foreground hover:text-slate-950"
+                          onClick={() => {
+                            setAdminListingSearch("");
+                            setAdminListingChainFilter("all");
+                            setAdminListingStatusFilter("all");
+                            setAdminListingsOffset(0);
+                          }}
+                        >
+                          Clear filters
+                        </Button>
+                      ) : null}
+                    </div>
+                  </div>
+
                   {isLoadingAdminListings ? (
                     <div className="space-y-2">
                       <Skeleton className="h-16 w-full" />
@@ -2290,7 +2387,7 @@ export default function DashboardPage() {
                     </AccentCallout>
                   ) : adminListings.length === 0 ? (
                     <AccentCallout label="No indexed listings" tone="mint">
-                      The index is not returning any listings right now, so there is nothing to review here yet.
+                      No indexed listing matches the current server search or filter combination.
                     </AccentCallout>
                   ) : (
                     <div className="space-y-2">
@@ -2320,6 +2417,17 @@ export default function DashboardPage() {
                           </div>
                         </div>
                       ))}
+                      {adminListingsHasMore ? (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="w-full"
+                          disabled={isLoadingMoreAdminListings}
+                          onClick={() => setAdminListingsOffset((current) => current + ADMIN_LISTINGS_PAGE_SIZE)}
+                        >
+                          {isLoadingMoreAdminListings ? "Loading more..." : "Load more listings"}
+                        </Button>
+                      ) : null}
                     </div>
                   )}
                 </CardContent>
