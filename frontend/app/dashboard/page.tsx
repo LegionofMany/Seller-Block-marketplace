@@ -372,6 +372,7 @@ export default function DashboardPage() {
   const [adminListingChainFilter, setAdminListingChainFilter] = React.useState("all");
   const [adminListingStatusFilter, setAdminListingStatusFilter] = React.useState<"all" | "active" | "inactive">("all");
   const deferredAdminListingSearch = React.useDeferredValue(adminListingSearch.trim());
+  const [adminListingsTotal, setAdminListingsTotal] = React.useState(0);
   const [adminListingsOffset, setAdminListingsOffset] = React.useState(0);
   const [adminListingsHasMore, setAdminListingsHasMore] = React.useState(false);
   const [isLoadingMoreAdminListings, setIsLoadingMoreAdminListings] = React.useState(false);
@@ -553,6 +554,7 @@ export default function DashboardPage() {
         await fetchJson<{ ok: true }>(`/listings/${listing.id}?chain=${encodeURIComponent(listing.chainKey)}`, { method: "DELETE" });
         setMyListings((current) => current?.filter((row) => !(row.id === listing.id && row.chainKey === listing.chainKey)) ?? current);
         setAdminListings((current) => current.filter((row) => !(row.id === listing.id && row.chainKey === listing.chainKey)));
+        setAdminListingsTotal((current) => Math.max(0, current - 1));
         setMyListingIds((current) => current?.filter((rowId) => rowId !== listing.id) ?? current);
         toast.success(auth.isAdmin ? "Listing removed" : "Listing deleted");
       } catch (error: unknown) {
@@ -705,7 +707,9 @@ export default function DashboardPage() {
     async function run() {
       if (!auth.isAuthenticated || !auth.isAdmin) {
         setAdminListings([]);
+        setAdminListingsTotal(0);
         setAdminListingsError(null);
+        setAdminListingsHasMore(false);
         return;
       }
 
@@ -724,7 +728,7 @@ export default function DashboardPage() {
         if (adminListingChainFilter !== "all") params.set("chain", adminListingChainFilter);
         if (adminListingStatusFilter !== "all") params.set("active", adminListingStatusFilter === "active" ? "true" : "false");
 
-        const res = await fetchJson<{ items: BackendListingRow[] }>(`/listings?${params.toString()}`, { timeoutMs: 7_000 });
+        const res = await fetchJson<{ items: BackendListingRow[]; total: number; limit: number; offset: number }>(`/listings?${params.toString()}`, { timeoutMs: 7_000 });
         if (cancelled) return;
         const nextItems = (res.items ?? []).map((row) => ({
             id: row.id as Hex,
@@ -734,15 +738,18 @@ export default function DashboardPage() {
             status: (row.active ? 1 : 2) as Parameters<typeof statusLabel>[0],
             buyer: zeroAddress,
           }));
+        const total = Number(res.total ?? nextItems.length);
         setAdminListings((current) => {
           if (adminListingsOffset === 0) return nextItems;
           const seen = new Set(current.map((row) => `${row.chainKey}:${row.id}`));
           return [...current, ...nextItems.filter((row) => !seen.has(`${row.chainKey}:${row.id}`))];
         });
-        setAdminListingsHasMore(nextItems.length === ADMIN_LISTINGS_PAGE_SIZE);
+        setAdminListingsTotal(total);
+        setAdminListingsHasMore(adminListingsOffset + nextItems.length < total);
       } catch (error: unknown) {
         if (!cancelled) {
           setAdminListings([]);
+          setAdminListingsTotal(0);
           setAdminListingsHasMore(false);
           setAdminListingsError(getErrorMessage(error, "Failed to load admin listings"));
         }
@@ -2355,7 +2362,7 @@ export default function DashboardPage() {
                       </select>
                     </div>
                     <div className="sm:col-span-2 xl:col-span-3 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
-                      <div>Showing {adminListings.length} indexed listings for the current server query.</div>
+                      <div>Showing {adminListings.length} of {adminListingsTotal} matching listings.</div>
                       {adminListingSearch || adminListingChainFilter !== "all" || adminListingStatusFilter !== "all" ? (
                         <Button
                           type="button"

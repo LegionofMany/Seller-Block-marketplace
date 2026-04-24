@@ -682,8 +682,7 @@ export type MostViewedListingsQuery = {
   limit: number;
 };
 
-export async function queryListings(_db: Pool | any, q: ListingsQuery) {
-  const p = ensurePool(_db);
+function buildListingsWhere(q: ListingsQuery) {
   const where: string[] = [];
   const params: any[] = [];
 
@@ -754,6 +753,28 @@ export async function queryListings(_db: Pool | any, q: ListingsQuery) {
   }
 
   const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
+
+  return { whereSql, params };
+}
+
+export async function countListings(_db: Pool | any, q: ListingsQuery): Promise<number> {
+  const p = ensurePool(_db);
+  const { whereSql, params } = buildListingsWhere(q);
+
+  const res = await p.query(
+    `SELECT COUNT(1)::INTEGER AS "count"
+     FROM listings
+     LEFT JOIN metadata m ON m.uri = listings.metadataURI
+     ${whereSql}`,
+    params
+  );
+
+  return Number(res.rows[0]?.count ?? 0);
+}
+
+export async function queryListings(_db: Pool | any, q: ListingsQuery) {
+  const p = ensurePool(_db);
+  const { whereSql, params } = buildListingsWhere(q);
 
   const orderBy = (() => {
     if (q.sort === "price_asc") return `ORDER BY CAST(listings.price AS NUMERIC) ASC, listings.blocknumber DESC`;

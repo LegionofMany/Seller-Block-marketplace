@@ -5,6 +5,7 @@ import { isAdminRequest, requireAuthAddress } from "../middlewares/auth";
 import { HttpError } from "../middlewares/errors";
 import { getContext } from "../services/context";
 import {
+  countListings,
   deleteListingRecord,
   findAuction,
   findListing,
@@ -154,7 +155,25 @@ export async function getListings(req: Request, res: Response) {
     offset,
   });
 
-  const body = { items: rows, limit, offset };
+  const total = await countListings(db, {
+    ...(chainKey ? { chainKey } : {}),
+    saleType,
+    active,
+    minPrice,
+    maxPrice,
+    ...(q ? { q } : {}),
+    ...(category ? { category } : {}),
+    ...(subcategory ? { subcategory } : {}),
+    ...(city ? { city } : {}),
+    ...(region ? { region } : {}),
+    ...(postalCode ? { postalCode } : {}),
+    ...(sort ? { sort } : {}),
+    autoHideReportThreshold: env.listingAutoHideReportsThreshold,
+    limit,
+    offset,
+  });
+
+  const body = { items: rows, total, limit, offset };
   cache.set(cacheKey, body);
   return res.json(body);
 }
