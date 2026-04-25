@@ -24,6 +24,7 @@ import { favoritesRouter } from "./routes/favorites";
 import { promotionsRouter } from "./routes/promotions";
 import { startMarketplaceIndexer, type MarketplaceIndexerHandle } from "./indexer/marketplaceIndexer";
 import { startNotificationsWorker } from "./services/notifications";
+import { getPinataAuthStatus } from "./services/ipfs";
 
 dotenv.config();
 
@@ -130,6 +131,23 @@ async function main() {
       },
       indexers: indexerStatuses,
       notifications: notificationsStatus,
+    });
+  });
+
+  app.get("/health/pinata", async (_req: express.Request, res: express.Response) => {
+    const pinata = await getPinataAuthStatus(env);
+
+    if (!pinata.configured) {
+      res.status(200).json({
+        status: "unconfigured",
+        pinata,
+      });
+      return;
+    }
+
+    res.status(pinata.authenticated ? 200 : 503).json({
+      status: pinata.authenticated ? "ok" : "fail",
+      pinata,
     });
   });
 
