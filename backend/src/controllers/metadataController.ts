@@ -21,9 +21,6 @@ export async function uploadMetadata(req: Request, res: Response) {
       ? [parsed.data.image]
       : [];
   const primaryImage = (parsed.data.image ?? images[0] ?? "").trim();
-  if (!primaryImage) {
-    throw new HttpError(400, "Metadata must include at least one image", "INVALID_METADATA_IMAGE");
-  }
 
   await upsertMetadata(db, {
     id,
@@ -151,9 +148,6 @@ export async function uploadMetadataIpfs(req: Request, res: Response) {
       ? [parsed.data.image]
       : [];
   const primaryImage = (parsed.data.image ?? images[0] ?? "").trim();
-  if (!primaryImage) {
-    throw new HttpError(400, "Metadata must include at least one image", "INVALID_METADATA_IMAGE");
-  }
 
   // Compute a stable id using the existing sha256 scheme.
   const { id } = buildFakeMetadataUri(parsed.data);

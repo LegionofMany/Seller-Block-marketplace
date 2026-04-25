@@ -11,6 +11,7 @@ It is written for someone who is not a developer. If you follow the steps in ord
 - browse listings
 - save favorites and follow sellers
 - create a listing
+- create a normal listing or a job post
 - use the dashboard
 
 ## What this app is
@@ -25,6 +26,7 @@ The current app is centered around normal user flows first:
 - dashboard watch activity
 - profile and address details
 - listing creation and publishing
+- jobs-specific posting flow for public hiring ads
 
 Wallet connection still exists, but it is not the first thing a normal user needs to do.
 
@@ -57,6 +59,7 @@ You need the backend if you want to use features like:
 - favorites and follows
 - saved searches and alerts
 - metadata creation during listing publish
+- text-first metadata fallback for no-photo posts such as jobs
 - faster marketplace and dashboard data loading
 
 If the backend is not running, the frontend may still open, but important parts of the app will not work correctly.
@@ -108,6 +111,7 @@ Optional but useful frontend values:
 
 - `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID`
 - `NEXT_PUBLIC_IPFS_GATEWAY_BASE_URL`
+- `NEXT_PUBLIC_BLOCKPAGES_URL`
 - `NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION`
 
 ## Start the frontend
@@ -210,11 +214,20 @@ Click any listing card to open its details page.
 The listing page shows the main information for that item, such as:
 
 - title
-- price
+- price or compensation summary
 - seller information
 - trust indicators
 - listing type
 - current status
+
+If the listing is a job post, the page now emphasizes:
+
+- company or employer
+- compensation summary
+- work mode such as on-site, hybrid, or remote
+- application contact details
+
+It no longer leads with normal buyer checkout language for job posts.
 
 Depending on the listing and the user account, the page may allow actions like:
 
@@ -237,10 +250,22 @@ Users should fill in:
 
 - a clear title
 - a plain-language description
-- photos
+- photos if the post needs them
 - location details
-- price or auction settings
+- price or auction settings for normal sale listings
 - the right category
+
+If the category is `Jobs`, the form changes into a hiring-style flow.
+
+For Jobs, the app asks for:
+
+- role title
+- role description
+- city, region, or postal code
+- email or phone contact for applicants
+- company or employer name
+- compensation summary
+- work mode such as on-site, hybrid, or remote
 
 Main listing types:
 
@@ -248,11 +273,34 @@ Main listing types:
 - auction
 - raffle
 
+Jobs do not use the auction, raffle, or token selection panels in the form.
+
 Important:
 
 - the backend must be available for metadata creation and recovery support
+- text-only posts such as jobs can now publish without photos
+- photo-based posts still need the image upload route and its backend support
 - wallet-related actions may still be required depending on the settlement path
 - if the app shows a draft recovery or publish recovery message, follow that prompt instead of starting over
+
+### Publishing with or without photos
+
+The create page now has two practical publish paths:
+
+1. With photos
+
+- the app uploads images first
+- then it sends the metadata through the IPFS publish route
+
+2. Without photos
+
+- the app can publish metadata without using the IPFS image route
+- this is the intended path for text-first posts such as jobs or quick public notices
+
+Important note:
+
+- if the seller wants to publish a listing with photos, the backend still needs image/IPFS support configured correctly
+- if the seller does not need photos, the app can now continue through the no-photo metadata path instead of failing immediately
 
 ## 6. Use the dashboard
 
@@ -286,6 +334,12 @@ This checklist can:
 - jump the user directly to the missing section such as email verification, contact details, bio, or seller wallet setup
 
 This means users do not need to search the form manually to find the next missing item.
+
+The Profile section may also show an `Increase KYC` prompt that opens BlockPages.
+
+This is a later trust step.
+
+It is not meant to block normal account creation.
 
 ### Watch
 
@@ -369,12 +423,28 @@ Likely cause:
 
 - metadata upload or listing publish support is not available from the backend
 - a wallet or chain action was not confirmed
+- a photo-based publish was attempted but the backend does not have its IPFS image support configured
 
 What to do:
 
 1. Keep the draft if the recovery message appears
 2. Confirm backend connectivity
-3. Retry from the recovery prompt instead of rebuilding the entire listing
+3. If the post does not need photos, remove the photos and try again
+4. Retry from the recovery prompt instead of rebuilding the entire listing
+
+### Jobs post fails during publish
+
+Likely cause:
+
+- no contact email or phone was entered
+- no location information was entered
+- wallet or chain confirmation was not completed
+
+What to do:
+
+1. Make sure at least one contact method is filled in
+2. Make sure city, region, or postal code is filled in
+3. Retry the wallet confirmation if it was cancelled
 
 ## Wallet actions are not working
 
@@ -419,10 +489,11 @@ You can consider the frontend ready for a layperson to use when all of these are
 5. the backend is reachable from the frontend
 6. email sign-in works
 7. users can browse, watch, and create listings without confusion
+8. users can publish a no-photo job post without confusion
 
 ## Final note
 
 For the current app, the simplest way to explain it to a non-technical user is this:
 
-Seller Block Marketplace is a marketplace website. Start the backend, start the frontend, open the browser, sign in with email, browse the marketplace, and use the dashboard to manage profile, watched items, and your listings.
+Seller Block Marketplace is a marketplace website. Start the backend, start the frontend, open the browser, sign in with email, browse the marketplace, and use the dashboard to manage profile, watched items, your listings, and job posts.
 

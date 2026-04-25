@@ -135,6 +135,17 @@ export function SiteHeader() {
         </Button>
       </div>
 
+      <div className="border-t border-border/60 bg-[linear-gradient(90deg,rgba(15,23,42,0.98),rgba(51,65,85,0.96),rgba(15,23,42,0.98))] px-3 py-1.5 text-[11px] text-slate-100 sm:px-4">
+        <div className="mx-auto flex w-full max-w-screen-xl items-center justify-between gap-3">
+          <div className="truncate uppercase tracking-[0.18em] text-slate-200">
+            Paid spotlight: Zonycs Basic Loop is now running across the marketplace.
+          </div>
+          <Link href="/marketplace" className="shrink-0 text-[11px] font-semibold uppercase tracking-[0.18em] text-white underline decoration-white/50 underline-offset-4">
+            View ads
+          </Link>
+        </div>
+      </div>
+
       {/* Mobile drawer */}
       <div
         className={

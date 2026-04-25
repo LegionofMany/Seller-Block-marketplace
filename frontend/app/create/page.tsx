@@ -99,6 +99,9 @@ type CreateListingDraft = {
   postalCode: string;
   contactEmail: string;
   contactPhone: string;
+  companyName: string;
+  compensation: string;
+  workMode: string;
   fixedPrice: string;
   auctionStart: string;
   auctionEnd: string;
@@ -138,6 +141,7 @@ type ReceiptLogLike = {
 
 const CREATE_DRAFT_KEY = "seller-block.create-listing-draft.v1";
 const CREATE_PUBLISH_RECOVERY_KEY = "seller-block.create-listing-recovery.v1";
+const JOB_LISTING_MIN_PRICE_WEI = 1n;
 
 function nowPlus(minutes: number) {
   return new Date(Date.now() + minutes * 60_000);
@@ -198,6 +202,11 @@ function getErrorMessage(error: unknown, fallback: string) {
   const candidate = error as { shortMessage?: unknown; message?: unknown } | null;
   const message = candidate?.shortMessage ?? candidate?.message;
   return typeof message === "string" && message.trim() ? message : fallback;
+}
+
+function isPinataUnavailableError(error: unknown) {
+  const message = getErrorMessage(error, "").toLowerCase();
+  return message.includes("pinata is not configured") || message.includes("set pinata_jwt");
 }
 
 function getRecoveryActionLabel(recovery: PublishRecovery) {
@@ -269,6 +278,9 @@ export default function CreateListingPage() {
   const [postalCode, setPostalCode] = React.useState("");
   const [contactEmail, setContactEmail] = React.useState("");
   const [contactPhone, setContactPhone] = React.useState("");
+  const [companyName, setCompanyName] = React.useState("");
+  const [compensation, setCompensation] = React.useState("");
+  const [workMode, setWorkMode] = React.useState("On-site");
 
   const [fixedPrice, setFixedPrice] = React.useState("0.01");
 
@@ -379,6 +391,9 @@ export default function CreateListingPage() {
       if (typeof draft.postalCode === "string") setPostalCode(draft.postalCode);
       if (typeof draft.contactEmail === "string") setContactEmail(draft.contactEmail);
       if (typeof draft.contactPhone === "string") setContactPhone(draft.contactPhone);
+      if (typeof draft.companyName === "string") setCompanyName(draft.companyName);
+      if (typeof draft.compensation === "string") setCompensation(draft.compensation);
+      if (typeof draft.workMode === "string") setWorkMode(draft.workMode);
       if (typeof draft.fixedPrice === "string") setFixedPrice(draft.fixedPrice);
       if (typeof draft.auctionStart === "string") setAuctionStart(draft.auctionStart);
       if (typeof draft.auctionEnd === "string") setAuctionEnd(draft.auctionEnd);
@@ -440,6 +455,9 @@ export default function CreateListingPage() {
       postalCode,
       contactEmail,
       contactPhone,
+      companyName,
+      compensation,
+      workMode,
       fixedPrice,
       auctionStart,
       auctionEnd,
@@ -466,6 +484,9 @@ export default function CreateListingPage() {
       postalCode,
       contactEmail,
       contactPhone,
+      companyName,
+      compensation,
+      workMode,
       fixedPrice,
       auctionStart,
       auctionEnd,
@@ -512,6 +533,14 @@ export default function CreateListingPage() {
     }
   }
 
+  const isJobListing = category === "Jobs";
+
+  React.useEffect(() => {
+    if (!isJobListing) return;
+    setSaleType(0);
+    setTokenAddress("");
+  }, [isJobListing]);
+
   if (envState.error || !envState.env || !activeChain) {
     return (
       <Card>
@@ -521,6 +550,57 @@ export default function CreateListingPage() {
   }
 
   const env = envState.env;
+  const photosOptional = true;
+
+  async function uploadListingMetadata(images: string[]) {
+    const payload = {
+      title: title.trim(),
+      description: description.trim(),
+      images,
+      category: category.trim() || undefined,
+      subcategory: subcategory.trim() || undefined,
+      city: city.trim() || undefined,
+      region: region.trim() || undefined,
+      postalCode: postalCode.trim() || undefined,
+      contactEmail: contactEmail.trim() || undefined,
+      contactPhone: contactPhone.trim() || undefined,
+      attributes: isJobListing
+        ? [
+            { trait_type: "listingKind", value: "job" },
+            ...(companyName.trim() ? [{ trait_type: "companyName", value: companyName.trim() }] : []),
+            ...(compensation.trim() ? [{ trait_type: "compensation", value: compensation.trim() }] : []),
+            ...(workMode.trim() ? [{ trait_type: "workMode", value: workMode.trim() }] : []),
+          ]
+        : [],
+    };
+
+    if (!images.length) {
+      return fetchJson<{ metadataURI: string; id: string }>("/metadata", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+        timeoutMs: 10_000,
+      });
+    }
+
+    try {
+      return await fetchJson<{ metadataURI: string; cid: string; id: string }>("/metadata/ipfs", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+        timeoutMs: 10_000,
+      });
+    } catch (error: unknown) {
+      if (isPinataUnavailableError(error)) {
+        throw new Error("Image uploads require Pinata. Remove photos for a text-only publish, or configure PINATA_JWT on the backend.");
+      }
+      throw error;
+    }
+  }
 
   async function publishFromMetadata(metadataURI: string, publishSaleType: SaleType, existingListingId?: Hex) {
     if (tokenAddress.trim().length && !selectedToken) {
@@ -534,9 +614,9 @@ export default function CreateListingPage() {
       return;
     }
 
-    const token: Address = tokenAddress.trim().length ? (tokenAddress.trim() as Address) : zeroAddress;
+    const token: Address = isJobListing ? zeroAddress : tokenAddress.trim().length ? (tokenAddress.trim() as Address) : zeroAddress;
     const settlementToken = selectedToken ?? describeToken(env, currentChain.chainId, zeroAddress);
-    const price = publishSaleType === 0 ? parseTokenAmount(fixedPrice || "0", settlementToken) : BigInt(0);
+    const price = isJobListing ? JOB_LISTING_MIN_PRICE_WEI : publishSaleType === 0 ? parseTokenAmount(fixedPrice || "0", settlementToken) : BigInt(0);
 
     let listingId: Hex | null = existingListingId ?? null;
 
@@ -659,8 +739,13 @@ export default function CreateListingPage() {
       return;
     }
 
-    if (!files.length) {
-      toast.error("At least one image is required");
+    if (isJobListing && !contactEmail.trim() && !contactPhone.trim()) {
+      toast.error("Jobs need an email or phone number so applicants can respond");
+      return;
+    }
+
+    if (isJobListing && !city.trim() && !region.trim() && !postalCode.trim()) {
+      toast.error("Jobs need at least one location detail");
       return;
     }
 
@@ -668,37 +753,22 @@ export default function CreateListingPage() {
     try {
       setIsSubmitting(true);
       setLastUploadError(null);
-      setUploadStage("uploading");
-      setUploadProgress(0);
-      const uploadJson = await uploadImagesWithProgress(env.backendUrl ?? "http://localhost:4000", files, setUploadProgress);
-      const images = uploadJson.items.map((item) => item.ipfsUri).filter(Boolean);
-      if (!images.length) throw new Error("Image upload returned no IPFS URIs");
+      const images = files.length
+        ? await (async () => {
+            setUploadStage("uploading");
+            setUploadProgress(0);
+            const uploadJson = await uploadImagesWithProgress(env.backendUrl ?? "http://localhost:4000", files, setUploadProgress);
+            return uploadJson.items.map((item) => item.ipfsUri).filter(Boolean);
+          })()
+        : [];
 
       setUploadStage("publishing");
-      setUploadProgress(100);
-      const res = await fetchJson<{ metadataURI: string; cid: string; id: string }>("/metadata/ipfs", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          title: title.trim(),
-          description: description.trim(),
-          images,
-          category: category.trim() || undefined,
-          subcategory: subcategory.trim() || undefined,
-          city: city.trim() || undefined,
-          region: region.trim() || undefined,
-          postalCode: postalCode.trim() || undefined,
-          contactEmail: contactEmail.trim() || undefined,
-          contactPhone: contactPhone.trim() || undefined,
-          attributes: [],
-        }),
-        timeoutMs: 10_000,
-      });
+      setUploadProgress(files.length ? 100 : 35);
+      const res = await uploadListingMetadata(images);
 
       metadataURI = res.metadataURI;
       setGeneratedMetadataURI(res.metadataURI);
+      setUploadProgress(100);
       savePublishRecovery({
         metadataURI: res.metadataURI,
         chainKey: currentChain.key,
@@ -747,7 +817,9 @@ export default function CreateListingPage() {
   }
 
   const saleTypeDescription =
-    saleType === 0
+    isJobListing
+      ? "Jobs publish as direct-response ads with recruiter contact details instead of buyer checkout pricing."
+      : saleType === 0
       ? "Best for everyday classifieds with a clear price and direct checkout."
       : saleType === 1
         ? "Advanced format for timed bidding. Use only when the listing really needs an auction."
@@ -759,30 +831,32 @@ export default function CreateListingPage() {
       <section className="market-hero px-4 py-5 sm:px-8 sm:py-8">
         <div className="grid gap-6 lg:grid-cols-[1.5fr_0.9fr] lg:items-end">
           <div className="space-y-4">
-            <div className="market-section-title">Post a listing</div>
+            <div className="market-section-title">{isJobListing ? "Post a job" : "Post a listing"}</div>
             <div className="space-y-2">
-              <h1 className="text-2xl font-semibold tracking-tight text-slate-950 sm:text-4xl">List it like a local marketplace, not a protocol dashboard.</h1>
+              <h1 className="text-2xl font-semibold tracking-tight text-slate-950 sm:text-4xl">{isJobListing ? "Post a hiring ad that feels built for applicants." : "List it like a local marketplace, not a protocol dashboard."}</h1>
               <p className="max-w-2xl text-[13px] leading-6 text-slate-700 sm:text-base">
-                Add photos, location, contact details, and a clear price first. Wallet settlement still powers the listing on the {publicNetworkLabel.toLowerCase()}, but the posting flow now prioritizes what shoppers actually need to see.
+                {isJobListing
+                  ? "Add the role, location, recruiter contact, and compensation notes first. Jobs now publish as direct-response public hiring posts instead of product listings."
+                  : `Add location, contact details, and a clear price first. Photos help when you have them, but quick public posts like jobs or simple local ads can still publish without them. Wallet settlement still powers the listing on the ${publicNetworkLabel.toLowerCase()}.`}
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
-              <div className="market-chip border-amber-200/80 bg-white/95 text-slate-900 shadow-sm">Photos up to 12</div>
+              <div className="market-chip border-amber-200/80 bg-white/95 text-slate-900 shadow-sm">{isJobListing ? "Applicant-ready copy" : "Photos optional, up to 12"}</div>
               <div className="market-chip border-amber-200/80 bg-white/95 text-slate-900 shadow-sm">Location-aware metadata</div>
-              <div className="market-chip border-amber-200/80 bg-white/95 text-slate-900 shadow-sm">Public listing page after publish</div>
+              <div className="market-chip border-amber-200/80 bg-white/95 text-slate-900 shadow-sm">{isJobListing ? "Direct-response contact info" : "Public listing page after publish"}</div>
             </div>
           </div>
 
           <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-1">
             <div className="market-stat">
               <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Default flow</div>
-              <div className="mt-2 text-lg font-semibold">Fixed price</div>
-              <div className="mt-1 text-sm text-muted-foreground">Simple classifieds checkout stays front and center.</div>
+              <div className="mt-2 text-lg font-semibold">{isJobListing ? "Direct response" : "Fixed price"}</div>
+              <div className="mt-1 text-sm text-muted-foreground">{isJobListing ? "Applicants respond through the recruiter contact details in the ad." : "Simple classifieds checkout stays front and center."}</div>
             </div>
             <div className="market-stat">
-              <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Settlement</div>
-              <div className="mt-2 text-lg font-semibold">{selectedToken?.symbol ?? activeChain.nativeCurrencySymbol}</div>
-              <div className="mt-1 text-sm text-muted-foreground">Choose the payment currency buyers should see before you publish.</div>
+              <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">{isJobListing ? "Hiring focus" : "Settlement"}</div>
+              <div className="mt-2 text-lg font-semibold">{isJobListing ? "Contact + location" : selectedToken?.symbol ?? activeChain.nativeCurrencySymbol}</div>
+              <div className="mt-1 text-sm text-muted-foreground">{isJobListing ? "Applicants should immediately see how to respond and where the role is based." : "Choose the payment currency buyers should see before you publish."}</div>
             </div>
           </div>
         </div>
@@ -791,15 +865,15 @@ export default function CreateListingPage() {
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px] xl:gap-6">
         <Card className="market-panel market-panel-spotlight market-panel-spotlight-blue">
           <CardHeader>
-            <div className="market-section-title">Listing setup</div>
-            <CardTitle>Build the listing buyers expect</CardTitle>
+            <div className="market-section-title">{isJobListing ? "Job setup" : "Listing setup"}</div>
+            <CardTitle>{isJobListing ? "Build the job post applicants expect" : "Build the listing buyers expect"}</CardTitle>
             <CardDescription>{saleTypeDescription}</CardDescription>
           </CardHeader>
           <CardContent className="p-4 pt-0 sm:p-6 sm:pt-0">
             <form onSubmit={onSubmit} className="space-y-6">
               {draftRestored ? (
                 <AccentCallout label="Draft restored" tone="amber">
-                  Draft restored. Text, pricing, and schedule details came back from local storage. Photos are not persisted, so reselect images before publishing.
+                  Draft restored. Text, pricing, and schedule details came back from local storage. Photos are not persisted, so reselect them only if this ad should include images.
                 </AccentCallout>
               ) : null}
               {publishRecovery ? (
@@ -833,38 +907,44 @@ export default function CreateListingPage() {
                 </AccentCallout>
               ) : null}
 
-              <div className="space-y-3 rounded-2xl border bg-accent/30 p-3 sm:p-4">
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-                  <div>
-                    <Label>Sale type</Label>
-                    <div className="mt-1 text-sm text-muted-foreground">Fixed price stays primary. Auction and raffle remain available as advanced publishing modes.</div>
+              {isJobListing ? (
+                <AccentCallout label="Jobs mode" tone="blue">
+                  Jobs publish as direct-response ads. Pricing, token selection, auctions, and raffles are hidden so the form stays focused on the role, location, and recruiter contact details.
+                </AccentCallout>
+              ) : (
+                <div className="space-y-3 rounded-2xl border bg-accent/30 p-3 sm:p-4">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                    <div>
+                      <Label>Sale type</Label>
+                      <div className="mt-1 text-sm text-muted-foreground">Fixed price stays primary. Auction and raffle remain available as advanced publishing modes.</div>
+                    </div>
+                    <div className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Current: {saleType === 0 ? "Fixed price" : saleType === 1 ? "Auction" : "Raffle"}</div>
                   </div>
-                  <div className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Current: {saleType === 0 ? "Fixed price" : saleType === 1 ? "Auction" : "Raffle"}</div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button type="button" size="lg" variant={saleType === 0 ? "default" : "outline"} onClick={() => setSaleType(0)} className="w-full sm:w-auto">
+                      Fixed price
+                    </Button>
+                    <Button type="button" size="lg" variant={saleType === 1 ? "default" : "outline"} onClick={() => setSaleType(1)} className="w-full sm:w-auto">
+                      Auction
+                    </Button>
+                    <Button type="button" size="lg" variant={saleType === 2 ? "default" : "outline"} onClick={() => setSaleType(2)} className="w-full sm:w-auto">
+                      Raffle
+                    </Button>
+                  </div>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  <Button type="button" size="lg" variant={saleType === 0 ? "default" : "outline"} onClick={() => setSaleType(0)} className="w-full sm:w-auto">
-                    Fixed price
-                  </Button>
-                  <Button type="button" size="lg" variant={saleType === 1 ? "default" : "outline"} onClick={() => setSaleType(1)} className="w-full sm:w-auto">
-                    Auction
-                  </Button>
-                  <Button type="button" size="lg" variant={saleType === 2 ? "default" : "outline"} onClick={() => setSaleType(2)} className="w-full sm:w-auto">
-                    Raffle
-                  </Button>
-                </div>
-              </div>
+              )}
 
               <div className="grid gap-3 sm:grid-cols-2 sm:gap-4">
                 <div className="space-y-2 sm:col-span-2">
-                  <Label>Title</Label>
-                  <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. My item" />
+                  <Label>{isJobListing ? "Role title" : "Title"}</Label>
+                  <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={isJobListing ? "e.g. Office Administrator" : "e.g. My item"} />
                 </div>
                 <div className="space-y-2 sm:col-span-2">
-                  <Label>Description</Label>
-                  <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Describe your item" />
+                  <Label>{isJobListing ? "Role description" : "Description"}</Label>
+                  <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder={isJobListing ? "Describe the responsibilities, requirements, and anything applicants should know before reaching out." : "Describe your item"} />
                 </div>
                 <div className="space-y-2 sm:col-span-2">
-                  <Label>Images (required, up to 12)</Label>
+                  <Label>Images ({photosOptional ? "optional" : "required"}, up to 12)</Label>
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div className="space-y-2">
                       <Label className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Choose from gallery</Label>
@@ -891,7 +971,7 @@ export default function CreateListingPage() {
                       />
                     </div>
                   </div>
-                  <div className="text-xs text-muted-foreground">Photos are selected per device session and are not stored in the local draft. New gallery or camera selections append up to 12 images so phone and tablet uploads can be built in batches.</div>
+                  <div className="text-xs text-muted-foreground">Photos are selected per device session and are not stored in the local draft. Add them for visual listings like antiques or furniture, or leave this empty for text-first posts such as jobs and quick public notices.</div>
                   {files.length ? (
                     <>
                       <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
@@ -999,50 +1079,74 @@ export default function CreateListingPage() {
                   <Input value={postalCode} onChange={(e) => setPostalCode(e.target.value)} placeholder="e.g. M5V" />
                 </div>
                 <div className="space-y-2">
-                  <Label>Contact email (optional)</Label>
+                  <Label>Contact email {isJobListing ? "(recommended)" : "(optional)"}</Label>
                   <Input value={contactEmail} onChange={(e) => setContactEmail(e.target.value)} placeholder="name@example.com" />
                 </div>
                 <div className="space-y-2">
-                  <Label>Contact phone (optional)</Label>
+                  <Label>Contact phone {isJobListing ? "(recommended)" : "(optional)"}</Label>
                   <Input value={contactPhone} onChange={(e) => setContactPhone(e.target.value)} placeholder="+1 555…" />
                 </div>
+                {isJobListing ? (
+                  <>
+                    <div className="space-y-2">
+                      <Label>Company / employer</Label>
+                      <Input value={companyName} onChange={(e) => setCompanyName(e.target.value)} placeholder="e.g. Zonycs Logistics" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Compensation summary</Label>
+                      <Input value={compensation} onChange={(e) => setCompensation(e.target.value)} placeholder="e.g. CAD 22/hour or salary based on experience" />
+                    </div>
+                    <div className="space-y-2 sm:col-span-2">
+                      <Label>Work mode</Label>
+                      <div className="flex flex-wrap gap-2">
+                        {["On-site", "Hybrid", "Remote"].map((entry) => (
+                          <Button key={entry} type="button" size="sm" variant={workMode === entry ? "default" : "outline"} onClick={() => setWorkMode(entry)}>
+                            {entry}
+                          </Button>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                ) : null}
                 <div className="space-y-2 sm:col-span-2">
                   <Label>Generated metadataURI (from backend)</Label>
                   <Input value={generatedMetadataURI} readOnly placeholder="Will be generated on submit" />
                 </div>
-                <div className="space-y-2 sm:col-span-2">
-                  <Label>Settlement token</Label>
-                  <div className="flex flex-wrap gap-2">
-                    {tokenOptions.map((tokenOption) => {
-                      const value = tokenOption.address === zeroAddress ? "" : tokenOption.address;
-                      const active = tokenAddress.trim().toLowerCase() === value.toLowerCase();
-                      return (
-                        <Button
-                          key={`${tokenOption.symbol}-${tokenOption.address}`}
-                          type="button"
-                          size="sm"
-                          variant={active ? "default" : "outline"}
-                          onClick={() => setTokenAddress(value)}
-                        >
-                          {tokenOption.symbol}
-                        </Button>
-                      );
-                    })}
+                {!isJobListing ? (
+                  <div className="space-y-2 sm:col-span-2">
+                    <Label>Settlement token</Label>
+                    <div className="flex flex-wrap gap-2">
+                      {tokenOptions.map((tokenOption) => {
+                        const value = tokenOption.address === zeroAddress ? "" : tokenOption.address;
+                        const active = tokenAddress.trim().toLowerCase() === value.toLowerCase();
+                        return (
+                          <Button
+                            key={`${tokenOption.symbol}-${tokenOption.address}`}
+                            type="button"
+                            size="sm"
+                            variant={active ? "default" : "outline"}
+                            onClick={() => setTokenAddress(value)}
+                          >
+                            {tokenOption.symbol}
+                          </Button>
+                        );
+                      })}
+                    </div>
+                    <Input
+                      value={tokenAddress}
+                      onChange={(e) => setTokenAddress(e.target.value)}
+                      placeholder={`Leave empty for ${activeChain.nativeCurrencySymbol}, or paste a custom ERC-20 address`}
+                    />
+                    <div className="text-xs text-muted-foreground">
+                      {selectedToken
+                        ? `Using ${selectedToken.name} (${selectedToken.symbol}) with ${selectedToken.decimals} decimals.`
+                        : "Custom token address must be a valid ERC-20 contract address."}
+                    </div>
                   </div>
-                  <Input
-                    value={tokenAddress}
-                    onChange={(e) => setTokenAddress(e.target.value)}
-                    placeholder={`Leave empty for ${activeChain.nativeCurrencySymbol}, or paste a custom ERC-20 address`}
-                  />
-                  <div className="text-xs text-muted-foreground">
-                    {selectedToken
-                      ? `Using ${selectedToken.name} (${selectedToken.symbol}) with ${selectedToken.decimals} decimals.`
-                      : "Custom token address must be a valid ERC-20 contract address."}
-                  </div>
-                </div>
+                ) : null}
               </div>
 
-              {saleType === 0 ? (
+              {saleType === 0 && !isJobListing ? (
                 <div className="grid gap-3 sm:grid-cols-2 sm:gap-4">
                   <div className="space-y-2">
                     <Label>Price ({selectedToken?.symbol ?? activeChain.nativeCurrencySymbol})</Label>
@@ -1051,7 +1155,7 @@ export default function CreateListingPage() {
                 </div>
               ) : null}
 
-              {saleType === 1 ? (
+              {saleType === 1 && !isJobListing ? (
                 <div className="space-y-4 rounded-2xl border bg-background/80 p-4">
                   <div className="text-sm font-medium">Auction configuration</div>
                   <div className="grid gap-3 sm:grid-cols-2 sm:gap-4">
@@ -1065,7 +1169,7 @@ export default function CreateListingPage() {
                 </div>
               ) : null}
 
-              {saleType === 2 ? (
+              {saleType === 2 && !isJobListing ? (
                 <div className="space-y-4 rounded-2xl border bg-background/80 p-4">
                   <div className="text-sm font-medium">Raffle configuration</div>
                   <div className="grid gap-4 sm:grid-cols-2">
@@ -1081,7 +1185,7 @@ export default function CreateListingPage() {
 
               <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
                 <Button type="submit" size="lg" className="w-full sm:w-auto" disabled={isSubmitting}>
-                  {isSubmitting ? "Publishing..." : "Publish listing"}
+                  {isSubmitting ? "Publishing..." : isJobListing ? "Publish job" : "Publish ad"}
                 </Button>
                 <Button
                   type="button"
@@ -1119,9 +1223,9 @@ export default function CreateListingPage() {
         <aside className="space-y-3 sm:space-y-4">
           <Card className="market-panel market-panel-spotlight market-panel-spotlight-amber">
             <CardHeader>
-              <div className="market-section-title">What buyers see</div>
+              <div className="market-section-title">{isJobListing ? "What applicants see" : "What buyers see"}</div>
               <CardTitle>Publishing checklist</CardTitle>
-              <CardDescription>Keep the draft readable, photo-rich, and priced like a real classifieds listing before it goes live.</CardDescription>
+              <CardDescription>{isJobListing ? "Keep the draft readable, location-aware, and easy to respond to before it goes live." : "Keep the draft readable, photo-rich, and priced like a real classifieds listing before it goes live."}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3 p-4 pt-0 text-sm text-muted-foreground sm:p-6 sm:pt-0">
               <AccentCallout label="Draft handling" tone="blue">
@@ -1130,14 +1234,14 @@ export default function CreateListingPage() {
               <AccentCallout label="Publish recovery" tone="amber">
                 If photo upload or listing creation already succeeded and the later publish step fails, this page keeps a recoverable publish session so you can continue without re-uploading the same images.
               </AccentCallout>
-              <AccentCallout label="Buyer-facing basics" tone="mint">
-                Lead with a plain-language title, real photos, city and region, and one direct price.
+              <AccentCallout label={isJobListing ? "Applicant-facing basics" : "Buyer-facing basics"} tone="mint">
+                {isJobListing ? "Lead with a plain-language role title, city or region, clear application contact details, and a short compensation summary." : "Lead with a plain-language title, real photos, city and region, and one direct price."}
               </AccentCallout>
-              <AccentCallout label="Recommended for classifieds" tone="mint">
-                Use fixed price for most listings so the detail page stays simple and buyers can act immediately.
+              <AccentCallout label={isJobListing ? "Recommended for jobs" : "Recommended for classifieds"} tone="mint">
+                {isJobListing ? "Use the description for responsibilities and requirements, then let the applicant reply directly from the public listing page." : "Use fixed price for most listings so the detail page stays simple and buyers can act immediately."}
               </AccentCallout>
               <AccentCallout label="Network" tone="blue">
-                This publish flow still settles through the {publicNetworkLabel.toLowerCase()}, but the listing details, location, and recovery path stay front and center instead of chain jargon.
+                {isJobListing ? "Jobs still publish on the marketplace network, but the public page now leads with role details, location, and contact instead of token jargon." : `This publish flow still settles through the ${publicNetworkLabel.toLowerCase()}, but the listing details, location, and recovery path stay front and center instead of chain jargon.`}
               </AccentCallout>
             </CardContent>
           </Card>

@@ -11,7 +11,7 @@ import { useSellerProfile } from "@/lib/hooks/useSellerProfile";
 import { buildListingHref } from "@/lib/listings";
 import { saleTypeLabel, statusLabel } from "@/lib/contracts/types";
 import { formatPrice, shortAddress } from "@/lib/format";
-import { getRenderableListingImage, useMarketplaceMetadata } from "@/lib/metadata";
+import { getMetadataAttributeValue, getRenderableListingImage, isJobMetadata, useMarketplaceMetadata } from "@/lib/metadata";
 import { zeroAddress } from "viem";
 
 export function ListingCard({ row }: { row: ListingSummary }) {
@@ -20,11 +20,16 @@ export function ListingCard({ row }: { row: ListingSummary }) {
   const { metadata } = useMarketplaceMetadata(row.metadataURI);
   const { profile: sellerProfile } = useSellerProfile(row.seller);
   const metadataMissing = !metadata;
+  const isJobPost = isJobMetadata(metadata);
+  const companyName = getMetadataAttributeValue(metadata, "companyName");
+  const compensation = getMetadataAttributeValue(metadata, "compensation");
+  const workMode = getMetadataAttributeValue(metadata, "workMode");
 
   const title = metadata?.title?.trim() || `${saleTypeLabel(row.saleType)} listing`;
   const description = metadata?.description?.trim() || "Listing details are still syncing. Open the listing for price, seller, and checkout status.";
   const imageUrl = getRenderableListingImage(metadata?.image);
   const subtitleParts = [metadata?.category, metadata?.city, metadata?.region, metadata?.postalCode].filter(Boolean).join(" • ");
+  const priceLabel = isJobPost ? compensation ?? "Compensation listed in ad" : formatPrice(row.price, isNative);
 
   return (
     <Link href={buildListingHref(row.id, row.chainKey)} className="block">
@@ -35,9 +40,15 @@ export function ListingCard({ row }: { row: ListingSummary }) {
               <CardTitle className="truncate">{title}</CardTitle>
               <CardDescription className="break-words">{description}</CardDescription>
               {subtitleParts ? <div className="mt-1 truncate text-xs text-muted-foreground">{subtitleParts}</div> : null}
+              {isJobPost && (companyName || workMode) ? (
+                <div className="mt-2 flex flex-wrap gap-2 text-xs text-muted-foreground">
+                  {companyName ? <span>{companyName}</span> : null}
+                  {workMode ? <span>{workMode}</span> : null}
+                </div>
+              ) : null}
             </div>
             <div className="flex flex-col items-end gap-2">
-              <Badge variant="outline">{saleTypeLabel(row.saleType)}</Badge>
+              <Badge variant="outline">{isJobPost ? "Job post" : saleTypeLabel(row.saleType)}</Badge>
             </div>
           </div>
         </CardHeader>
@@ -70,8 +81,8 @@ export function ListingCard({ row }: { row: ListingSummary }) {
             <SellerTrustSummary profile={sellerProfile} variant="compact" />
           </div>
           <div className="mt-2 flex items-center justify-between text-sm">
-            <div className="text-muted-foreground">Price</div>
-            <div>{formatPrice(row.price, isNative)}</div>
+            <div className="text-muted-foreground">{isJobPost ? "Compensation" : "Price"}</div>
+            <div>{priceLabel}</div>
           </div>
           {status ? (
             <div className="mt-2 flex items-center justify-between text-sm">

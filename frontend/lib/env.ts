@@ -35,6 +35,7 @@ export type ClientEnv = {
   walletConnectProjectId?: string;
   backendUrl?: string;
   ipfsGatewayBaseUrl?: string;
+  blockPagesUrl?: string;
   marketplaceRegistryAddress: Address;
   marketplaceSettlementV2Address: Address;
   escrowVaultAddress: Address;
@@ -160,6 +161,7 @@ export function getEnv(): ClientEnv {
   const walletConnectProjectId = clean(process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID);
   const backendUrl = clean(process.env.NEXT_PUBLIC_BACKEND_URL);
   const ipfsGatewayBaseUrl = clean(process.env.NEXT_PUBLIC_IPFS_GATEWAY_BASE_URL) ?? undefined;
+  const blockPagesUrl = clean(process.env.NEXT_PUBLIC_BLOCKPAGES_URL) ?? undefined;
 
   const chainConfigJson = clean(process.env.NEXT_PUBLIC_CHAIN_CONFIG_JSON);
 
@@ -225,6 +227,7 @@ export function getEnv(): ClientEnv {
     walletConnectProjectId,
     backendUrl,
     ipfsGatewayBaseUrl,
+    blockPagesUrl,
     marketplaceRegistryAddress: defaultChain.marketplaceRegistryAddress,
     marketplaceSettlementV2Address: defaultChain.marketplaceSettlementV2Address,
     escrowVaultAddress: defaultChain.escrowVaultAddress,

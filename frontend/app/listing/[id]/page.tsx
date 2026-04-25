@@ -29,7 +29,7 @@ import { isNativeToken, saleTypeLabel, statusLabel } from "@/lib/contracts/types
 import { formatPrice, shortenHex } from "@/lib/format";
 import { useSellerProfile } from "@/lib/hooks/useSellerProfile";
 import { useToastTx } from "@/lib/hooks/useToastTx";
-import { fetchMetadataById, fetchMetadataByUri, getRenderableListingImage, hasCompleteMarketplaceMetadata, isSmokeMetadataUri, LISTING_FALLBACK_IMAGE, metadataIdFromUri, type MarketplaceMetadata } from "@/lib/metadata";
+import { fetchMetadataById, fetchMetadataByUri, getMetadataAttributeValue, getRenderableListingImage, hasCompleteMarketplaceMetadata, isJobMetadata, isSmokeMetadataUri, LISTING_FALLBACK_IMAGE, metadataIdFromUri, type MarketplaceMetadata } from "@/lib/metadata";
 import { fetchJson, type ApiError } from "@/lib/api";
 import { addBlockedSeller } from "@/lib/blocks";
 import { describeToken, getPublicNetworkLabel } from "@/lib/tokens";
@@ -935,7 +935,7 @@ export default function ListingDetailPage() {
         <CardContent className="p-6 space-y-3">
           <div className="text-sm font-semibold">Listing details unavailable</div>
           <div className="text-sm text-muted-foreground break-words">
-            This listing has not finished metadata validation yet, so it is hidden from the public marketplace detail view until the seller restores complete title, description, and image data.
+            This listing has not finished metadata validation yet, so it is hidden from the public marketplace detail view until the seller restores complete title and description data.
           </div>
           <Button asChild variant="outline" size="sm">
             <Link href="/marketplace">Back to marketplace</Link>
@@ -946,10 +946,14 @@ export default function ListingDetailPage() {
   }
 
   const pageTitle = metadata?.title ?? (listing ? `${saleTypeLabel(listing.saleType)} listing` : "Loading…");
+  const isJobPost = isJobMetadata(metadata);
+  const companyName = getMetadataAttributeValue(metadata, "companyName");
+  const compensation = getMetadataAttributeValue(metadata, "compensation");
+  const workMode = getMetadataAttributeValue(metadata, "workMode");
   const priceLabel = listing ? formatPrice(listing.price, native, activeChainNativeCurrencySymbol) : "—";
   const locationLabel = [metadata?.city, metadata?.region, metadata?.postalCode].filter(Boolean).join(", ");
   const pageDescription = listing
-    ? metadata?.description ?? (isSeller ? "Your listing is missing complete metadata. Restore title, description, and at least one image before sharing it publicly." : "Listing details unavailable.")
+    ? metadata?.description ?? (isSeller ? "Your listing is missing complete metadata. Restore title and description before sharing it publicly." : "Listing details unavailable.")
     : "Loading listing details...";
 
   return (
@@ -957,7 +961,7 @@ export default function ListingDetailPage() {
       <section className="market-hero px-4 py-5 sm:px-8 sm:py-8">
         <div className="grid gap-6 lg:grid-cols-[1.4fr_0.9fr] lg:items-end">
           <div className="space-y-4">
-            <div className="market-section-title">Listing detail</div>
+            <div className="market-section-title">{isJobPost ? "Job detail" : "Listing detail"}</div>
             <div className="space-y-2">
               <div className="flex flex-wrap items-center gap-2">
                 <h1 className="text-2xl font-semibold tracking-tight text-slate-950 sm:text-4xl">{pageTitle}</h1>
@@ -968,7 +972,8 @@ export default function ListingDetailPage() {
             <div className="flex flex-wrap gap-2">
               {metadata?.category ? <div className="market-chip border-amber-200/80 bg-white/95 text-slate-900 shadow-sm">{metadata.subcategory ? `${metadata.category} / ${metadata.subcategory}` : metadata.category}</div> : null}
               {locationLabel ? <div className="market-chip border-amber-200/80 bg-white/95 text-slate-900 shadow-sm">{locationLabel}</div> : null}
-              <div className="market-chip border-amber-200/80 bg-white/95 text-slate-900 shadow-sm">{priceLabel}</div>
+              <div className="market-chip border-amber-200/80 bg-white/95 text-slate-900 shadow-sm">{isJobPost ? compensation ?? "Compensation in ad" : priceLabel}</div>
+              {isJobPost && workMode ? <div className="market-chip border-amber-200/80 bg-white/95 text-slate-900 shadow-sm">{workMode}</div> : null}
             </div>
           </div>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 sm:gap-3 lg:grid-cols-1">
@@ -980,8 +985,8 @@ export default function ListingDetailPage() {
               </div>
             </div>
             <div className="market-stat">
-              <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Checkout</div>
-              <div className="mt-2 text-lg font-semibold text-slate-950">{listing?.saleType === 0 ? "Fixed price" : saleTypeLabel(listing?.saleType ?? 0)}</div>
+              <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">{isJobPost ? "Response flow" : "Checkout"}</div>
+              <div className="mt-2 text-lg font-semibold text-slate-950">{isJobPost ? "Direct applicant contact" : listing?.saleType === 0 ? "Fixed price" : saleTypeLabel(listing?.saleType ?? 0)}</div>
             </div>
           </div>
         </div>
@@ -1016,7 +1021,7 @@ export default function ListingDetailPage() {
                 >
                   <div className="text-xs break-words">
                     This listing references metadata id {metadataId}, but the backend returned 404.
-                    You can re-upload the original metadata to restore title/description/image.
+                    You can re-upload the original metadata to restore the missing listing details.
                   </div>
                 </AccentCallout>
               ) : null}
@@ -1076,14 +1081,22 @@ export default function ListingDetailPage() {
                         <div className="font-medium">{locationLabel}</div>
                       </div>
                     ) : null}
+                    {isJobPost && companyName ? (
+                      <div className="text-sm">
+                        <div className="text-muted-foreground">Company</div>
+                        <div className="font-medium">{companyName}</div>
+                      </div>
+                    ) : null}
                     <div className="text-sm">
-                      <div className="text-muted-foreground">Price</div>
-                      <div className="font-medium">{priceLabel}</div>
+                      <div className="text-muted-foreground">{isJobPost ? "Compensation" : "Price"}</div>
+                      <div className="font-medium">{isJobPost ? compensation ?? "Compensation discussed with employer" : priceLabel}</div>
                     </div>
-                    <div className="text-sm">
-                      <div className="text-muted-foreground">Token</div>
-                      <div className="font-medium break-all">{native ? activeChainNativeCurrencySymbol : listing.token}</div>
-                    </div>
+                    {!isJobPost ? (
+                      <div className="text-sm">
+                        <div className="text-muted-foreground">Token</div>
+                        <div className="font-medium break-all">{native ? activeChainNativeCurrencySymbol : listing.token}</div>
+                      </div>
+                    ) : null}
                     <div className="text-sm">
                       <div className="text-muted-foreground">Seller</div>
                       <div className="space-y-2 font-medium">
@@ -1093,13 +1106,15 @@ export default function ListingDetailPage() {
                         <SellerTrustSummary profile={sellerProfile} variant="detail" />
                       </div>
                     </div>
-                    <div className="text-sm">
-                      <div className="text-muted-foreground">Buyer</div>
-                      <div className="font-medium">{listing.buyer === zeroAddress ? "—" : shortenHex(listing.buyer)}</div>
-                    </div>
+                    {!isJobPost ? (
+                      <div className="text-sm">
+                        <div className="text-muted-foreground">Buyer</div>
+                        <div className="font-medium">{listing.buyer === zeroAddress ? "—" : shortenHex(listing.buyer)}</div>
+                      </div>
+                    ) : null}
                     {metadata?.contactEmail || metadata?.contactPhone ? (
                       <div className="text-sm sm:col-span-2">
-                        <div className="text-muted-foreground">Contact</div>
+                        <div className="text-muted-foreground">{isJobPost ? "Application contact" : "Contact"}</div>
                         <div className="font-medium">{[metadata.contactEmail, metadata.contactPhone].filter(Boolean).join(" • ")}</div>
                       </div>
                     ) : null}
@@ -1171,8 +1186,8 @@ export default function ListingDetailPage() {
                 <aside className="space-y-3 sm:space-y-4">
                   <div className="rounded-2xl border bg-accent/25 p-3 space-y-3 sm:p-4">
                     <div>
-                      <div className="market-section-title">Buyer actions</div>
-                      <div className="mt-1 text-lg font-semibold">Checkout and safety</div>
+                      <div className="market-section-title">{isJobPost ? "Applicant actions" : "Buyer actions"}</div>
+                      <div className="mt-1 text-lg font-semibold">{isJobPost ? "Apply and safety" : "Checkout and safety"}</div>
                     </div>
 
                 {listing.status === 1 && !isSeller ? (
@@ -1234,7 +1249,7 @@ export default function ListingDetailPage() {
                   </Button>
                 ) : null}
 
-                {listing.saleType === 0 && listing.status === 1 ? (
+                {listing.saleType === 0 && listing.status === 1 && !isJobPost ? (
                   <div className="rounded-xl border bg-background/80 p-3 text-sm space-y-3 sm:p-4">
                     <div className="font-medium">Gasless fixed-price checkout</div>
                     {!canUseGaslessSettlement ? (

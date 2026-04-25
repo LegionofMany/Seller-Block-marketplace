@@ -25,6 +25,11 @@ export type MarketplaceMetadata = {
   createdAt?: number;
 };
 
+export type MetadataAttribute = {
+  trait_type: string;
+  value: string | number | boolean;
+};
+
 const cache = new Map<string, MarketplaceMetadata>();
 const inflight = new Map<string, Promise<MarketplaceMetadata | null>>();
 const missingCache = new Map<string, number>();
@@ -86,9 +91,29 @@ export function hasCompleteMarketplaceMetadata(metadata: MarketplaceMetadata | n
   if (!metadata) return false;
   const title = metadata.title?.trim();
   const description = metadata.description?.trim();
-  const images = Array.isArray(metadata.images) && metadata.images.length ? metadata.images : metadata.image ? [metadata.image] : [];
-  const hasRealImage = images.some((item) => getRenderableListingImage(item) !== LISTING_FALLBACK_IMAGE);
-  return Boolean(title && description && hasRealImage);
+  return Boolean(title && description);
+}
+
+export function getMetadataAttributes(metadata: MarketplaceMetadata | null | undefined): MetadataAttribute[] {
+  if (!metadata?.attributes || !Array.isArray(metadata.attributes)) return [];
+
+  return metadata.attributes.flatMap((item) => {
+    if (!item || typeof item !== "object") return [];
+    const candidate = item as { trait_type?: unknown; value?: unknown };
+    if (typeof candidate.trait_type !== "string") return [];
+    if (!["string", "number", "boolean"].includes(typeof candidate.value)) return [];
+    return [{ trait_type: candidate.trait_type, value: candidate.value as string | number | boolean }];
+  });
+}
+
+export function getMetadataAttributeValue(metadata: MarketplaceMetadata | null | undefined, traitType: string): string | null {
+  const match = getMetadataAttributes(metadata).find((item) => item.trait_type === traitType);
+  if (!match) return null;
+  return String(match.value).trim() || null;
+}
+
+export function isJobMetadata(metadata: MarketplaceMetadata | null | undefined): boolean {
+  return metadata?.category === "Jobs" || getMetadataAttributeValue(metadata, "listingKind") === "job";
 }
 
 export function metadataIdFromUri(uri: string): string | null {

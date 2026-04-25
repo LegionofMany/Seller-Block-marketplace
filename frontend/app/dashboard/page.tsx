@@ -425,6 +425,7 @@ export default function DashboardPage() {
     }
   }, []);
   const envReady = Boolean(envState.env);
+  const blockPagesUrl = envState.env?.blockPagesUrl ?? "https://blockpages.com";
   const defaultChainKey = envState.env?.defaultChain.key ?? "sepolia";
   const defaultChainId = envState.env?.defaultChain.chainId;
   const defaultNativeCurrencySymbol = envState.env?.defaultChain.nativeCurrencySymbol ?? "ETH";
@@ -1208,6 +1209,19 @@ export default function DashboardPage() {
                           ))}
                         </div>
                       </div>
+                      <AccentCallout
+                        label="Increase KYC"
+                        tone="blue"
+                        actions={
+                          <Button asChild type="button" variant="outline" size="sm">
+                            <a href={blockPagesUrl} target="_blank" rel="noreferrer">
+                              Open BlockPages
+                            </a>
+                          </Button>
+                        }
+                      >
+                        Use BlockPages after the core account setup is done if you want stronger marketplace trust signals. This stays a later profile step, not a sign-up barrier.
+                      </AccentCallout>
                       {auth.user?.authMethod === "email" && !auth.user?.emailVerifiedAt ? (
                         <div ref={verificationSectionRef} className="scroll-mt-28">
                           <AccentCallout

@@ -34,11 +34,11 @@ This launch target should feel closer to Kijiji, Marketplace, or GovDeals accoun
 
 ## Implementation Status Snapshot
 
-Status as of April 22, 2026 for this roadmap tranche:
+Status as of April 25, 2026 for this roadmap tranche:
 
-- shipped: email-first sign-in and registration, forgot-password flow, profile/address/phone capture, watch/favorites/follows dashboard refactor, landing-page/category improvements, local discovery, create-flow publish recovery, public-launch category updates, token/network copy cleanup, accent refresh, saved-search alerts with marketplace deep links, and notification/email copy polish
-- partially complete: final manual UX regression across sign-in, posting, watch flow, and trust/copy surfaces; hosted deployment and migration verification outside local builds
-- unresolved but now decision-ready: SMS verification scope, BlockPages timing, exact "SEO and google loop" implementation meaning, and stablecoin launch matrix by geography
+- shipped: email-first sign-in and registration, forgot-password flow, profile/address/phone capture, watch/favorites/follows dashboard refactor, landing-page/category improvements, local discovery, create-flow publish recovery, public-launch category updates, token/network copy cleanup, accent refresh, saved-search alerts with marketplace deep links, notification/email copy polish, BlockPages post-signup trust CTA, paid Zonycs banner ribbon, photo-optional listing metadata, and jobs-specific create/detail UI copy
+- partially complete: final manual UX regression across sign-in, posting, watch flow, trust/copy surfaces, and hosted deployment verification outside local builds
+- unresolved but now decision-ready: SMS verification scope, exact "SEO and google loop" implementation meaning, stablecoin launch matrix by geography, and whether the long-term Jobs model should stay on the current on-chain listing abstraction or move to a dedicated contract/listing type later
 
 This means the implementation is near-complete for the public-launch UX scope. The closure path is now explicit: adopt the launch defaults in the final closure pass below, finish the remaining manual validation, and confirm hosted deployment parity.
 
@@ -117,13 +117,36 @@ Implementation consequence:
 
 - token/network copy can be treated as launch-complete once production config confirms the single-token-per-chain choice
 
+5. Jobs posting model
+
+Recommended decision: keep Jobs on the current marketplace listing model for launch, with job-specific frontend copy and a text-first metadata publish fallback, and defer a dedicated contract/listing-type redesign until after launch.
+
+Launch default:
+
+- Jobs publish through the same listing infrastructure as other ads
+- the create flow treats Jobs as direct-response posts with recruiter contact, company, compensation, and work-mode fields
+- no-photo job posts should publish through backend `/metadata` fallback when IPFS pinning is unavailable
+- image-backed listings should still use the IPFS route when Pinata is configured
+- contract-level job-only enforcement is deferred until a post-launch protocol pass
+
+Reasoning:
+
+- the current product is still on-chain-first for listing identity, routes, indexing, and seller tooling
+- splitting Jobs into an off-chain-only model now would widen scope and create a second listing system just before launch
+- the current registry rejects zero-price fixed listings, so a dedicated protocol redesign is a larger follow-up rather than a launch-safe patch
+
+Implementation consequence:
+
+- launch signoff should treat the current Jobs path as acceptable once hosted deploy parity is restored and QA confirms the detail page reads like a job ad
+- the remaining hardening recommendation is a later contract/product decision, not a launch blocker
+
 ### Signoff Trigger
 
 This roadmap tranche can move from near-complete to signed off when all of the following are true:
 
-1. The four recommended launch defaults above are accepted, either explicitly by the client or implicitly by product leadership for the launch cut.
+1. The five recommended launch defaults above are accepted, either explicitly by the client or implicitly by product leadership for the launch cut.
 2. Manual regression is completed for sign-in, password reset, profile editing, watch flow, local discovery, create/publish recovery, and trust/copy surfaces.
-3. Hosted deployment parity is verified for the current frontend/backend behavior, including required migrations and environment configuration.
+3. Hosted deployment parity is verified for the current frontend/backend behavior, including required migrations, hosted backend photo-optional metadata behavior, and environment configuration.
 4. No launch-surface copy or UX blockers remain after the final QA pass.
 
 ### Signed-Off State
@@ -131,7 +154,7 @@ This roadmap tranche can move from near-complete to signed off when all of the f
 If the recommended launch defaults are accepted, the correct roadmap status becomes:
 
 - signed off for public-launch implementation scope
-- BlockPages, SMS, broader regional token expansion, and other deferred items remain in post-launch roadmap status unless separately promoted
+- BlockPages, SMS, broader regional token expansion, contract-level Jobs enforcement, and other deferred items remain in post-launch roadmap status unless separately promoted
 
 ## Scope Lock
 
@@ -353,7 +376,7 @@ Make profile data useful for trust and nearby discovery.
 
 ### Status
 
-Mostly complete. The create flow includes publish-recovery handling after upload/listing creation failures, categories now include antiques and housewares, and auction wording is clearer. The remaining gap is final end-to-end manual publish validation in the intended hosted environment.
+Mostly complete. The create flow includes publish-recovery handling after upload/listing creation failures, categories include antiques and housewares, photos are optional for text-first posts, and Jobs now have dedicated form/detail copy. The remaining gaps are hosted deployment parity for the updated backend metadata behavior and final manual end-to-end publish QA in the intended environment.
 
 ### Goal
 
@@ -363,10 +386,13 @@ Make posting feel stable and understandable for public launch.
 
 - fix remaining publish blockers in create flow
 - keep image-first posting simple and reliable
+- keep text-first posting available when a seller does not have photos
+- preserve a non-IPFS metadata fallback for no-photo posts
 - refine category list for launch
 - add at minimum:
   - antique collectable
   - housewares
+- make Jobs feel intentionally designed, not merely less blocked
 - clarify auction reserve / cost wording
 - improve selection visibility and control feedback in posting flow
 
@@ -380,6 +406,7 @@ Make posting feel stable and understandable for public launch.
 ### Acceptance Criteria
 
 - a user can upload photos and successfully publish a listing
+- a user can publish a text-first job post without photos when the backend is reachable
 - launch categories reflect the client's public-marketplace use case
 - auction wording is understandable without contract knowledge
 
@@ -477,7 +504,9 @@ These should not block the public-launch tranche.
 ### Current Validation Status
 
 - completed locally: backend TypeScript builds and frontend production builds passed after each major implementation slice
+- completed locally: a live Sepolia smoke publish validated the current Jobs-compatible launch path using backend `/metadata` plus on-chain listing creation, and the resulting job-tagged listing rendered with the intended job detail inputs
 - still pending: final manual regression across sign-up, password reset, posting, watch flow, local discovery, and trust/copy surfaces in the target deployment environment
+- still pending: redeploy the hosted backend so `/metadata/ipfs` no longer rejects photo-optional posts and the hosted app matches the local fixes
 
 ### Functional Validation
 
@@ -486,6 +515,7 @@ These should not block the public-launch tranche.
 - address and postal code are editable and persist
 - watch / favorite / follow flows are visible and understandable
 - listing publish succeeds with image upload
+- listing publish succeeds without photos for text-first jobs/public notices
 - categories match the public launch goal
 - landing page reflects categories and top ads clearly
 
@@ -493,6 +523,7 @@ These should not block the public-launch tranche.
 
 - review first-run sign-up flow against GovDeals-style expectations
 - test new-user posting flow end to end
+- test Jobs posting and detail view end to end in the hosted environment
 - test signed-in routing to watch / favorites / followed views
 - test profile editing and location persistence
 - review all user-facing token and network copy for trust issues
@@ -503,13 +534,16 @@ These should not block the public-launch tranche.
 - legal and industry-specific requirements for auto workflows are real but should not drive the public classifieds launch sprint
 - if SMS verification is required for launch, provider choice and backend integration become a dependency
 - if BlockPages is made launch-critical, onboarding complexity will increase and must be designed carefully
+- the hosted backend currently needs redeploy parity for the photo-optional metadata controller change; without that, hosted Jobs publishing may still fail on the stale image requirement or Pinata-only path
+- Jobs are currently launch-safe at the UX level but not contract-enforced as non-buyable listings; a deeper protocol change remains post-launch work if hard enforcement is required
 
 ## Recommended Next Sprint
 
-1. Accept or override the four recommended launch defaults in the final closure pass
-2. Run final manual regression on sign-in, password reset, posting, watch flow, and local discovery
-3. Verify required backend migrations and hosted deployment parity for the latest frontend/backend slices
-4. Mark the tranche signed off for public-launch scope if no blocking issues remain
+1. Accept or override the five recommended launch defaults in the final closure pass
+2. Redeploy backend and frontend so hosted create/detail behavior matches the current local Jobs and metadata fixes
+3. Run final manual regression on sign-in, password reset, posting, watch flow, Jobs detail, and local discovery
+4. Verify required backend migrations and hosted deployment parity for the latest frontend/backend slices
+5. Mark the tranche signed off for public-launch scope if no blocking issues remain
 
 ## Ownership Notes
 
