@@ -14,6 +14,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { getEnv } from "@/lib/env";
+import { getWalletConnectAvailability } from "@/lib/walletConnect";
 
 type RegisterStep = "account" | "contact";
 type RegisterFlowStage = RegisterStep | "verify" | "complete";
@@ -33,7 +34,8 @@ export default function SignInPage() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const env = getEnv();
-  const walletConnectEnabled = Boolean(env.walletConnectProjectId);
+  const walletConnectAvailability = getWalletConnectAvailability(env.walletConnectProjectId);
+  const walletConnectEnabled = walletConnectAvailability === "enabled";
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
   const [confirmPassword, setConfirmPassword] = React.useState("");
@@ -361,7 +363,11 @@ export default function SignInPage() {
               <div className="mt-1 text-sm text-muted-foreground">If you already use a wallet-based account, you can still sign in here. New marketplace accounts should use the account flow first.</div>
             </div>
             <AccentCallout label="Wallet status" tone={walletConnectEnabled ? "blue" : "amber"}>
-              WalletConnect is {walletConnectEnabled ? "ready for mobile and tablet scans" : "not configured in this frontend environment yet"}.
+              WalletConnect is {walletConnectAvailability === "enabled"
+                ? "ready for mobile and tablet scans"
+                : walletConnectAvailability === "preview-disabled"
+                  ? "disabled on this preview deployment until the Reown allowlist includes this host"
+                  : "not configured in this frontend environment yet"}.
             </AccentCallout>
             <div className="flex flex-wrap gap-3">
               <ConnectButton showBalance={false} chainStatus="icon" />

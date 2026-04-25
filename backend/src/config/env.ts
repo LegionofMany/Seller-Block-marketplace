@@ -151,6 +151,25 @@ function parseOrigins(raw: string | undefined): string[] | undefined {
   if (parts.includes("*")) return ["*"];
 
   for (const o of parts) {
+    if (o.includes("*")) {
+      const wildcardMatch = o.match(/^(https?):\/\/([^/?#]+)$/i);
+      if (!wildcardMatch) {
+        throw new Error(`Invalid CORS origin: ${o}`);
+      }
+
+      const host = wildcardMatch[2];
+      if (!host) {
+        throw new Error(`Invalid CORS origin: ${o}`);
+      }
+
+      const normalizedHost = host.replace(/:\d+$/, "");
+      if (!normalizedHost.includes("*")) {
+        throw new Error(`Invalid CORS origin: ${o}`);
+      }
+
+      continue;
+    }
+
     try {
       const u = new URL(o);
       if (!u.protocol || !u.hostname) throw new Error();

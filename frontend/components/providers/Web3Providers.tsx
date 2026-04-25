@@ -10,6 +10,7 @@ import { RainbowKitProvider, darkTheme } from "@rainbow-me/rainbowkit";
 
 import { type ApiError } from "@/lib/api";
 import { getEnv } from "@/lib/env";
+import { getWalletConnectAvailability } from "@/lib/walletConnect";
 import { Card, CardContent } from "@/components/ui/card";
 
 const queryClient = new QueryClient({
@@ -68,9 +69,10 @@ export function Web3Providers({ children }: { children: React.ReactNode }) {
       );
       if (!chains.length) throw new Error("No frontend chains configured");
       const configuredChains = [chains[0], ...chains.slice(1)] as readonly [Chain, ...Chain[]];
+      const walletConnectAvailability = getWalletConnectAvailability(env.walletConnectProjectId);
       const connectors = [
         injected(),
-        ...(env.walletConnectProjectId
+        ...(walletConnectAvailability === "enabled" && env.walletConnectProjectId
           ? [walletConnect({ projectId: env.walletConnectProjectId, showQrModal: true })]
           : []),
       ];

@@ -30,6 +30,39 @@ dotenv.config();
 
 const app = express();
 
+function isOriginAllowed(requestOrigin: string, allowedOrigins: string[]) {
+  if (allowedOrigins.includes("*")) return true;
+
+  let parsedRequestOrigin: URL;
+  try {
+    parsedRequestOrigin = new URL(requestOrigin);
+  } catch {
+    return false;
+  }
+
+  return allowedOrigins.some((allowedOrigin) => {
+    if (allowedOrigin === requestOrigin) return true;
+    if (!allowedOrigin.includes("*")) return false;
+
+    const wildcardMatch = allowedOrigin.match(/^(https?):\/\/([^/?#]+)$/i);
+    if (!wildcardMatch) return false;
+
+    const allowedProtocol = wildcardMatch[1];
+    const allowedHost = wildcardMatch[2];
+    if (!allowedProtocol || !allowedHost) return false;
+
+    if (parsedRequestOrigin.protocol !== `${allowedProtocol.toLowerCase()}:`) return false;
+
+    const requestHost = parsedRequestOrigin.host.toLowerCase();
+    const pattern = allowedHost
+      .toLowerCase()
+      .replace(/[.+?^${}()|[\]\\]/g, "\\$&")
+      .replace(/\*/g, "[^.]+?");
+
+    return new RegExp(`^${pattern}$`, "i").test(requestHost);
+  });
+}
+
 async function main() {
   const { env, logger, db } = getContext();
   const shutdownTimeoutMs = 10_000;
@@ -46,10 +79,21 @@ async function main() {
   app.use(helmet());
 
   if (env.corsOrigins?.length) {
-    const allowAll = env.corsOrigins.includes("*");
     app.use(
       cors({
-        origin: allowAll ? true : env.corsOrigins,
+        origin(origin, callback) {
+          if (!origin) {
+            callback(null, true);
+            return;
+          }
+
+          if (isOriginAllowed(origin, env.corsOrigins ?? [])) {
+            callback(null, true);
+            return;
+          }
+
+          callback(new Error("Not allowed by CORS"));
+        },
       })
     );
   } else {
