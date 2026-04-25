@@ -2,8 +2,39 @@ import type { Request, Response } from "express";
 import { metadataSchema, buildFakeMetadataUri } from "../services/metadata";
 import { HttpError } from "../middlewares/errors";
 import { getContext } from "../services/context";
-import { findMetadata, findMetadataByUri, upsertMetadata } from "../services/db";
+import { findListingByMetadataUri, findMetadata, findMetadataByUri, upsertMetadata, type ListingRow, type MetadataRow } from "../services/db";
 import { ipfsUriFromCid, pinJsonToIpfs } from "../services/ipfs";
+
+function buildFallbackMetadataRow(listing: ListingRow, metadataUri: string, id: string): MetadataRow {
+  return {
+    id,
+    uri: metadataUri,
+    title: `Marketplace listing ${listing.id.slice(0, 10)}...`,
+    description:
+      "This listing is still live on-chain, but its original off-chain metadata is unavailable. Ask the seller to refresh the listing details if you need the full description.",
+    image: "",
+    imagesJson: "[]",
+    category: null,
+    subcategory: null,
+    city: null,
+    region: null,
+    postalCode: null,
+    contactEmail: null,
+    contactPhone: null,
+    attributesJson: "[]",
+    createdAt: listing.createdAt,
+  };
+}
+
+async function backfillMissingMetadataFromListing(metadataUri: string, id: string) {
+  const { db } = getContext();
+  const listing = await findListingByMetadataUri(db, metadataUri);
+  if (!listing) return null;
+
+  const fallbackRow = buildFallbackMetadataRow(listing, metadataUri, id);
+  await upsertMetadata(db, fallbackRow);
+  return fallbackRow;
+}
 
 export async function uploadMetadata(req: Request, res: Response) {
   const { db } = getContext();
@@ -51,7 +82,8 @@ export async function getMetadataById(req: Request, res: Response) {
     throw new HttpError(400, "Invalid metadata id", "INVALID_METADATA_ID");
   }
 
-  const row = await findMetadata(db, id);
+  const metadataUri = `metadata://sha256/${id}`;
+  const row = (await findMetadata(db, id)) ?? (await backfillMissingMetadataFromListing(metadataUri, id));
   if (!row) {
     throw new HttpError(404, "Metadata not found", "METADATA_NOT_FOUND");
   }
@@ -72,6 +104,7 @@ export async function getMetadataById(req: Request, res: Response) {
 
   return res.json({
     id: row.id,
+    uri: row.uri ?? metadataUri,
     title: row.title,
     description: row.description,
     image: row.image,
@@ -96,7 +129,8 @@ export async function getMetadataByUriHandler(req: Request, res: Response) {
     throw new HttpError(400, "Invalid metadata uri", "INVALID_METADATA_URI");
   }
 
-  const row = await findMetadataByUri(db, uri);
+  const derivedId = /^metadata:\/\/sha256\/([0-9a-fA-F]{64})$/.exec(uri)?.[1]?.toLowerCase() ?? null;
+  const row = (await findMetadataByUri(db, uri)) ?? (derivedId ? await backfillMissingMetadataFromListing(uri, derivedId) : null);
   if (!row) {
     throw new HttpError(404, "Metadata not found", "METADATA_NOT_FOUND");
   }

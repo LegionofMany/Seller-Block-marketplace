@@ -570,6 +570,23 @@ export async function findListing(_db: Pool | any, id: string, chainKey?: string
   return res.rows[0] ? toListingRow(res.rows[0]) : null;
 }
 
+export async function findListingByMetadataUri(_db: Pool | any, metadataUri: string, chainKey?: string): Promise<ListingRow | null> {
+  const p = ensurePool(_db);
+  const clean = String(metadataUri ?? "").trim();
+  if (!clean) return null;
+
+  const res = await p.query(
+    `SELECT chainkey AS "chainKey", chainid AS "chainId", id, seller, metadatauri AS "metadataURI", price, token, saletype AS "saleType", active, createdat AS "createdAt", blocknumber AS "blockNumber"
+     FROM listings
+     WHERE metadatauri = $1${chainKey ? ' AND chainkey = $2' : ''}
+     ORDER BY blocknumber DESC
+     LIMIT 1`,
+    chainKey ? [clean, chainKey] : [clean]
+  );
+
+  return res.rows[0] ? toListingRow(res.rows[0]) : null;
+}
+
 export async function findAuction(_db: Pool | any, listingId: string, chainKey?: string): Promise<AuctionRow | null> {
   const p = ensurePool(_db);
   const res = await p.query(
