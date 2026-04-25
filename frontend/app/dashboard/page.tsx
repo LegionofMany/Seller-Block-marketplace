@@ -172,6 +172,8 @@ type AdminTrustSummaryResponse = {
 
 type AccountTab = "profile" | "watch" | "my-listings";
 
+type ProfileFocusSection = "verification" | "identity" | "contact" | "bio" | "wallet";
+
 function formatFilters(filters: SavedSearchFilters) {
   return Object.entries(filters)
     .map(([key, value]) => `${key}: ${value}`)
@@ -397,6 +399,21 @@ export default function DashboardPage() {
   const [verifiedSellers, setVerifiedSellers] = React.useState<PublicUserProfileResponse[]>([]);
   const [trustHistory, setTrustHistory] = React.useState<TrustReviewHistoryItem[]>([]);
   const [isLoadingTrustAdmin, setIsLoadingTrustAdmin] = React.useState(false);
+  const verificationSectionRef = React.useRef<HTMLDivElement | null>(null);
+  const walletSectionRef = React.useRef<HTMLDivElement | null>(null);
+  const identitySectionRef = React.useRef<HTMLDivElement | null>(null);
+  const contactSectionRef = React.useRef<HTMLDivElement | null>(null);
+  const bioSectionRef = React.useRef<HTMLDivElement | null>(null);
+  const profileSectionRefs = React.useMemo<Record<ProfileFocusSection, React.RefObject<HTMLDivElement | null>>>(
+    () => ({
+      verification: verificationSectionRef,
+      wallet: walletSectionRef,
+      identity: identitySectionRef,
+      contact: contactSectionRef,
+      bio: bioSectionRef,
+    }),
+    []
+  );
   const profileLocationFilter = React.useMemo(() => getProfileLocationFilter(auth.user), [auth.user]);
   const watchBrowseHref = React.useMemo(() => buildMarketplaceHref(profileLocationFilter), [profileLocationFilter]);
 
@@ -478,6 +495,23 @@ export default function DashboardPage() {
     setAccountTab((current) => (current === nextTab ? current : nextTab));
   }, [searchParams]);
 
+  React.useEffect(() => {
+    if (accountTab !== "profile") return;
+    const requestedFocus = searchParams.get("focus");
+    if (!requestedFocus || !(requestedFocus in profileSectionRefs)) return;
+
+    const section = requestedFocus as ProfileFocusSection;
+    const timer = window.setTimeout(() => {
+      const node = profileSectionRefs[section].current;
+      if (!node) return;
+      node.scrollIntoView({ behavior: "smooth", block: "start" });
+      const focusTarget = node.querySelector<HTMLElement>("input, textarea, button, select");
+      focusTarget?.focus();
+    }, 120);
+
+    return () => window.clearTimeout(timer);
+  }, [accountTab, profileSectionRefs, searchParams]);
+
   async function updateSellerTrust(sellerVerified: boolean) {
     if (!trustTargetAddress) {
       toast.error("Enter a valid seller address first");
@@ -521,6 +555,7 @@ export default function DashboardPage() {
         params.delete("tab");
       } else {
         params.set("tab", nextTab);
+        params.delete("focus");
       }
       const query = params.toString();
       router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
@@ -805,6 +840,39 @@ export default function DashboardPage() {
   const pendingDeleteNotice = auth.isAdmin
     ? "You are performing this removal with admin access."
     : "This action removes the listing from your seller surfaces after the delete completes.";
+  const profileSetupItems = auth.user
+    ? [
+        { label: "Confirm account email", done: auth.user.authMethod !== "email" || Boolean(auth.user.emailVerifiedAt), target: "verification" as const },
+        { label: "Add full name", done: Boolean(auth.user.fullName?.trim()), target: "identity" as const },
+        { label: "Set display name", done: Boolean(auth.user.displayName?.trim()), target: "identity" as const },
+        { label: "Add phone number", done: Boolean(auth.user.phoneNumber?.trim()), target: "contact" as const },
+        {
+          label: "Complete location details",
+          done: Boolean(auth.user.streetAddress1?.trim() && auth.user.city?.trim() && auth.user.region?.trim() && auth.user.postalCode?.trim()),
+          target: "contact" as const,
+        },
+        { label: "Add public bio", done: Boolean(auth.user.bio?.trim()), target: "bio" as const },
+        { label: "Add seller wallet later if needed", done: Boolean(auth.user.linkedWalletAddress?.trim()) || auth.user.authMethod !== "email", target: "wallet" as const },
+      ]
+    : [];
+  const completedProfileSetupCount = profileSetupItems.filter((item) => item.done).length;
+  const nextProfileSetupLabel = profileSetupItems.find((item) => !item.done)?.label ?? null;
+  const focusProfileSection = React.useCallback(
+    (section: ProfileFocusSection) => {
+      const params = new URLSearchParams(searchParams.toString());
+      params.delete("tab");
+      params.set("focus", section);
+      const query = params.toString();
+      router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+
+      const node = profileSectionRefs[section].current;
+      if (!node) return;
+      node.scrollIntoView({ behavior: "smooth", block: "start" });
+      const focusTarget = node.querySelector<HTMLElement>("input, textarea, button, select");
+      focusTarget?.focus();
+    },
+    [pathname, router, searchParams]
+  );
 
   const { data: lastListingId } = useReadContract({
     address: marketplaceRegistryAddress,
@@ -1090,13 +1158,13 @@ export default function DashboardPage() {
                 <CardContent className="space-y-4 p-4 pt-0 sm:p-6 sm:pt-0">
                   {!auth.isAuthenticated ? (
                     <AccentCallout
-                      label="Open your profile"
+                      label="Open your account"
                       tone="mint"
                       actions={
                         <>
                           {address && !auth.isAuthenticated ? (
                             <Button type="button" variant="outline" size="lg" className="w-full sm:w-auto" disabled={auth.isLoading} onClick={() => void auth.signIn()}>
-                              Sign in with wallet
+                              Use wallet-only sign-in
                             </Button>
                           ) : null}
                           <Button asChild type="button" variant="outline" size="lg" className="w-full sm:w-auto">
@@ -1105,7 +1173,7 @@ export default function DashboardPage() {
                         </>
                       }
                     >
-                      Sign in with email or wallet to edit your profile, identity, and location settings.
+                      Sign in to manage your marketplace account, public profile, and local selling details.
                     </AccentCallout>
                   ) : (
                     <div className="grid gap-4">
@@ -1113,43 +1181,69 @@ export default function DashboardPage() {
                         {auth.user?.email?.trim() ? <span className="market-chip">Email account</span> : null}
                         {auth.user?.authMethod === "email" ? <span className="market-chip">{auth.user?.emailVerifiedAt ? "Email verified" : "Email not verified"}</span> : null}
                         {auth.user?.postalCode?.trim() ? <span className="market-chip">Local zone {auth.user.postalCode.trim()}</span> : null}
-                        {address ? <span className="market-chip">Wallet {shortenHex(address)}</span> : null}
-                        {auth.user?.linkedWalletAddress ? <span className="market-chip">Linked wallet {shortenHex(auth.user.linkedWalletAddress)}</span> : null}
+                        {address ? <span className="market-chip">Connected wallet {shortenHex(address)}</span> : null}
+                        {auth.user?.linkedWalletAddress ? <span className="market-chip">Seller wallet {shortenHex(auth.user.linkedWalletAddress)}</span> : null}
+                      </div>
+                      <div className="rounded-2xl border border-slate-200/80 bg-slate-50/90 p-4 shadow-sm">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                          <div className="space-y-1">
+                            <div className="text-sm font-semibold text-slate-950">Account setup progress</div>
+                            <div className="text-sm text-muted-foreground">
+                              {completedProfileSetupCount} of {profileSetupItems.length} account setup items complete.
+                              {nextProfileSetupLabel ? ` Next: ${nextProfileSetupLabel}.` : " Your account profile is ready for normal marketplace use."}
+                            </div>
+                          </div>
+                          <div className="market-chip">{completedProfileSetupCount}/{profileSetupItems.length} complete</div>
+                        </div>
+                        <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                          {profileSetupItems.map((item) => (
+                            <button
+                              type="button"
+                              key={item.label}
+                              onClick={() => focusProfileSection(item.target)}
+                              className={`rounded-full border px-3 py-1 ${item.done ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-amber-200 bg-amber-50 text-amber-900"}`}
+                            >
+                              {item.done ? "Done" : "Next"} {item.label}
+                            </button>
+                          ))}
+                        </div>
                       </div>
                       {auth.user?.authMethod === "email" && !auth.user?.emailVerifiedAt ? (
-                        <AccentCallout
-                          label="Verify your email"
-                          tone="amber"
-                          actions={
-                            <Button
-                              type="button"
-                              variant="outline"
-                              disabled={auth.isLoading || !auth.user?.email}
-                              onClick={async () => {
-                                await auth.sendVerificationEmail();
-                              }}
-                            >
-                              Send verification email
-                            </Button>
-                          }
-                        >
-                          Verification unlocks a confirmed account state for sign-in links, notifications, and account recovery.
-                        </AccentCallout>
+                        <div ref={verificationSectionRef} className="scroll-mt-28">
+                          <AccentCallout
+                            label="Verify your email"
+                            tone="amber"
+                            actions={
+                              <Button
+                                type="button"
+                                variant="outline"
+                                disabled={auth.isLoading || !auth.user?.email}
+                                onClick={async () => {
+                                  await auth.sendVerificationEmail();
+                                }}
+                              >
+                                Send verification email
+                              </Button>
+                            }
+                          >
+                            Verification confirms the marketplace account for sign-in links, notifications, and account recovery.
+                          </AccentCallout>
+                        </div>
                       ) : null}
                       {auth.user?.authMethod === "email" ? (
-                        <div className="rounded-2xl border border-slate-200/80 bg-slate-50/90 p-4 shadow-sm">
+                        <div ref={walletSectionRef} className="scroll-mt-28 rounded-2xl border border-slate-200/80 bg-slate-50/90 p-4 shadow-sm">
                           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                             <div className="space-y-1">
-                              <div className="text-sm font-semibold text-slate-950">Wallet link</div>
+                              <div className="text-sm font-semibold text-slate-950">Seller wallet</div>
                               <div className="text-sm text-muted-foreground">
-                                Link a wallet to this email account for seller actions and chain settlement while keeping subscription billing separate from the product.
+                                Add a seller wallet after the account details are in place. You only need it for listing actions, settlement steps, and other seller-side tools.
                               </div>
                               <div className="text-xs text-muted-foreground">
                                 {auth.user?.linkedWalletAddress
-                                  ? `Linked wallet: ${auth.user.linkedWalletAddress}`
+                                  ? `Linked seller wallet: ${auth.user.linkedWalletAddress}`
                                   : address
                                     ? `Connected wallet ready to link: ${address}`
-                                    : "Connect the wallet you want to use for seller actions, then link it here."}
+                                    : "Connect the wallet you want to use for seller actions, then link it here after the rest of the account is ready."}
                               </div>
                             </div>
                             <div className="flex flex-wrap gap-2">
@@ -1178,7 +1272,7 @@ export default function DashboardPage() {
                                     });
                                     auth.setUser(res.user);
                                     await auth.refresh();
-                                    toast.success("Wallet linked");
+                                    toast.success("Seller wallet linked");
                                   } catch (error: unknown) {
                                     toast.error(getErrorMessage(error, "Failed to link wallet"));
                                   } finally {
@@ -1186,7 +1280,7 @@ export default function DashboardPage() {
                                   }
                                 }}
                               >
-                                {auth.user?.linkedWalletAddress?.toLowerCase() === address?.toLowerCase() ? "Wallet linked" : isLinkingWallet ? "Linking..." : "Link connected wallet"}
+                                {auth.user?.linkedWalletAddress?.toLowerCase() === address?.toLowerCase() ? "Seller wallet linked" : isLinkingWallet ? "Linking..." : "Link seller wallet"}
                               </Button>
                               {auth.user?.linkedWalletAddress ? (
                                 <Button
@@ -1199,7 +1293,7 @@ export default function DashboardPage() {
                                       const res = await fetchJson<{ user: UserProfile }>("/auth/link-wallet/unlink", { method: "POST" });
                                       auth.setUser(res.user);
                                       await auth.refresh();
-                                      toast.success("Wallet unlinked");
+                                      toast.success("Seller wallet removed");
                                     } catch (error: unknown) {
                                       toast.error(getErrorMessage(error, "Failed to unlink wallet"));
                                     } finally {
@@ -1214,7 +1308,7 @@ export default function DashboardPage() {
                           </div>
                         </div>
                       ) : null}
-                      <div className="grid gap-4 sm:grid-cols-2">
+                      <div ref={identitySectionRef} className="scroll-mt-28 grid gap-4 sm:grid-cols-2">
                         <div className="space-y-2">
                           <Label>Full name</Label>
                           <Input value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Victor Adeyemi" />
@@ -1225,7 +1319,7 @@ export default function DashboardPage() {
                         </div>
                       </div>
                       {auth.user?.email ? (
-                        <div className="grid gap-4 sm:grid-cols-2">
+                        <div ref={contactSectionRef} className="scroll-mt-28 grid gap-4 sm:grid-cols-2">
                           <div className="space-y-2">
                             <Label>Email</Label>
                             <Input value={auth.user.email} disabled />
@@ -1237,7 +1331,7 @@ export default function DashboardPage() {
                         </div>
                       ) : null}
                       {!auth.user?.email ? (
-                        <div className="space-y-2">
+                        <div ref={contactSectionRef} className="scroll-mt-28 space-y-2">
                           <Label>Phone number</Label>
                           <Input value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} placeholder="+234 800 000 0000" />
                         </div>
@@ -1264,7 +1358,7 @@ export default function DashboardPage() {
                           <Input value={postalCode} onChange={(e) => setPostalCode(e.target.value)} placeholder="100001" />
                         </div>
                       </div>
-                      <div className="space-y-2">
+                      <div ref={bioSectionRef} className="scroll-mt-28 space-y-2">
                         <Label>Bio</Label>
                         <Textarea value={bio} onChange={(e) => setBio(e.target.value)} placeholder="Tell buyers what you sell and how to reach you." />
                       </div>

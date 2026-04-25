@@ -32,7 +32,7 @@ type AuthContextValue = {
     city?: string;
     region?: string;
     postalCode?: string;
-  }) => Promise<void>;
+  }) => Promise<{ emailVerificationSent: boolean }>;
   signOut: () => void;
   refresh: () => Promise<void>;
   setUser: (user: UserProfile | null) => void;
@@ -290,6 +290,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
       applySession(verified);
       toast.success(verified.emailVerificationSent ? "Account created. Verification email sent." : "Account created");
+      return { emailVerificationSent: Boolean(verified.emailVerificationSent) };
     } catch (error: unknown) {
       toast.error(getErrorMessage(error, "Email registration failed"));
       throw error;
