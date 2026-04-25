@@ -57,23 +57,17 @@ function toListingSummary(row: BackendListingRow): ListingSummary {
 
 const spotlightRules = [
   {
-    title: "Sign in before you manage anything",
-    detail: "Account creation, watch activity, alerts, and saved seller flow should feel obvious before advanced seller tools show up.",
+    title: "Sign in after the first impression",
+    detail: "Paid ads and live inventory should land first. Sign-in comes next for saved searches, watched items, and seller follows.",
   },
   {
-    title: "Browse by category",
-    detail: "Antiques & Collectibles, Housewares, and everyday classifieds categories need to be visible from the first screen.",
+    title: "Post real ads quickly",
+    detail: "Sellers need a direct path to create a listing first, then decide whether to pay for homepage placement.",
   },
   {
-    title: "Top ads stay visible",
-    detail: "Popular and curated inventory can still lead the page, but the language should read like consumer classifieds rather than ad-tech placement rules.",
+    title: "Homepage ads stay on the homepage",
+    detail: "Sponsored placements should look like real ads for real inventory, not a separate feature that users need to hunt for.",
   },
-];
-
-const ecosystemSignals = [
-  "Create an account, then land in a watch-first signed-in view for followed sellers, saved ads, saved searches, and alerts.",
-  "Wallet linking stays available after profile setup instead of blocking the first session.",
-  "Public launch stays focused on classifieds flow first, with dealer and subscription complexity deferred.",
 ];
 
 const safetyWarnings = [
@@ -287,48 +281,107 @@ export default function HomePage() {
 
   return (
     <div className="space-y-8">
+      <section className="space-y-4 rounded-[2rem] border border-amber-300/70 bg-[linear-gradient(135deg,rgba(255,248,228,0.95),rgba(255,255,255,0.98))] px-5 py-6 shadow-[0_30px_80px_rgba(146,64,14,0.08)] sm:px-8 sm:py-8">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div className="space-y-3">
+            <div className="market-section-title">Homepage paid ads</div>
+            <h1 className="max-w-3xl text-3xl font-semibold tracking-tight text-slate-950 sm:text-5xl">
+              Paid ads now lead the Zonycs home page before sign-in or deeper browsing.
+            </h1>
+            <p className="max-w-2xl text-sm leading-7 text-slate-700 sm:text-base">
+              This front page is shifting toward the classifieds pattern your client asked for: real sponsored ads first, a clear sign-in option, and the rest of the marketplace underneath instead of competing above the fold.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-3">
+            <Button asChild size="lg" className="rounded-full px-6">
+              <Link href="/create">Post an ad</Link>
+            </Button>
+            <Button asChild size="lg" variant="outline" className="rounded-full px-6">
+              <Link href="/sign-in">Sign in</Link>
+            </Button>
+            {auth.isAdmin ? (
+              <Button asChild size="lg" variant="ghost" className="rounded-full px-6 text-slate-700">
+                <Link href="/dashboard">Manage homepage ads</Link>
+              </Button>
+            ) : null}
+          </div>
+        </div>
+
+        {sponsoredError ? <AccentCallout label="Homepage paid ads" tone="amber">{sponsoredError}</AccentCallout> : null}
+
+        {sponsoredListings.length === 0 ? (
+          <Card className="border-amber-200/70 bg-white/90">
+            <CardContent className="flex flex-col gap-4 p-6 lg:flex-row lg:items-center lg:justify-between">
+              <div className="space-y-1">
+                <div className="text-sm font-semibold text-slate-950">No homepage paid ads are live right now.</div>
+                <div className="text-sm text-slate-700">
+                  As soon as a sponsored campaign is activated, it will appear here first for every visitor before the rest of the marketplace flow.
+                </div>
+              </div>
+              {auth.isAdmin ? (
+                <Button asChild className="rounded-full">
+                  <Link href="/dashboard">Create homepage ad</Link>
+                </Button>
+              ) : null}
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-4">
+            {sponsoredListings.map((item, index) => (
+              <div key={`${item.listing.chainKey}-${item.listing.id}`} className={index === 0 ? "xl:col-span-2" : "xl:col-span-1"}>
+                <div className="mb-2 flex flex-wrap items-center gap-2 text-xs uppercase tracking-[0.16em] text-muted-foreground">
+                  <span>{item.sponsorLabel || "Paid ad"}</span>
+                  {item.campaignName ? <span>{item.campaignName}</span> : null}
+                </div>
+                <ListingCard row={item.listing} />
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
       <section className="market-hero px-5 py-6 sm:px-8 sm:py-8">
         <div className="grid gap-6 lg:grid-cols-[1.4fr_0.9fr] lg:items-end">
           <div className="space-y-5">
             <div className="market-section-title">Zonycs marketplace</div>
             <div className="space-y-3">
               <h1 className="max-w-3xl text-3xl font-semibold tracking-tight text-slate-950 sm:text-5xl">
-                Buy, sell, and watch local ads from one clear entry point.
+                Post ads, discover local inventory, and sign in only when you need the account tools.
               </h1>
               <p className="max-w-2xl text-sm leading-7 text-slate-700 sm:text-base">
-                The landing page now puts sign-in, categories, top ads, and live inventory into a cleaner first impression. Buyers can start with familiar classifieds browsing, then step into saved ads, followed sellers, and account tools only when they want them.
+                The public entry point is being narrowed down to the pieces that matter most: homepage paid ads, a direct post-ad path, a clear sign-in option, and live marketplace inventory that feels closer to familiar classifieds sites.
               </p>
             </div>
             <div className="flex flex-wrap gap-3">
               <Button asChild size="lg" className="rounded-full px-6">
-                <Link href="/marketplace">Browse marketplace</Link>
-              </Button>
-              <Button asChild size="lg" variant="outline" className="rounded-full px-6">
                 <Link href="/create">Post an ad</Link>
               </Button>
+              <Button asChild size="lg" variant="outline" className="rounded-full px-6">
+                <Link href="/marketplace">Browse marketplace</Link>
+              </Button>
               <Button asChild size="lg" variant="ghost" className="rounded-full px-6 text-slate-700">
-                <Link href="/dashboard">Seller dashboard</Link>
+                <Link href="/sign-in">Sign in</Link>
               </Button>
             </div>
             <div className="flex flex-wrap gap-2">
-              <div className="market-chip border-amber-200/80 bg-white/95 text-slate-900 shadow-sm">Antiques & Collectibles ready</div>
-              <div className="market-chip border-amber-200/80 bg-white/95 text-slate-900 shadow-sm">Housewares added to public launch</div>
-              <div className="market-chip border-amber-200/80 bg-white/95 text-slate-900 shadow-sm">Watch-first account flow for signed-in members</div>
+              <div className="market-chip border-amber-200/80 bg-white/95 text-slate-900 shadow-sm">Homepage paid ads first</div>
+              <div className="market-chip border-amber-200/80 bg-white/95 text-slate-900 shadow-sm">Direct post-an-ad path</div>
+              <div className="market-chip border-amber-200/80 bg-white/95 text-slate-900 shadow-sm">Saved search and follow tools after sign-in</div>
             </div>
           </div>
 
           <div className="space-y-3">
             <div className="market-stat bg-white/85">
               <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Landing page priorities</div>
-              <div className="mt-2 text-xl font-semibold text-slate-950">Sign in, categories, top ads, then the live marketplace.</div>
+              <div className="mt-2 text-xl font-semibold text-slate-950">Paid ads first, sign-in second, live browsing underneath.</div>
               <div className="mt-2 text-sm text-slate-700">
-                This entry point keeps sign-in, category browsing, and featured inventory easy to read before the full marketplace opens up.
+                The first screen should read like a marketplace front page, not a control panel. Sponsored inventory leads, then account tools and categories support the rest of the journey.
               </div>
             </div>
             <AccentCallout label="Watch-first flow" tone={auth.isAuthenticated ? "mint" : "blue"}>
               {auth.isAuthenticated
-                ? "Signed-in members now get a watch-first account flow with followed sellers, saved ads, and alerts grouped together."
-                : "Sign in to unlock watch activity and personalized order, or keep browsing the public marketplace right away."}
+                ? "Signed-in members still get watched items, followed sellers, and personalized discovery, but those now sit behind the first homepage impression instead of ahead of it."
+                : "Visitors can browse right away, then sign in when they want saved searches, watched ads, and account tools."}
             </AccentCallout>
           </div>
         </div>
@@ -392,28 +445,23 @@ export default function HomePage() {
 
           <Card className="market-panel market-panel-spotlight market-panel-spotlight-amber">
             <CardHeader>
-              <CardTitle>Top ads</CardTitle>
-              <CardDescription>Featured inventory stays visible without reading like an internal ad console.</CardDescription>
+              <CardTitle>Sign in and save your targets</CardTitle>
+              <CardDescription>After the homepage ads, sign-in should be the next clear action for buyers who want a personalized feed.</CardDescription>
             </CardHeader>
             <CardContent>
-              {sponsoredError ? <AccentCallout label="Top ads" tone="amber">{sponsoredError}</AccentCallout> : null}
-              {sponsoredListings.length === 0 ? (
-                <AccentCallout label="Featured placement" tone="amber">
-                  No featured top ads are active right now. As campaign windows or featured listings go live, they will appear here.
+              <div className="space-y-4">
+                <AccentCallout label="Personalized next" tone="amber">
+                  Sign in to bring saved searches, followed sellers, favorites, and watched inventory back onto the homepage after the paid-ad layer.
                 </AccentCallout>
-              ) : (
-                <div className="grid gap-4">
-                  {sponsoredListings.map((item) => (
-                    <div key={`${item.listing.chainKey}-${item.listing.id}`} className="space-y-2">
-                      <div className="flex flex-wrap items-center gap-2 text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                          <span>{item.sponsorLabel || "Top ad"}</span>
-                        {item.campaignName ? <span>{item.campaignName}</span> : null}
-                      </div>
-                      <ListingCard row={item.listing} />
-                    </div>
-                  ))}
+                <div className="flex flex-wrap gap-3">
+                  <Button asChild className="rounded-full">
+                    <Link href="/sign-in">Open sign-in</Link>
+                  </Button>
+                  <Button asChild variant="outline" className="rounded-full">
+                    <Link href="/marketplace">Keep browsing</Link>
+                  </Button>
                 </div>
-              )}
+              </div>
             </CardContent>
           </Card>
         </div>
@@ -594,7 +642,7 @@ export default function HomePage() {
         <Card className="market-panel market-panel-spotlight market-panel-spotlight-blue">
           <CardHeader>
             <CardTitle>Sign in on any device</CardTitle>
-            <CardDescription>Email-first access stays available without forcing a desktop wallet assumption.</CardDescription>
+            <CardDescription>Email-first access stays available without getting in the way of the homepage ad experience.</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <AccentCallout label="Account access" tone="blue">

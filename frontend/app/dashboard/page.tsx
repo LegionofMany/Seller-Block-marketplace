@@ -1421,9 +1421,9 @@ export default function DashboardPage() {
                 {auth.isAdmin ? (
               <Card className="market-panel market-panel-spotlight market-panel-spotlight-amber border-amber-300/60 bg-[linear-gradient(180deg,rgba(255,252,244,0.92),rgba(255,255,255,0.98))]">
           <CardHeader>
-            <div className="market-section-title">Homepage admin</div>
-            <CardTitle>Spotlight placements</CardTitle>
-            <CardDescription>Control the featured inventory and trust surfaces that shape the public landing page.</CardDescription>
+            <div className="market-section-title">Homepage paid ads</div>
+            <CardTitle>Create and manage paid homepage ads</CardTitle>
+            <CardDescription>Use real listing ids to decide which paid ads land first on the public home page.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-5 p-4 pt-0 sm:p-6 sm:pt-0">
             <div className="grid gap-3 sm:grid-cols-3">
@@ -1626,8 +1626,8 @@ export default function DashboardPage() {
               <div className="space-y-3">
                 <div className="flex items-center justify-between gap-3">
                   <div>
-                    <div className="text-sm font-semibold">Current placement inventory</div>
-                    <div className="text-sm text-muted-foreground">Review timing, priority, and labeling before a placement reaches the homepage.</div>
+                    <div className="text-sm font-semibold">Current paid ads</div>
+                    <div className="text-sm text-muted-foreground">Review timing, priority, and labeling before a paid ad reaches the homepage.</div>
                   </div>
                   <Button
                     type="button"
@@ -1637,7 +1637,7 @@ export default function DashboardPage() {
                       setPromotionDraft(emptyPromotionDraft(defaultChainKey));
                     }}
                   >
-                    New placement
+                    New paid ad
                   </Button>
                 </div>
 
@@ -1648,8 +1648,8 @@ export default function DashboardPage() {
                     <Skeleton className="h-16 w-full" />
                   </div>
                 ) : promotions.length === 0 ? (
-                  <AccentCallout label="No spotlight placements" tone="amber">
-                    The spotlight layer is empty. Create the first placement from the form to the right.
+                  <AccentCallout label="No homepage paid ads" tone="amber">
+                    No paid homepage ads are active yet. Create the first one from the form to the right.
                   </AccentCallout>
                 ) : (
                   promotions.map((item) => (
@@ -1657,7 +1657,7 @@ export default function DashboardPage() {
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                         <div className="space-y-1">
                           <div className="flex flex-wrap items-center gap-2">
-                            <div className="font-semibold">{item.campaignName?.trim() || item.sponsorLabel?.trim() || "Untitled placement"}</div>
+                            <div className="font-semibold">{item.campaignName?.trim() || item.sponsorLabel?.trim() || "Untitled paid ad"}</div>
                             <span className="rounded-full border px-2 py-0.5 text-[11px] uppercase tracking-[0.16em] text-muted-foreground">{item.status}</span>
                             <span className="rounded-full border px-2 py-0.5 text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Priority {item.priority}</span>
                           </div>
@@ -1695,7 +1695,7 @@ export default function DashboardPage() {
                                   setEditingPromotionId(null);
                                   setPromotionDraft(emptyPromotionDraft(defaultChainKey));
                                 }
-                                toast.success("Placement removed");
+                                toast.success("Paid ad removed");
                               } catch (error: unknown) {
                                 toast.error(getErrorMessage(error, "Failed to remove placement"));
                               } finally {
@@ -1714,8 +1714,8 @@ export default function DashboardPage() {
 
               <div className="rounded-2xl border bg-white/90 p-4 sm:p-5">
                 <div className="space-y-1">
-                  <div className="text-sm font-semibold">{editingPromotionId ? "Update placement" : "Create placement"}</div>
-                  <div className="text-sm text-muted-foreground">Use a real listing id and a clean campaign label so the homepage reads like curated inventory, not ad ops.</div>
+                  <div className="text-sm font-semibold">{editingPromotionId ? "Update paid ad" : "Create paid ad"}</div>
+                  <div className="text-sm text-muted-foreground">Use a real listing id and clear sponsor labeling so the ad reads like real homepage inventory.</div>
                 </div>
 
                 {promotionDraft ? (
@@ -1757,7 +1757,7 @@ export default function DashboardPage() {
                         <Input
                           value={promotionDraft.campaignName}
                           onChange={(e) => setPromotionDraft((current) => current ? { ...current, campaignName: e.target.value } : current)}
-                          placeholder="Weekend local spotlight"
+                          placeholder="Weekend truck spotlight"
                         />
                       </div>
                       <div className="space-y-2">
@@ -1765,7 +1765,7 @@ export default function DashboardPage() {
                         <Input
                           value={promotionDraft.sponsorLabel}
                           onChange={(e) => setPromotionDraft((current) => current ? { ...current, sponsorLabel: e.target.value } : current)}
-                          placeholder="Zonycs Spotlight"
+                          placeholder="Sponsored by Zonycs"
                         />
                       </div>
                     </div>
@@ -1775,7 +1775,7 @@ export default function DashboardPage() {
                         <Input
                           value={promotionDraft.placementSlot}
                           onChange={(e) => setPromotionDraft((current) => current ? { ...current, placementSlot: e.target.value } : current)}
-                          placeholder="homepage-hero"
+                          placeholder="homepage-paid-ad"
                         />
                       </div>
                       <div className="space-y-2">
@@ -1813,7 +1813,7 @@ export default function DashboardPage() {
                         rows={4}
                         value={promotionDraft.notes}
                         onChange={(e) => setPromotionDraft((current) => current ? { ...current, notes: e.target.value } : current)}
-                        placeholder="Why this placement exists, who approved it, and what part of the homepage it is meant to influence."
+                        placeholder="What is being promoted, who paid for it, and any notes about how long it should stay on the homepage."
                       />
                     </div>
                     <div className="flex flex-wrap gap-2">
@@ -1874,15 +1874,15 @@ export default function DashboardPage() {
                             });
                             setEditingPromotionId(null);
                             setPromotionDraft(emptyPromotionDraft(defaultChainKey));
-                            toast.success(editingPromotionId ? "Placement updated" : "Placement created");
+                            toast.success(editingPromotionId ? "Paid ad updated" : "Paid ad created");
                           } catch (error: unknown) {
-                            toast.error(getErrorMessage(error, "Failed to save placement"));
+                            toast.error(getErrorMessage(error, "Failed to save paid ad"));
                           } finally {
                             setIsSavingPromotion(false);
                           }
                         }}
                       >
-                        {editingPromotionId ? "Save placement" : "Create placement"}
+                        {editingPromotionId ? "Save paid ad" : "Create paid ad"}
                       </Button>
                       <Button
                         type="button"
