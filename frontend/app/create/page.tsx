@@ -102,6 +102,12 @@ type CreateListingDraft = {
   companyName: string;
   compensation: string;
   workMode: string;
+  conditionSummary: string;
+  inspectionNotes: string;
+  transferTerms: string;
+  titleStatus: string;
+  ownershipConfirmed: boolean;
+  publicSaleTermsAccepted: boolean;
   fixedPrice: string;
   auctionStart: string;
   auctionEnd: string;
@@ -281,6 +287,12 @@ export default function CreateListingPage() {
   const [companyName, setCompanyName] = React.useState("");
   const [compensation, setCompensation] = React.useState("");
   const [workMode, setWorkMode] = React.useState("On-site");
+  const [conditionSummary, setConditionSummary] = React.useState("");
+  const [inspectionNotes, setInspectionNotes] = React.useState("");
+  const [transferTerms, setTransferTerms] = React.useState("");
+  const [titleStatus, setTitleStatus] = React.useState("");
+  const [ownershipConfirmed, setOwnershipConfirmed] = React.useState(false);
+  const [publicSaleTermsAccepted, setPublicSaleTermsAccepted] = React.useState(false);
 
   const [fixedPrice, setFixedPrice] = React.useState("0.01");
 
@@ -394,6 +406,12 @@ export default function CreateListingPage() {
       if (typeof draft.companyName === "string") setCompanyName(draft.companyName);
       if (typeof draft.compensation === "string") setCompensation(draft.compensation);
       if (typeof draft.workMode === "string") setWorkMode(draft.workMode);
+      if (typeof draft.conditionSummary === "string") setConditionSummary(draft.conditionSummary);
+      if (typeof draft.inspectionNotes === "string") setInspectionNotes(draft.inspectionNotes);
+      if (typeof draft.transferTerms === "string") setTransferTerms(draft.transferTerms);
+      if (typeof draft.titleStatus === "string") setTitleStatus(draft.titleStatus);
+      if (typeof draft.ownershipConfirmed === "boolean") setOwnershipConfirmed(draft.ownershipConfirmed);
+      if (typeof draft.publicSaleTermsAccepted === "boolean") setPublicSaleTermsAccepted(draft.publicSaleTermsAccepted);
       if (typeof draft.fixedPrice === "string") setFixedPrice(draft.fixedPrice);
       if (typeof draft.auctionStart === "string") setAuctionStart(draft.auctionStart);
       if (typeof draft.auctionEnd === "string") setAuctionEnd(draft.auctionEnd);
@@ -458,6 +476,12 @@ export default function CreateListingPage() {
       companyName,
       compensation,
       workMode,
+      conditionSummary,
+      inspectionNotes,
+      transferTerms,
+      titleStatus,
+      ownershipConfirmed,
+      publicSaleTermsAccepted,
       fixedPrice,
       auctionStart,
       auctionEnd,
@@ -487,6 +511,12 @@ export default function CreateListingPage() {
       companyName,
       compensation,
       workMode,
+      conditionSummary,
+      inspectionNotes,
+      transferTerms,
+      titleStatus,
+      ownershipConfirmed,
+      publicSaleTermsAccepted,
       fixedPrice,
       auctionStart,
       auctionEnd,
@@ -571,7 +601,16 @@ export default function CreateListingPage() {
             ...(compensation.trim() ? [{ trait_type: "compensation", value: compensation.trim() }] : []),
             ...(workMode.trim() ? [{ trait_type: "workMode", value: workMode.trim() }] : []),
           ]
-        : [],
+        : [
+            { trait_type: "listingKind", value: "public-sale" },
+            { trait_type: "conditionSummary", value: conditionSummary.trim() },
+            { trait_type: "inspectionNotes", value: inspectionNotes.trim() },
+            ...(transferTerms.trim() ? [{ trait_type: "transferTerms", value: transferTerms.trim() }] : []),
+            ...(titleStatus.trim() ? [{ trait_type: "titleStatus", value: titleStatus.trim() }] : []),
+            { trait_type: "ownershipConfirmed", value: ownershipConfirmed },
+            { trait_type: "publicSaleTermsAccepted", value: publicSaleTermsAccepted },
+            { trait_type: "saleTerms", value: "As-is / where-is unless noted otherwise by the seller" },
+          ],
     };
 
     if (!images.length) {
@@ -746,6 +785,26 @@ export default function CreateListingPage() {
 
     if (isJobListing && !city.trim() && !region.trim() && !postalCode.trim()) {
       toast.error("Jobs need at least one location detail");
+      return;
+    }
+
+    if (!isJobListing && !conditionSummary.trim()) {
+      toast.error("Add a condition summary so buyers know what they are looking at");
+      return;
+    }
+
+    if (!isJobListing && !inspectionNotes.trim()) {
+      toast.error("Add inspection or pickup notes for public-sale listings");
+      return;
+    }
+
+    if (!isJobListing && !ownershipConfirmed) {
+      toast.error("Confirm that you have the right to sell this item");
+      return;
+    }
+
+    if (!isJobListing && !publicSaleTermsAccepted) {
+      toast.error("Accept the public-sale terms before publishing");
       return;
     }
 
@@ -1107,7 +1166,63 @@ export default function CreateListingPage() {
                       </div>
                     </div>
                   </>
-                ) : null}
+                ) : (
+                  <>
+                    <div className="space-y-2 sm:col-span-2">
+                      <Label>Condition summary</Label>
+                      <Textarea
+                        value={conditionSummary}
+                        onChange={(e) => setConditionSummary(e.target.value)}
+                        placeholder="Summarize age, wear, known damage, and what is included in the sale."
+                      />
+                    </div>
+                    <div className="space-y-2 sm:col-span-2">
+                      <Label>Inspection and pickup notes</Label>
+                      <Textarea
+                        value={inspectionNotes}
+                        onChange={(e) => setInspectionNotes(e.target.value)}
+                        placeholder="Tell buyers how they can inspect the item, where pickup happens, and any deadlines that matter."
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Transfer or release terms</Label>
+                      <Input
+                        value={transferTerms}
+                        onChange={(e) => setTransferTerms(e.target.value)}
+                        placeholder="e.g. Bill of sale at pickup, appointment required"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Title / ownership documents</Label>
+                      <Input
+                        value={titleStatus}
+                        onChange={(e) => setTitleStatus(e.target.value)}
+                        placeholder="e.g. Clear title, bill of sale only, not applicable"
+                      />
+                    </div>
+                    <div className="space-y-3 rounded-2xl border bg-background/80 p-4 sm:col-span-2">
+                      <div className="text-sm font-medium text-slate-950">Public-sale safeguards</div>
+                      <label className="flex items-start gap-3 text-sm text-muted-foreground">
+                        <input
+                          type="checkbox"
+                          className="mt-1 h-4 w-4 rounded border-slate-300"
+                          checked={ownershipConfirmed}
+                          onChange={(e) => setOwnershipConfirmed(e.target.checked)}
+                        />
+                        <span>I confirm I have the right to sell or transfer this item and can provide the release terms described in this listing.</span>
+                      </label>
+                      <label className="flex items-start gap-3 text-sm text-muted-foreground">
+                        <input
+                          type="checkbox"
+                          className="mt-1 h-4 w-4 rounded border-slate-300"
+                          checked={publicSaleTermsAccepted}
+                          onChange={(e) => setPublicSaleTermsAccepted(e.target.checked)}
+                        />
+                        <span>I understand this listing is published as a public sale and buyers should rely on these disclosures, inspect before paying, and expect as-is / where-is terms unless I state otherwise above.</span>
+                      </label>
+                    </div>
+                  </>
+                )}
                 <div className="space-y-2 sm:col-span-2">
                   <Label>Generated metadataURI (from backend)</Label>
                   <Input value={generatedMetadataURI} readOnly placeholder="Will be generated on submit" />
@@ -1237,6 +1352,11 @@ export default function CreateListingPage() {
               <AccentCallout label={isJobListing ? "Applicant-facing basics" : "Buyer-facing basics"} tone="mint">
                 {isJobListing ? "Lead with a plain-language role title, city or region, clear application contact details, and a short compensation summary." : "Lead with a plain-language title, real photos, city and region, and one direct price."}
               </AccentCallout>
+              {!isJobListing ? (
+                <AccentCallout label="Public-sale safeguards" tone="amber">
+                  Add a condition summary, inspection notes, and the sale terms buyers need before they commit. The live listing now carries those disclosures forward on the public page.
+                </AccentCallout>
+              ) : null}
               <AccentCallout label={isJobListing ? "Recommended for jobs" : "Recommended for classifieds"} tone="mint">
                 {isJobListing ? "Use the description for responsibilities and requirements, then let the applicant reply directly from the public listing page." : "Use fixed price for most listings so the detail page stays simple and buyers can act immediately."}
               </AccentCallout>

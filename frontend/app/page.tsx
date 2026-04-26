@@ -55,21 +55,6 @@ function toListingSummary(row: BackendListingRow): ListingSummary {
   };
 }
 
-const spotlightRules = [
-  {
-    title: "Sign in after the first impression",
-    detail: "Paid ads and live inventory should land first. Sign-in comes next for saved searches, watched items, and seller follows.",
-  },
-  {
-    title: "Post real ads quickly",
-    detail: "Sellers need a direct path to create a listing first, then decide whether to pay for homepage placement.",
-  },
-  {
-    title: "Homepage ads stay on the homepage",
-    detail: "Sponsored placements should look like real ads for real inventory, not a separate feature that users need to hunt for.",
-  },
-];
-
 const safetyWarnings = [
   "Meet in safe public locations and avoid cash-only pressure tactics.",
   "Report scam attempts, counterfeit goods, and illicit sales directly from profile and listing pages.",
@@ -278,6 +263,7 @@ export default function HomePage() {
     () => listings.filter((listing) => !followedSellers.includes(String(listing.seller).toLowerCase())).slice(0, 8),
     [listings, followedSellers]
   );
+  const featuredCategories = React.useMemo(() => Object.keys(CATEGORY_TREE).slice(0, 6), []);
 
   return (
     <div className="space-y-8">
@@ -366,16 +352,20 @@ export default function HomePage() {
             <div className="flex flex-wrap gap-2">
               <div className="market-chip border-amber-200/80 bg-white/95 text-slate-900 shadow-sm">Homepage paid ads first</div>
               <div className="market-chip border-amber-200/80 bg-white/95 text-slate-900 shadow-sm">Direct post-an-ad path</div>
-              <div className="market-chip border-amber-200/80 bg-white/95 text-slate-900 shadow-sm">Saved search and follow tools after sign-in</div>
+              {featuredCategories.map((category) => (
+                <Link key={category} href={buildMarketplaceHref({ category })} className="market-chip border-amber-200/80 bg-white/95 text-slate-900 shadow-sm">
+                  {category}
+                </Link>
+              ))}
             </div>
           </div>
 
           <div className="space-y-3">
             <div className="market-stat bg-white/85">
               <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Landing page priorities</div>
-              <div className="mt-2 text-xl font-semibold text-slate-950">Paid ads first, sign-in second, live browsing underneath.</div>
+              <div className="mt-2 text-xl font-semibold text-slate-950">Paid ads first. Posting and browsing stay one click away.</div>
               <div className="mt-2 text-sm text-slate-700">
-                The first screen should read like a marketplace front page, not a control panel. Sponsored inventory leads, then account tools and categories support the rest of the journey.
+                The first screen should read like a marketplace front page, not a control panel. Sponsored inventory leads and the rest of the tools stay compact until the user chooses them.
               </div>
             </div>
             <AccentCallout label="Watch-first flow" tone={auth.isAuthenticated ? "mint" : "blue"}>
@@ -387,71 +377,96 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
+      <section className="grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
         <Card className="market-panel market-panel-spotlight market-panel-spotlight-mint">
           <CardHeader>
-            <CardTitle>Followed sellers first</CardTitle>
-            <CardDescription>Driven by real follows, not placeholder merchandising.</CardDescription>
+            <CardTitle>Quick browse</CardTitle>
+            <CardDescription>Keep the next step simple: browse fast, post fast, or sign in for personalized tools.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {followedError ? <AccentCallout label="Followed sellers" tone="amber">{followedError}</AccentCallout> : null}
-            {!auth.isAuthenticated ? (
-              <AccentCallout label="Start following" tone="mint">
-                Follow a seller from their profile page, then come back here to see their newest ads ahead of the open marketplace feed.
-              </AccentCallout>
-            ) : followedSellers.length === 0 ? (
-              <AccentCallout label="Follow sellers" tone="mint">
-                You are signed in, but you are not following any sellers yet. Visit seller pages, follow trusted profiles, and their newest ads will land here first.
-              </AccentCallout>
-            ) : followedListings.length === 0 ? (
-              <AccentCallout label="Waiting on inventory" tone="blue">
-                You follow sellers already, but none of their recent inventory is available in the current homepage window yet.
-              </AccentCallout>
-            ) : (
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                {followedListings.map((listing) => (
-                  <ListingCard key={`${listing.chainKey}-${listing.id}`} row={listing} />
-                ))}
-              </div>
-            )}
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              {featuredCategories.map((category) => (
+                <Link key={category} href={buildMarketplaceHref({ category })} className="market-stat h-full bg-white/85 transition-colors hover:bg-accent/20">
+                  <div className="text-sm font-semibold text-slate-950">{category}</div>
+                  <div className="mt-2 text-sm leading-6 text-slate-700">{CATEGORY_TREE[category].slice(0, 2).join(" • ")}</div>
+                  <div className="mt-3 text-xs uppercase tracking-[0.16em] text-muted-foreground">Open category</div>
+                </Link>
+              ))}
+            </div>
+            <div className="flex flex-wrap gap-3">
+              <Button asChild className="rounded-full">
+                <Link href="/create">Post an ad</Link>
+              </Button>
+              <Button asChild variant="outline" className="rounded-full">
+                <Link href="/marketplace">Open marketplace</Link>
+              </Button>
+            </div>
           </CardContent>
         </Card>
 
-        <div className="grid gap-4">
-          <Card className="market-panel market-panel-spotlight market-panel-spotlight-blue">
-            <CardHeader>
-              <CardTitle>Favorites next</CardTitle>
-              <CardDescription>Saved listings hold a dedicated slot near the top of the landing experience.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {favoriteError ? <AccentCallout label="Favorites" tone="amber">{favoriteError}</AccentCallout> : null}
-              {!auth.isAuthenticated ? (
-                <AccentCallout label="Save listings" tone="blue">
-                  Sign in with email or wallet, save listings from their detail pages, and they will appear here on your next visit.
-                </AccentCallout>
-              ) : favoriteListings.length === 0 ? (
-                <AccentCallout label="Save favorites" tone="blue">
-                  You do not have favorite listings yet. Open any listing and save it to lift it into this homepage layer.
-                </AccentCallout>
-              ) : (
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  {favoriteListings.map((listing) => (
-                    <ListingCard key={`${listing.chainKey}-${listing.id}`} row={listing} />
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+        <Card className="market-panel market-panel-spotlight market-panel-spotlight-blue">
+          <CardHeader>
+            <CardTitle>{auth.isAuthenticated ? "Your shortcuts" : "Sign in when you want the extras"}</CardTitle>
+            <CardDescription>
+              {auth.isAuthenticated
+                ? "Saved ads and followed sellers stay available without crowding the opening screen."
+                : "Browsing stays public. Sign in only when you want favorites, follows, and saved-search tools."}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {followedError ? <AccentCallout label="Followed sellers" tone="amber">{followedError}</AccentCallout> : null}
+            {favoriteError ? <AccentCallout label="Favorites" tone="amber">{favoriteError}</AccentCallout> : null}
 
-          <Card className="market-panel market-panel-spotlight market-panel-spotlight-amber">
-            <CardHeader>
-              <CardTitle>Sign in and save your targets</CardTitle>
-              <CardDescription>After the homepage ads, sign-in should be the next clear action for buyers who want a personalized feed.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <AccentCallout label="Personalized next" tone="amber">
-                  Sign in to bring saved searches, followed sellers, favorites, and watched inventory back onto the homepage after the paid-ad layer.
+            {auth.isAuthenticated ? (
+              <>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="market-stat h-full bg-white/85">
+                    <div className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Followed sellers</div>
+                    <div className="mt-2 text-2xl font-semibold text-slate-950">{followedSellers.length}</div>
+                    <div className="mt-2 text-sm text-slate-700">{followedListings.length > 0 ? "Fresh inventory from trusted sellers is ready below." : "Follow more sellers to personalize the feed."}</div>
+                  </div>
+                  <div className="market-stat h-full bg-white/85">
+                    <div className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Saved favorites</div>
+                    <div className="mt-2 text-2xl font-semibold text-slate-950">{favoriteListings.length}</div>
+                    <div className="mt-2 text-sm text-slate-700">Open any listing and save it to keep it close to the homepage.</div>
+                  </div>
+                </div>
+
+                {followedListings.length > 0 ? (
+                  <div className="space-y-2">
+                    <div className="text-sm font-medium text-slate-950">From followed sellers</div>
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                      {followedListings.slice(0, 2).map((listing) => (
+                        <ListingCard key={`${listing.chainKey}-${listing.id}`} row={listing} />
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
+                {favoriteListings.length > 0 ? (
+                  <div className="space-y-2">
+                    <div className="text-sm font-medium text-slate-950">Saved favorites</div>
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                      {favoriteListings.slice(0, 2).map((listing) => (
+                        <ListingCard key={`${listing.chainKey}-${listing.id}`} row={listing} />
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
+                <div className="flex flex-wrap gap-3">
+                  <Button asChild variant="outline" className="rounded-full">
+                    <Link href="/dashboard?tab=watch">Open watch tools</Link>
+                  </Button>
+                  <Button asChild variant="ghost" className="rounded-full">
+                    <Link href="/marketplace">Keep browsing</Link>
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <>
+                <AccentCallout label="Personalized later" tone="blue">
+                  Sign in to save favorites, follow sellers, and bring watched inventory back onto the homepage after the paid-ad layer.
                 </AccentCallout>
                 <div className="flex flex-wrap gap-3">
                   <Button asChild className="rounded-full">
@@ -461,41 +476,8 @@ export default function HomePage() {
                     <Link href="/marketplace">Keep browsing</Link>
                   </Button>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </section>
-
-      <section className="grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
-        <Card className="market-panel market-panel-spotlight market-panel-spotlight-mint">
-          <CardHeader>
-            <CardTitle>Browse by category</CardTitle>
-            <CardDescription>Category entry points now match the public-launch classifieds mix, including antiques and housewares.</CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {Object.entries(CATEGORY_TREE).map(([category, subcategories]) => (
-              <Link key={category} href={buildMarketplaceHref({ category })} className="market-stat h-full bg-white/85 transition-colors hover:bg-accent/20">
-                <div className="text-sm font-semibold text-slate-950">{category}</div>
-                <div className="mt-2 text-sm leading-6 text-slate-700">{subcategories.slice(0, 3).join(" • ")}</div>
-                <div className="mt-3 text-xs uppercase tracking-[0.16em] text-muted-foreground">Open category</div>
-              </Link>
-            ))}
-          </CardContent>
-        </Card>
-
-        <Card className="market-panel market-panel-spotlight market-panel-spotlight-blue">
-          <CardHeader>
-            <CardTitle>Account flow</CardTitle>
-            <CardDescription>Keep the homepage clean, then let sign-in open the deeper watch and profile tools.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {spotlightRules.map((rule) => (
-              <div key={rule.title} className="market-stat h-full bg-white/85">
-                <div className="text-sm font-semibold text-slate-950">{rule.title}</div>
-                <div className="mt-2 text-sm leading-6 text-slate-700">{rule.detail}</div>
-              </div>
-            ))}
+              </>
+            )}
           </CardContent>
         </Card>
       </section>

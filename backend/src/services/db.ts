@@ -90,6 +90,22 @@ export type FavoriteListingRow = {
   createdAt: number;
 };
 
+export type PaymentRow = {
+  id: number;
+  userAddress: string;
+  listingId?: string | null;
+  listingChainKey?: string | null;
+  provider: string;
+  providerSessionId?: string | null;
+  status: string;
+  amount: number;
+  currency: string;
+  promotionType?: string | null;
+  metadata: Record<string, unknown>;
+  createdAt: number;
+  updatedAt: number;
+};
+
 export type PromotionRow = {
   id: number;
   listingId: string;
@@ -1012,6 +1028,24 @@ function toUserTrustReviewRow(r: any): UserTrustReviewRow {
   };
 }
 
+function toPaymentRow(r: any): PaymentRow {
+  return {
+    id: Number(r.id ?? 0),
+    userAddress: String(r.userAddress ?? r.useraddress),
+    listingId: r.listingId ?? r.listingid ?? null,
+    listingChainKey: r.listingChainKey ?? r.listingchainkey ?? null,
+    provider: String(r.provider ?? ""),
+    providerSessionId: r.providerSessionId ?? r.providersessionid ?? null,
+    status: String(r.status ?? "pending"),
+    amount: Number(r.amount ?? 0),
+    currency: String(r.currency ?? "usd"),
+    promotionType: r.promotionType ?? r.promotiontype ?? null,
+    metadata: parseJsonObject(r.metadataJson ?? r.metadatajson),
+    createdAt: Number(r.createdAt ?? r.createdat ?? 0),
+    updatedAt: Number(r.updatedAt ?? r.updatedat ?? 0),
+  };
+}
+
 function toPromotionRow(r: any): PromotionRow {
   return {
     id: Number(r.id),
@@ -1625,6 +1659,145 @@ export async function listHomepageSponsoredPromotions(_db: Pool | any, now: numb
   return res.rows.map(toPromotionRow);
 }
 
+export async function findPaymentByProviderSessionId(_db: Pool | any, providerSessionId: string): Promise<PaymentRow | null> {
+  const p = ensurePool(_db);
+  const clean = String(providerSessionId ?? "").trim();
+  if (!clean) return null;
+  const res = await p.query(
+    `SELECT id,
+            useraddress AS "userAddress",
+            listingid AS "listingId",
+            listingchainkey AS "listingChainKey",
+            provider,
+            providersessionid AS "providerSessionId",
+            status,
+            amount,
+            currency,
+            promotiontype AS "promotionType",
+            metadatajson AS "metadataJson",
+            createdat AS "createdAt",
+            updatedat AS "updatedAt"
+     FROM payments
+     WHERE providersessionid = $1
+     LIMIT 1`,
+    [clean]
+  );
+  return res.rows[0] ? toPaymentRow(res.rows[0]) : null;
+}
+
+export async function findPaymentById(_db: Pool | any, id: number): Promise<PaymentRow | null> {
+  const p = ensurePool(_db);
+  const res = await p.query(
+    `SELECT id,
+            useraddress AS "userAddress",
+            listingid AS "listingId",
+            listingchainkey AS "listingChainKey",
+            provider,
+            providersessionid AS "providerSessionId",
+            status,
+            amount,
+            currency,
+            promotiontype AS "promotionType",
+            metadatajson AS "metadataJson",
+            createdat AS "createdAt",
+            updatedat AS "updatedAt"
+     FROM payments
+     WHERE id = $1
+     LIMIT 1`,
+    [id]
+  );
+  return res.rows[0] ? toPaymentRow(res.rows[0]) : null;
+}
+
+export async function createPayment(
+  _db: Pool | any,
+  input: Omit<PaymentRow, "id" | "metadata" | "createdAt" | "updatedAt"> & { metadata?: Record<string, unknown>; createdAt: number; updatedAt: number }
+): Promise<PaymentRow> {
+  const p = ensurePool(_db);
+  const res = await p.query(
+    `INSERT INTO payments(useraddress, listingid, listingchainkey, provider, providersessionid, status, amount, currency, promotiontype, metadatajson, createdat, updatedat)
+     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+     RETURNING id,
+               useraddress AS "userAddress",
+               listingid AS "listingId",
+               listingchainkey AS "listingChainKey",
+               provider,
+               providersessionid AS "providerSessionId",
+               status,
+               amount,
+               currency,
+               promotiontype AS "promotionType",
+               metadatajson AS "metadataJson",
+               createdat AS "createdAt",
+               updatedat AS "updatedAt"`,
+    [
+      input.userAddress,
+      input.listingId ?? null,
+      input.listingChainKey ?? null,
+      input.provider,
+      input.providerSessionId ?? null,
+      input.status,
+      input.amount,
+      input.currency,
+      input.promotionType ?? null,
+      JSON.stringify(input.metadata ?? {}),
+      input.createdAt,
+      input.updatedAt,
+    ]
+  );
+  return toPaymentRow(res.rows[0]);
+}
+
+export async function updatePayment(
+  _db: Pool | any,
+  input: Omit<PaymentRow, "metadata" | "createdAt" | "updatedAt"> & { metadata?: Record<string, unknown>; updatedAt: number }
+): Promise<PaymentRow | null> {
+  const p = ensurePool(_db);
+  const res = await p.query(
+    `UPDATE payments
+     SET useraddress = $2,
+         listingid = $3,
+         listingchainkey = $4,
+         provider = $5,
+         providersessionid = $6,
+         status = $7,
+         amount = $8,
+         currency = $9,
+         promotiontype = $10,
+         metadatajson = $11,
+         updatedat = $12
+     WHERE id = $1
+     RETURNING id,
+               useraddress AS "userAddress",
+               listingid AS "listingId",
+               listingchainkey AS "listingChainKey",
+               provider,
+               providersessionid AS "providerSessionId",
+               status,
+               amount,
+               currency,
+               promotiontype AS "promotionType",
+               metadatajson AS "metadataJson",
+               createdat AS "createdAt",
+               updatedat AS "updatedAt"`,
+    [
+      input.id,
+      input.userAddress,
+      input.listingId ?? null,
+      input.listingChainKey ?? null,
+      input.provider,
+      input.providerSessionId ?? null,
+      input.status,
+      input.amount,
+      input.currency,
+      input.promotionType ?? null,
+      JSON.stringify(input.metadata ?? {}),
+      input.updatedAt,
+    ]
+  );
+  return res.rows[0] ? toPaymentRow(res.rows[0]) : null;
+}
+
 export async function listAllPromotions(_db: Pool | any, type?: string): Promise<PromotionRow[]> {
   const p = ensurePool(_db);
   const values: any[] = [];
@@ -1657,6 +1830,106 @@ export async function listAllPromotions(_db: Pool | any, type?: string): Promise
     values
   );
   return res.rows.map(toPromotionRow);
+}
+
+export async function findPromotionById(_db: Pool | any, id: number): Promise<PromotionRow | null> {
+  const p = ensurePool(_db);
+  const res = await p.query(
+    `SELECT id,
+            listingid AS "listingId",
+            listingchainkey AS "listingChainKey",
+            paymentid AS "paymentId",
+            type,
+            status,
+            priority,
+            placementslot AS "placementSlot",
+            campaignname AS "campaignName",
+            sponsorlabel AS "sponsorLabel",
+            createdby AS "createdBy",
+            notes,
+            metadatajson AS "metadataJson",
+            startsat AS "startsAt",
+            endsat AS "endsAt",
+            createdat AS "createdAt",
+            updatedat AS "updatedAt"
+     FROM promotions
+     WHERE id = $1
+     LIMIT 1`,
+    [id]
+  );
+  return res.rows[0] ? toPromotionRow(res.rows[0]) : null;
+}
+
+export async function listPromotionsByCreator(_db: Pool | any, createdBy: string, type?: string): Promise<PromotionRow[]> {
+  const p = ensurePool(_db);
+  const values: any[] = [createdBy.trim().toLowerCase()];
+  const where = [`LOWER(COALESCE(createdby, '')) = $1`];
+  if (type) {
+    values.push(type);
+    where.push(`type = $${values.length}`);
+  }
+  const res = await p.query(
+    `SELECT id,
+            listingid AS "listingId",
+            listingchainkey AS "listingChainKey",
+            paymentid AS "paymentId",
+            type,
+            status,
+            priority,
+            placementslot AS "placementSlot",
+            campaignname AS "campaignName",
+            sponsorlabel AS "sponsorLabel",
+            createdby AS "createdBy",
+            notes,
+            metadatajson AS "metadataJson",
+            startsat AS "startsAt",
+            endsat AS "endsAt",
+            createdat AS "createdAt",
+            updatedat AS "updatedAt"
+     FROM promotions
+     WHERE ${where.join(" AND ")}
+     ORDER BY updatedat DESC, id DESC`,
+    values
+  );
+  return res.rows.map(toPromotionRow);
+}
+
+export async function findPromotionForSellerListing(
+  _db: Pool | any,
+  listingId: string,
+  listingChainKey: string,
+  createdBy: string,
+  type: string
+): Promise<PromotionRow | null> {
+  const p = ensurePool(_db);
+  const res = await p.query(
+    `SELECT id,
+            listingid AS "listingId",
+            listingchainkey AS "listingChainKey",
+            paymentid AS "paymentId",
+            type,
+            status,
+            priority,
+            placementslot AS "placementSlot",
+            campaignname AS "campaignName",
+            sponsorlabel AS "sponsorLabel",
+            createdby AS "createdBy",
+            notes,
+            metadatajson AS "metadataJson",
+            startsat AS "startsAt",
+            endsat AS "endsAt",
+            createdat AS "createdAt",
+            updatedat AS "updatedAt"
+     FROM promotions
+     WHERE listingid = $1
+       AND listingchainkey = $2
+       AND LOWER(COALESCE(createdby, '')) = $3
+       AND type = $4
+     ORDER BY updatedat DESC, id DESC
+     LIMIT 1`,
+    [listingId, listingChainKey, createdBy.trim().toLowerCase(), type]
+  );
+  return res.rows[0] ? toPromotionRow(res.rows[0]) : null;
 }
 
 export async function createPromotion(

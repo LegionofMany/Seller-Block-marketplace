@@ -950,6 +950,12 @@ export default function ListingDetailPage() {
   const companyName = getMetadataAttributeValue(metadata, "companyName");
   const compensation = getMetadataAttributeValue(metadata, "compensation");
   const workMode = getMetadataAttributeValue(metadata, "workMode");
+  const conditionSummary = getMetadataAttributeValue(metadata, "conditionSummary");
+  const inspectionNotes = getMetadataAttributeValue(metadata, "inspectionNotes");
+  const transferTerms = getMetadataAttributeValue(metadata, "transferTerms");
+  const titleStatus = getMetadataAttributeValue(metadata, "titleStatus");
+  const ownershipConfirmed = getMetadataAttributeValue(metadata, "ownershipConfirmed") === "true";
+  const publicSaleTermsAccepted = getMetadataAttributeValue(metadata, "publicSaleTermsAccepted") === "true";
   const priceLabel = listing ? formatPrice(listing.price, native, activeChainNativeCurrencySymbol) : "—";
   const locationLabel = [metadata?.city, metadata?.region, metadata?.postalCode].filter(Boolean).join(", ");
   const pageDescription = listing
@@ -1120,6 +1126,47 @@ export default function ListingDetailPage() {
                     ) : null}
                   </div>
 
+                  {!isJobPost && (conditionSummary || inspectionNotes || transferTerms || titleStatus || ownershipConfirmed || publicSaleTermsAccepted) ? (
+                    <div className="rounded-2xl border bg-slate-50/80 p-4 space-y-4 sm:p-5">
+                      <div>
+                        <div className="text-sm font-semibold text-slate-950">Sale terms and disclosures</div>
+                        <div className="mt-1 text-xs text-muted-foreground">
+                          Public-sale details carried forward from the seller&apos;s publish form.
+                        </div>
+                      </div>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        {conditionSummary ? (
+                          <div className="text-sm sm:col-span-2">
+                            <div className="text-muted-foreground">Condition</div>
+                            <div className="font-medium whitespace-pre-wrap">{conditionSummary}</div>
+                          </div>
+                        ) : null}
+                        {inspectionNotes ? (
+                          <div className="text-sm sm:col-span-2">
+                            <div className="text-muted-foreground">Inspection and pickup</div>
+                            <div className="font-medium whitespace-pre-wrap">{inspectionNotes}</div>
+                          </div>
+                        ) : null}
+                        {transferTerms ? (
+                          <div className="text-sm">
+                            <div className="text-muted-foreground">Transfer terms</div>
+                            <div className="font-medium whitespace-pre-wrap">{transferTerms}</div>
+                          </div>
+                        ) : null}
+                        {titleStatus ? (
+                          <div className="text-sm">
+                            <div className="text-muted-foreground">Title / documents</div>
+                            <div className="font-medium whitespace-pre-wrap">{titleStatus}</div>
+                          </div>
+                        ) : null}
+                      </div>
+                      <div className="flex flex-wrap gap-2 text-xs">
+                        {ownershipConfirmed ? <Badge variant="outline" className="bg-white/90">Seller confirmed right to sell</Badge> : null}
+                        {publicSaleTermsAccepted ? <Badge variant="outline" className="bg-white/90">As-is / where-is public sale</Badge> : null}
+                      </div>
+                    </div>
+                  ) : null}
+
                   <div className="space-y-4">
                     <div className="flex items-center justify-between gap-3">
                       <div>
@@ -1193,6 +1240,11 @@ export default function ListingDetailPage() {
                 {listing.status === 1 && !isSeller ? (
                   <div className="rounded-xl border bg-background/80 p-3 space-y-2 sm:p-4">
                     <div className="text-sm font-medium">Safety</div>
+                    {!isJobPost ? (
+                      <AccentCallout label="Public-sale safeguards" tone="amber">
+                        Inspect before paying, verify transfer documents when they matter, and rely on the disclosure panel above for the seller&apos;s stated sale terms.
+                      </AccentCallout>
+                    ) : null}
                     <div className="flex flex-col gap-2 sm:flex-row">
                       <Button type="button" variant={isFavorite ? "default" : "outline"} size="lg" className="w-full sm:w-auto" disabled={isFavoriteLoading} onClick={() => void toggleFavorite()}>
                         {isFavorite ? "Saved" : "Save favorite"}
@@ -1215,6 +1267,11 @@ export default function ListingDetailPage() {
                 ) : (
                   <div className="rounded-xl border bg-background/80 p-3 space-y-2 sm:p-4">
                     <div className="text-sm font-medium">Safety</div>
+                    {!isJobPost ? (
+                      <AccentCallout label="Public-sale safeguards" tone="amber">
+                        Inspect before paying, verify transfer documents when they matter, and rely on the disclosure panel above for the seller&apos;s stated sale terms.
+                      </AccentCallout>
+                    ) : null}
                     <div className="flex flex-col gap-2 sm:flex-row">
                       <Button type="button" variant={isFavorite ? "default" : "outline"} size="lg" className="w-full sm:w-auto" disabled={isFavoriteLoading} onClick={() => void toggleFavorite()}>
                         {isFavorite ? "Saved" : "Save favorite"}

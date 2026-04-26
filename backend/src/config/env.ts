@@ -54,6 +54,11 @@ export type Env = {
   relayerPrivateKey?: string;
   pinataJwt?: string;
   pinataGatewayBaseUrl?: string;
+  stripeSecretKey?: string;
+  promotionHomepagePriceCents: number;
+  promotionHomepageDurationDays: number;
+  promotionHomepagePriority: number;
+  promotionHomepagePlacementSlot: string;
 };
 
 function required(name: string): string {
@@ -389,6 +394,24 @@ export function getEnv(): Env {
   const pinataJwt = optional("PINATA_JWT");
   const pinataGatewayBaseUrl = optional("PINATA_GATEWAY_BASE_URL");
   if (pinataGatewayBaseUrl) validateRpcUrl("PINATA_GATEWAY_BASE_URL", pinataGatewayBaseUrl);
+  const stripeSecretKey = optional("STRIPE_SECRET_KEY");
+  const promotionHomepagePriceCents = numberFromEnv("PROMOTION_HOMEPAGE_PRICE_CENTS", 4900);
+  const promotionHomepageDurationDays = numberFromEnv("PROMOTION_HOMEPAGE_DURATION_DAYS", 7);
+  const promotionHomepagePriority = numberFromEnv("PROMOTION_HOMEPAGE_PRIORITY", 180);
+  const promotionHomepagePlacementSlot = optional("PROMOTION_HOMEPAGE_PLACEMENT_SLOT") ?? "homepage-paid-primary";
+
+  if (!Number.isInteger(promotionHomepagePriceCents) || promotionHomepagePriceCents <= 0) {
+    throw new Error("Invalid PROMOTION_HOMEPAGE_PRICE_CENTS");
+  }
+  if (!Number.isInteger(promotionHomepageDurationDays) || promotionHomepageDurationDays <= 0 || promotionHomepageDurationDays > 90) {
+    throw new Error("Invalid PROMOTION_HOMEPAGE_DURATION_DAYS");
+  }
+  if (!Number.isInteger(promotionHomepagePriority) || promotionHomepagePriority < 0 || promotionHomepagePriority > 1000) {
+    throw new Error("Invalid PROMOTION_HOMEPAGE_PRIORITY");
+  }
+  if (!promotionHomepagePlacementSlot.trim()) {
+    throw new Error("Invalid PROMOTION_HOMEPAGE_PLACEMENT_SLOT");
+  }
 
   return {
     port,
@@ -421,5 +444,10 @@ export function getEnv(): Env {
     ...(relayerPrivateKey ? { relayerPrivateKey } : {}),
     ...(pinataJwt ? { pinataJwt } : {}),
     ...(pinataGatewayBaseUrl ? { pinataGatewayBaseUrl } : {}),
+    ...(stripeSecretKey ? { stripeSecretKey } : {}),
+    promotionHomepagePriceCents,
+    promotionHomepageDurationDays,
+    promotionHomepagePriority,
+    promotionHomepagePlacementSlot,
   };
 }

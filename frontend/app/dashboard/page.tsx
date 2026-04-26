@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { type Address, type Hex, isAddress, parseAbiItem, zeroAddress } from "viem";
@@ -33,6 +34,7 @@ import { buildListingHref } from "@/lib/listings";
 import { type ListingSummary } from "@/lib/hooks/useListings";
 import { getProfileLocationFilter } from "@/lib/location";
 import { buildMarketplaceHref } from "@/lib/marketplace";
+import { fetchMetadataByUri, getRenderableListingImage, LISTING_FALLBACK_IMAGE } from "@/lib/metadata";
 
 const listingCreatedEvent = parseAbiItem(
   "event ListingCreated(bytes32 indexed id, address seller, uint8 saleType, address token, uint256 price, string metadataURI)"
@@ -138,6 +140,7 @@ type PromotionAdminItem = {
   endsAt: number;
   createdAt: number;
   updatedAt: number;
+  metadata?: Record<string, unknown> | null;
 };
 
 type PromotionDraft = {
@@ -151,6 +154,31 @@ type PromotionDraft = {
   notes: string;
   startsAt: string;
   endsAt: string;
+};
+
+type SellerPromotionPricing = {
+  enabled: boolean;
+  mode: "manual_pending";
+  amountCents: number;
+  durationDays: number;
+  currency: string;
+  priority: number;
+  placementSlot: string;
+};
+
+type SellerPromotionDraft = {
+  listingId: string;
+  listingChainKey: string;
+  campaignName: string;
+  sponsorLabel: string;
+  notes: string;
+};
+
+type PromotionListingPreview = {
+  title: string;
+  imageUrl: string;
+  href: string;
+  subtitle: string;
 };
 
 type TrustReviewHistoryItem = {
@@ -265,6 +293,79 @@ function toPromotionDraft(item: PromotionAdminItem): PromotionDraft {
     startsAt: formatDateTimeInput(item.startsAt),
     endsAt: formatDateTimeInput(item.endsAt),
   };
+}
+
+function emptySellerPromotionDraft(defaultChainKey: string): SellerPromotionDraft {
+  return {
+    listingId: "",
+    listingChainKey: defaultChainKey,
+    campaignName: "",
+    sponsorLabel: "",
+    notes: "",
+  };
+}
+
+function getPromotionPreviewKey(listingId: string, listingChainKey: string) {
+  return `${listingChainKey}:${listingId}`;
+}
+
+function isSellerPromotionRequest(item: PromotionAdminItem) {
+  const requestMode = typeof item.metadata?.requestMode === "string" ? item.metadata.requestMode : null;
+  const reviewStatus = typeof item.metadata?.reviewStatus === "string" ? item.metadata.reviewStatus : null;
+  return requestMode === "manual_pending" || reviewStatus === "pending" || reviewStatus === "approved";
+}
+
+function getPaymentReviewState(item: PromotionAdminItem) {
+  const raw = typeof item.metadata?.paymentReviewState === "string" ? item.metadata.paymentReviewState : null;
+  if (raw) return raw;
+  const reviewStatus = typeof item.metadata?.reviewStatus === "string" ? item.metadata.reviewStatus : null;
+  if (reviewStatus === "approved") return "approved_pending_collection";
+  if (reviewStatus === "rejected") return "rejected";
+  if (reviewStatus === "paused") return "on_hold";
+  return "pending_review";
+}
+
+function formatPaymentReviewStateLabel(state: string) {
+  switch (state) {
+    case "approved_pending_collection":
+      return "Payment pending collection";
+    case "rejected":
+      return "Payment review closed";
+    case "on_hold":
+      return "Payment review on hold";
+    default:
+      return "Payment review pending";
+  }
+}
+
+function PromotionPreviewTile({
+  preview,
+  fallbackTitle,
+  listingId,
+  listingChainKey,
+}: {
+  preview?: PromotionListingPreview;
+  fallbackTitle: string;
+  listingId: string;
+  listingChainKey: string;
+}) {
+  const href = preview?.href ?? buildListingHref(listingId, listingChainKey);
+  const imageUrl = preview?.imageUrl ?? LISTING_FALLBACK_IMAGE;
+
+  return (
+    <Link href={href} className="block rounded-2xl border bg-white/90 p-3 transition-colors hover:bg-accent/20">
+      <div className="flex gap-3">
+        <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-xl border bg-muted">
+          <Image src={imageUrl} alt={preview?.title ?? fallbackTitle} fill className="object-cover" sizes="64px" unoptimized />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-sm font-semibold text-slate-950">{preview?.title ?? fallbackTitle}</div>
+          <div className="mt-1 truncate text-xs text-muted-foreground">{preview?.subtitle ?? `${listingChainKey} • ${shortenHex(listingId as Hex)}`}</div>
+          <div className="mt-2 truncate text-[11px] text-muted-foreground">{shortenHex(listingId as Hex)}</div>
+        </div>
+      </div>
+    </Link>
+  );
 }
 
 function toSavedSearchDraft(item: SavedSearch): SavedSearchDraft {
@@ -392,6 +493,12 @@ export default function DashboardPage() {
   const [isSavingPromotion, setIsSavingPromotion] = React.useState(false);
   const [editingPromotionId, setEditingPromotionId] = React.useState<number | null>(null);
   const [promotionDraft, setPromotionDraft] = React.useState<PromotionDraft | null>(null);
+  const [promotionListingPreviews, setPromotionListingPreviews] = React.useState<Record<string, PromotionListingPreview>>({});
+  const [sellerPromotions, setSellerPromotions] = React.useState<PromotionAdminItem[]>([]);
+  const [sellerPromotionPricing, setSellerPromotionPricing] = React.useState<SellerPromotionPricing | null>(null);
+  const [isLoadingSellerPromotions, setIsLoadingSellerPromotions] = React.useState(false);
+  const [isSubmittingSellerPromotion, setIsSubmittingSellerPromotion] = React.useState(false);
+  const [sellerPromotionDraft, setSellerPromotionDraft] = React.useState<SellerPromotionDraft | null>(null);
   const [adminTrustAddress, setAdminTrustAddress] = React.useState("");
   const [adminTrustNote, setAdminTrustNote] = React.useState("");
   const [isSavingTrust, setIsSavingTrust] = React.useState(false);
@@ -741,6 +848,95 @@ export default function DashboardPage() {
     let cancelled = false;
 
     async function run() {
+      if (!auth.isAuthenticated) {
+        setSellerPromotions([]);
+        setSellerPromotionPricing(null);
+        setSellerPromotionDraft(null);
+        return;
+      }
+
+      try {
+        setIsLoadingSellerPromotions(true);
+        const res = await fetchJson<{ pricing: SellerPromotionPricing; items: PromotionAdminItem[] }>("/promotions/self-serve", { timeoutMs: 7_000 });
+        if (cancelled) return;
+        setSellerPromotionPricing(res.pricing ?? null);
+        setSellerPromotions(res.items ?? []);
+        setSellerPromotionDraft((current) => current ?? emptySellerPromotionDraft(defaultChainKey));
+      } catch (error: unknown) {
+        if (!cancelled) {
+          toast.error(getErrorMessage(error, "Failed to load homepage ad requests"));
+        }
+      } finally {
+        if (!cancelled) setIsLoadingSellerPromotions(false);
+      }
+    }
+
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [auth.isAuthenticated, dashboardRefreshKey, defaultChainKey]);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    const promotionItems = [...promotions, ...sellerPromotions];
+    const uniqueItems = Array.from(
+      new Map(promotionItems.map((item) => [getPromotionPreviewKey(item.listingId, item.listingChainKey), item])).values()
+    );
+    const missingItems = uniqueItems.filter((item) => !promotionListingPreviews[getPromotionPreviewKey(item.listingId, item.listingChainKey)]);
+
+    if (missingItems.length === 0) return;
+
+    async function run() {
+      const loadedEntries = await Promise.all(
+        missingItems.map(async (item) => {
+          const key = getPromotionPreviewKey(item.listingId, item.listingChainKey);
+          try {
+            const detail = await fetchJson<{ listing: BackendListingRow }>(`/listings/${item.listingId}?chain=${encodeURIComponent(item.listingChainKey)}`, {
+              timeoutMs: 5_000,
+            });
+            const metadata = await fetchMetadataByUri(detail.listing.metadataURI);
+            const subtitle = [metadata?.category, metadata?.city, metadata?.region].filter(Boolean).join(" • ") || item.listingChainKey;
+            return [
+              key,
+              {
+                title: metadata?.title?.trim() || item.campaignName?.trim() || item.sponsorLabel?.trim() || `Listing ${shortenHex(item.listingId as Hex)}`,
+                imageUrl: getRenderableListingImage(metadata?.image),
+                href: buildListingHref(item.listingId, item.listingChainKey),
+                subtitle,
+              },
+            ] as const;
+          } catch {
+            return [
+              key,
+              {
+                title: item.campaignName?.trim() || item.sponsorLabel?.trim() || `Listing ${shortenHex(item.listingId as Hex)}`,
+                imageUrl: LISTING_FALLBACK_IMAGE,
+                href: buildListingHref(item.listingId, item.listingChainKey),
+                subtitle: item.listingChainKey,
+              },
+            ] as const;
+          }
+        })
+      );
+
+      if (cancelled) return;
+      setPromotionListingPreviews((current) => ({
+        ...current,
+        ...Object.fromEntries(loadedEntries),
+      }));
+    }
+
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [promotions, promotionListingPreviews, sellerPromotions]);
+
+  React.useEffect(() => {
+    let cancelled = false;
+
+    async function run() {
       if (!auth.isAuthenticated || !auth.isAdmin) {
         setAdminListings([]);
         setAdminListingsTotal(0);
@@ -807,6 +1003,21 @@ export default function DashboardPage() {
     setAdminListingsOffset(0);
   }, [adminListingChainFilter, adminListingStatusFilter, deferredAdminListingSearch]);
 
+  React.useEffect(() => {
+    if (!sellerPromotionDraft) return;
+    if (sellerPromotionDraft.listingId.trim()) return;
+    if (!myListings?.length) return;
+
+    setSellerPromotionDraft((current) => {
+      if (!current || current.listingId.trim()) return current;
+      return {
+        ...current,
+        listingId: String(myListings[0].id),
+        listingChainKey: myListings[0].chainKey,
+      };
+    });
+  }, [myListings, sellerPromotionDraft]);
+
   const activeSavedSearchSubcategories = React.useMemo(() => {
     if (!savedSearchDraft?.filters.category) return [];
     return subcategoriesFor(savedSearchDraft.filters.category);
@@ -858,6 +1069,98 @@ export default function DashboardPage() {
     : [];
   const completedProfileSetupCount = profileSetupItems.filter((item) => item.done).length;
   const nextProfileSetupLabel = profileSetupItems.find((item) => !item.done)?.label ?? null;
+  const sellerPromotionPriceLabel = sellerPromotionPricing
+    ? new Intl.NumberFormat("en-US", { style: "currency", currency: sellerPromotionPricing.currency.toUpperCase() }).format(sellerPromotionPricing.amountCents / 100)
+    : null;
+  const sellerPromotionRequests = React.useMemo(
+    () => promotions.filter((item) => isSellerPromotionRequest(item) && item.status === "draft"),
+    [promotions]
+  );
+  const managedHomepageAds = React.useMemo(
+    () => promotions.filter((item) => !(isSellerPromotionRequest(item) && item.status === "draft")),
+    [promotions]
+  );
+
+  const submitSellerPromotionRequest = React.useCallback(async () => {
+      if (!sellerPromotionDraft) return;
+      if (!sellerPromotionDraft.listingId.trim()) {
+        toast.error("Choose one of your listings first");
+        return;
+      }
+      if (!sellerPromotionDraft.listingChainKey.trim()) {
+        toast.error("Listing chain is required");
+        return;
+      }
+
+      try {
+        setIsSubmittingSellerPromotion(true);
+        const response = await fetchJson<{ promotion: PromotionAdminItem; message?: string }>("/promotions/self-serve/request", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            listingId: sellerPromotionDraft.listingId.trim(),
+            listingChainKey: sellerPromotionDraft.listingChainKey.trim(),
+            campaignName: sellerPromotionDraft.campaignName.trim(),
+            sponsorLabel: sellerPromotionDraft.sponsorLabel.trim(),
+            notes: sellerPromotionDraft.notes.trim(),
+          }),
+        });
+        toast.success(response.message ?? "Homepage ad request sent for review");
+        setSellerPromotionDraft(emptySellerPromotionDraft(defaultChainKey));
+        setDashboardRefreshKey((current) => current + 1);
+      } catch (error: unknown) {
+        toast.error(getErrorMessage(error, "Failed to request homepage placement"));
+      } finally {
+        setIsSubmittingSellerPromotion(false);
+      }
+    }, [defaultChainKey, sellerPromotionDraft]);
+
+  const approvePromotionRequest = React.useCallback(
+    async (item: PromotionAdminItem) => {
+      try {
+        setIsSavingPromotion(true);
+        const res = await fetchJson<{ item: PromotionAdminItem }>(`/promotions/admin/${item.id}/approve`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ notes: item.notes ?? "" }),
+        });
+
+        setPromotions((current) => current.map((entry) => (entry.id === item.id ? res.item : entry)));
+        if (editingPromotionId === item.id) {
+          setPromotionDraft(toPromotionDraft(res.item));
+        }
+        toast.success("Seller ad request approved");
+      } catch (error: unknown) {
+        toast.error(getErrorMessage(error, "Failed to approve seller ad request"));
+      } finally {
+        setIsSavingPromotion(false);
+      }
+    },
+    [editingPromotionId]
+  );
+  const reviewPromotionRequest = React.useCallback(
+    async (item: PromotionAdminItem, action: "pause" | "reject") => {
+      try {
+        setIsSavingPromotion(true);
+        const res = await fetchJson<{ item: PromotionAdminItem }>(`/promotions/admin/${item.id}/${action}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ notes: item.notes ?? "" }),
+        });
+
+        setPromotions((current) => current.map((entry) => (entry.id === item.id ? res.item : entry)));
+        if (editingPromotionId === item.id) {
+          setPromotionDraft(toPromotionDraft(res.item));
+        }
+        toast.success(action === "pause" ? "Seller ad request paused" : "Seller ad request rejected");
+      } catch (error: unknown) {
+        toast.error(getErrorMessage(error, action === "pause" ? "Failed to pause seller ad request" : "Failed to reject seller ad request"));
+      } finally {
+        setIsSavingPromotion(false);
+      }
+    },
+    [editingPromotionId]
+  );
   const focusProfileSection = React.useCallback(
     (section: ProfileFocusSection) => {
       const params = new URLSearchParams(searchParams.toString());
@@ -1624,10 +1927,92 @@ export default function DashboardPage() {
 
             <div className="grid gap-5 xl:grid-cols-[minmax(0,1.1fr)_minmax(320px,0.9fr)]">
               <div className="space-y-3">
+                <div>
+                  <div className="text-sm font-semibold">Seller ad request queue</div>
+                  <div className="text-sm text-muted-foreground">Approve pending self-serve homepage requests directly from the review queue.</div>
+                </div>
+
+                {isLoadingPromotions ? (
+                  <div className="space-y-2">
+                    <Skeleton className="h-16 w-full" />
+                    <Skeleton className="h-16 w-full" />
+                  </div>
+                ) : sellerPromotionRequests.length === 0 ? (
+                  <AccentCallout label="Queue is clear" tone="mint">
+                    No seller-submitted homepage ad requests are waiting for review right now.
+                  </AccentCallout>
+                ) : (
+                  sellerPromotionRequests.map((item) => (
+                    <div key={item.id} className="rounded-2xl border bg-white/80 p-4">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="space-y-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <div className="font-semibold">{item.campaignName?.trim() || item.sponsorLabel?.trim() || "Untitled paid ad"}</div>
+                            <span className="rounded-full border px-2 py-0.5 text-[11px] uppercase tracking-[0.16em] text-amber-700">Pending review</span>
+                            <span className="rounded-full border px-2 py-0.5 text-[11px] uppercase tracking-[0.16em] text-slate-600">{formatPaymentReviewStateLabel(getPaymentReviewState(item))}</span>
+                            <span className="rounded-full border px-2 py-0.5 text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Priority {item.priority}</span>
+                          </div>
+                          <div className="text-xs text-muted-foreground">Slot: {item.placementSlot || "homepage"}</div>
+                          <PromotionPreviewTile
+                            preview={promotionListingPreviews[getPromotionPreviewKey(item.listingId, item.listingChainKey)]}
+                            fallbackTitle={item.campaignName?.trim() || item.sponsorLabel?.trim() || "Promotion listing"}
+                            listingId={item.listingId}
+                            listingChainKey={item.listingChainKey}
+                          />
+                          <div className="text-xs text-muted-foreground">Requested window: {formatDateTime(item.startsAt)} to {formatDateTime(item.endsAt)}</div>
+                          {item.notes ? <div className="text-sm text-slate-700">{item.notes}</div> : null}
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            type="button"
+                            size="sm"
+                            disabled={isSavingPromotion}
+                            onClick={() => void approvePromotionRequest(item)}
+                          >
+                            Approve request
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled={isSavingPromotion}
+                            onClick={() => void reviewPromotionRequest(item, "pause")}
+                          >
+                            Pause
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="destructive"
+                            size="sm"
+                            disabled={isSavingPromotion}
+                            onClick={() => void reviewPromotionRequest(item, "reject")}
+                          >
+                            Reject
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setEditingPromotionId(item.id);
+                              setPromotionDraft(toPromotionDraft(item));
+                            }}
+                          >
+                            Review details
+                          </Button>
+                          <Button asChild type="button" variant="ghost" size="sm">
+                            <Link href={buildListingHref(item.listingId, item.listingChainKey)}>Open listing</Link>
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+
                 <div className="flex items-center justify-between gap-3">
                   <div>
-                    <div className="text-sm font-semibold">Current paid ads</div>
-                    <div className="text-sm text-muted-foreground">Review timing, priority, and labeling before a paid ad reaches the homepage.</div>
+                    <div className="text-sm font-semibold">Managed homepage ads</div>
+                    <div className="text-sm text-muted-foreground">Review timing, priority, and labeling for live or manually curated homepage ads.</div>
                   </div>
                   <Button
                     type="button"
@@ -1647,12 +2032,12 @@ export default function DashboardPage() {
                     <Skeleton className="h-16 w-full" />
                     <Skeleton className="h-16 w-full" />
                   </div>
-                ) : promotions.length === 0 ? (
-                  <AccentCallout label="No homepage paid ads" tone="amber">
-                    No paid homepage ads are active yet. Create the first one from the form to the right.
+                ) : managedHomepageAds.length === 0 ? (
+                  <AccentCallout label="No managed homepage ads" tone="amber">
+                    No live or manually curated homepage ads are active yet. Create the first one from the form to the right.
                   </AccentCallout>
                 ) : (
-                  promotions.map((item) => (
+                  managedHomepageAds.map((item) => (
                     <div key={item.id} className="rounded-2xl border bg-white/80 p-4">
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                         <div className="space-y-1">
@@ -1662,7 +2047,12 @@ export default function DashboardPage() {
                             <span className="rounded-full border px-2 py-0.5 text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Priority {item.priority}</span>
                           </div>
                           <div className="text-xs text-muted-foreground">Slot: {item.placementSlot || "homepage"}</div>
-                          <div className="break-all text-xs text-muted-foreground">Listing: {item.listingId}</div>
+                          <PromotionPreviewTile
+                            preview={promotionListingPreviews[getPromotionPreviewKey(item.listingId, item.listingChainKey)]}
+                            fallbackTitle={item.campaignName?.trim() || item.sponsorLabel?.trim() || "Promotion listing"}
+                            listingId={item.listingId}
+                            listingChainKey={item.listingChainKey}
+                          />
                           <div className="text-xs text-muted-foreground">Window: {formatDateTime(item.startsAt)} to {formatDateTime(item.endsAt)}</div>
                           {item.notes ? <div className="text-sm text-slate-700">{item.notes}</div> : null}
                         </div>
@@ -2355,14 +2745,138 @@ export default function DashboardPage() {
           ) : null}
 
           {accountTab === "my-listings" ? (
-            <React.Fragment>
+            <div className="space-y-4">
             <Card className="market-panel market-panel-spotlight market-panel-spotlight-mint">
               <CardHeader>
                 <div className="market-section-title">Listings</div>
                 <CardTitle>My listings</CardTitle>
                 <CardDescription>Your live seller inventory, presented in a cleaner classifieds-style view.</CardDescription>
               </CardHeader>
-              <CardContent className="p-4 pt-0 sm:p-6 sm:pt-0">
+              <CardContent className="space-y-4 p-4 pt-0 sm:p-6 sm:pt-0">
+                {isLoadingSellerPromotions ? (
+                  <div className="space-y-2 rounded-2xl border bg-white/85 p-4">
+                    <Skeleton className="h-4 w-56" />
+                    <Skeleton className="h-4 w-72" />
+                    <Skeleton className="h-20 w-full" />
+                  </div>
+                ) : sellerPromotionPricing ? (
+                  <div className="space-y-4 rounded-2xl border bg-white/90 p-4 shadow-sm">
+                    <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                      <div>
+                        <div className="text-sm font-semibold text-slate-950">Homepage paid ads</div>
+                        <div className="mt-1 text-sm text-muted-foreground">
+                          Choose one listing, submit the request yourself, and keep Stripe pending until manual review is complete.
+                        </div>
+                      </div>
+                      <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
+                        {sellerPromotionPriceLabel ? `${sellerPromotionPriceLabel} / ${sellerPromotionPricing.durationDays} days` : "Pending review"}
+                      </div>
+                    </div>
+
+                    <AccentCallout label="Current release" tone="amber">
+                      Requests save immediately and land in the review queue as pending. Homepage activation and payment collection are still handled manually while Stripe stays out of the live flow.
+                    </AccentCallout>
+
+                    {myListings && myListings.length > 0 && sellerPromotionDraft ? (
+                      <div className="grid gap-3 md:grid-cols-2">
+                        <div className="space-y-2 md:col-span-2">
+                          <Label htmlFor="seller-promotion-listing">Listing</Label>
+                          <select
+                            id="seller-promotion-listing"
+                            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                            value={`${sellerPromotionDraft.listingChainKey}:${sellerPromotionDraft.listingId}`}
+                            onChange={(event) => {
+                              const [chainKey, listingId] = event.target.value.split(":");
+                              setSellerPromotionDraft((current) =>
+                                current
+                                  ? {
+                                      ...current,
+                                      listingChainKey: chainKey,
+                                      listingId,
+                                    }
+                                  : current
+                              );
+                            }}
+                          >
+                            {myListings.map((row) => (
+                              <option key={`${row.chainKey}:${row.id}`} value={`${row.chainKey}:${row.id}`}>
+                                {row.chainKey} • {shortenHex(row.id)} • {statusLabel(row.status)}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="seller-promotion-campaign">Campaign name</Label>
+                          <Input
+                            id="seller-promotion-campaign"
+                            value={sellerPromotionDraft.campaignName}
+                            onChange={(event) => setSellerPromotionDraft((current) => current ? { ...current, campaignName: event.target.value } : current)}
+                            placeholder="Homepage feature for spring inventory"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="seller-promotion-sponsor">Sponsor label</Label>
+                          <Input
+                            id="seller-promotion-sponsor"
+                            value={sellerPromotionDraft.sponsorLabel}
+                            onChange={(event) => setSellerPromotionDraft((current) => current ? { ...current, sponsorLabel: event.target.value } : current)}
+                            placeholder="Shown beside the ad card"
+                          />
+                        </div>
+                        <div className="space-y-2 md:col-span-2">
+                          <Label htmlFor="seller-promotion-notes">Notes for review</Label>
+                          <Textarea
+                            id="seller-promotion-notes"
+                            value={sellerPromotionDraft.notes}
+                            onChange={(event) => setSellerPromotionDraft((current) => current ? { ...current, notes: event.target.value } : current)}
+                            placeholder="Optional timing, audience, or legal notes for the homepage placement review."
+                          />
+                        </div>
+                        <div className="md:col-span-2 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+                          <Button type="button" disabled={isSubmittingSellerPromotion} onClick={() => void submitSellerPromotionRequest()}>
+                            {isSubmittingSellerPromotion ? "Submitting..." : "Request homepage ad"}
+                          </Button>
+                          <div className="text-xs text-muted-foreground">
+                            Placement slot: {sellerPromotionPricing.placementSlot} • Review priority: {sellerPromotionPricing.priority}
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <AccentCallout label="Need a listing first" tone="mint">
+                        Publish at least one listing before requesting homepage placement.
+                      </AccentCallout>
+                    )}
+
+                    {sellerPromotions.length > 0 ? (
+                      <div className="space-y-2">
+                        <div className="text-sm font-medium text-slate-950">Your existing ad requests</div>
+                        {sellerPromotions.map((item) => (
+                          <div key={item.id} className="rounded-2xl border bg-slate-50/80 px-3 py-3 text-sm">
+                            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                              <div className="min-w-0 flex-1 space-y-2">
+                                <div className="font-medium text-slate-950">{item.campaignName || `Homepage ad request #${item.id}`}</div>
+                                <div className="mt-1 text-xs text-muted-foreground">
+                                  {item.status === "draft" ? "Pending review" : item.status === "active" ? "Live on homepage" : item.status}
+                                  {" • "}
+                                  {item.listingChainKey}
+                                </div>
+                                <PromotionPreviewTile
+                                  preview={promotionListingPreviews[getPromotionPreviewKey(item.listingId, item.listingChainKey)]}
+                                  fallbackTitle={item.campaignName || `Homepage ad request #${item.id}`}
+                                  listingId={item.listingId}
+                                  listingChainKey={item.listingChainKey}
+                                />
+                                {item.notes ? <div className="mt-2 text-xs text-muted-foreground">{item.notes}</div> : null}
+                              </div>
+                              <div className="text-xs text-muted-foreground">Updated {formatDateTime(item.updatedAt)}</div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+
                 {myListingIds === null || myListings === null ? (
                   <div className="space-y-2">
                     <Skeleton className="h-4 w-64" />
@@ -2548,7 +3062,7 @@ export default function DashboardPage() {
                 </CardContent>
               </Card>
             ) : null}
-            </React.Fragment>
+            </div>
           ) : null}
         </div>
 
