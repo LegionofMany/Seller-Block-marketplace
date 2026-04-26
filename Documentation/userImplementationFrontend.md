@@ -8,10 +8,12 @@ It is written for someone who is not a developer. If you follow the steps in ord
 - start the frontend on your computer
 - open the marketplace in your browser
 - sign in with email
+- connect a wallet when you need one
 - browse listings
 - save favorites and follow sellers
 - create a listing
 - create a normal listing or a job post
+- request a homepage paid ad for one of your listings
 - use the dashboard
 
 ## What this app is
@@ -27,6 +29,9 @@ The current app is centered around normal user flows first:
 - profile and address details
 - listing creation and publishing
 - jobs-specific posting flow for public hiring ads
+- public-sale disclosure flow for ordinary sale listings
+- seller self-serve homepage ad requests
+- admin review tools for paid homepage ads
 
 Wallet connection still exists, but it is not the first thing a normal user needs to do.
 
@@ -149,9 +154,11 @@ The home page is the public marketplace entry point.
 It highlights:
 
 - categories
+- homepage paid ads first
 - top or featured listings
 - saved and followed activity for signed-in users
 - trust and marketplace guidance
+- quick links to post an ad, open the marketplace, or continue to watch tools
 
 Use the home page if you want a quick overview before searching deeper.
 
@@ -193,6 +200,18 @@ Seller Block now opens a dedicated account-created page that explains:
 
 This makes the onboarding flow feel more like a normal marketplace account setup.
 
+### If you click Connect Wallet and no wallet appears
+
+The frontend now shows a small helper message if your browser does not detect an installed wallet extension.
+
+If that happens:
+
+1. install a browser wallet such as MetaMask or Rabby
+2. reload the page
+3. or use WalletConnect from the sign-in page to connect a mobile wallet
+
+This prevents the wallet button from feeling blank or broken.
+
 ## 3. Browse the marketplace
 
 Open `/marketplace`.
@@ -228,6 +247,14 @@ If the listing is a job post, the page now emphasizes:
 - application contact details
 
 It no longer leads with normal buyer checkout language for job posts.
+
+If the listing is a normal public-sale post, the page can also show:
+
+- condition summary
+- inspection and pickup notes
+- transfer or release terms
+- title or ownership-document status
+- public-sale safeguard notices carried from the create form
 
 Depending on the listing and the user account, the page may allow actions like:
 
@@ -274,6 +301,16 @@ Main listing types:
 - raffle
 
 Jobs do not use the auction, raffle, or token selection panels in the form.
+
+If the listing is a normal sale listing, the form now also asks for public-sale safeguard details such as:
+
+- condition summary
+- inspection notes
+- transfer terms
+- title or document status
+- seller confirmation that they have the right to sell the item
+
+These details appear again on the public listing page after publishing.
 
 Important:
 
@@ -360,6 +397,25 @@ Use this section to:
 - open listing details again
 - check listing activity connected to your seller account
 
+This section also now includes the seller self-serve homepage ad request area.
+
+From this area a seller can:
+
+- choose one of their listings
+- enter a campaign name and sponsor label
+- submit a homepage paid ad request
+- review their existing ad request history with listing title and thumbnail previews
+
+For the current release, payment collection is still manual. The request is saved first and reviewed later.
+
+### Notifications
+
+The dashboard notifications area is where users can see activity such as:
+
+- saved-search and watch alerts
+- seller-request review notifications for homepage ads
+- approval or rejection updates from admin review
+
 ### Admin listing tools
 
 If the signed-in account has admin access, the dashboard also shows an extra listing management panel.
@@ -374,6 +430,21 @@ Admins can use this panel to:
 
 This area is only for trusted marketplace operators. Regular buyers and sellers do not need it.
 
+### Admin homepage ad review tools
+
+If the signed-in account has admin access, the dashboard also includes homepage ad review controls.
+
+Admins can:
+
+- open the seller ad request queue
+- view the linked listing title and thumbnail instead of only the listing id
+- approve a request
+- pause a request
+- reject a request
+- see the payment review state beside the approval state
+
+This is part of the current manual paid-ad workflow. Stripe is not the live path yet.
+
 ## When a wallet is needed
 
 The app is no longer explained as wallet-first, but some flows may still require a wallet connection.
@@ -386,6 +457,7 @@ Examples:
 - settlement actions
 - contract-linked listing operations
 - owner or admin tools
+- optional wallet-based sign-in for existing wallet users
 
 If a wallet is needed, the app will guide the user at that point.
 
@@ -453,12 +525,14 @@ Likely cause:
 - wrong chain configuration
 - missing wallet connection
 - missing project env values
+- no injected browser wallet installed on the device
 
 What to do:
 
 1. Confirm the frontend chain configuration is correct
 2. Confirm wallet connection is active
 3. Reload the page after changing wallet network
+4. If the page says no browser wallet was detected, install MetaMask or Rabby or use WalletConnect from the sign-in page
 
 ## Commands summary
 
@@ -490,10 +564,12 @@ You can consider the frontend ready for a layperson to use when all of these are
 6. email sign-in works
 7. users can browse, watch, and create listings without confusion
 8. users can publish a no-photo job post without confusion
+9. users understand when a wallet extension is missing instead of seeing an empty wallet state
+10. sellers can request homepage ad placement from the dashboard if that feature is enabled for their account
 
 ## Final note
 
 For the current app, the simplest way to explain it to a non-technical user is this:
 
-Seller Block Marketplace is a marketplace website. Start the backend, start the frontend, open the browser, sign in with email, browse the marketplace, and use the dashboard to manage profile, watched items, your listings, and job posts.
+Seller Block Marketplace is a marketplace website. Start the backend, start the frontend, open the browser, sign in with email, browse the marketplace, and use the dashboard to manage profile, watched items, your listings, job posts, and homepage ad requests.
 

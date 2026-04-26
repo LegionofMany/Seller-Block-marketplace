@@ -34,13 +34,43 @@ This launch target should feel closer to Kijiji, Marketplace, or GovDeals accoun
 
 ## Implementation Status Snapshot
 
-Status as of April 25, 2026 for this roadmap tranche:
+Status as of April 26, 2026 for this roadmap tranche:
 
-- shipped: email-first sign-in and registration, forgot-password flow, profile/address/phone capture, watch/favorites/follows dashboard refactor, landing-page/category improvements, local discovery, create-flow publish recovery, public-launch category updates, token/network copy cleanup, accent refresh, saved-search alerts with marketplace deep links, notification/email copy polish, BlockPages post-signup trust CTA, paid Zonycs banner ribbon, photo-optional listing metadata, and jobs-specific create/detail UI copy
-- partially complete: final manual UX regression across sign-in, posting, watch flow, trust/copy surfaces, and hosted deployment verification outside local builds
-- unresolved but now decision-ready: SMS verification scope, exact "SEO and google loop" implementation meaning, stablecoin launch matrix by geography, and whether the long-term Jobs model should stay on the current on-chain listing abstraction or move to a dedicated contract/listing type later
+### Completed
 
-This means the implementation is near-complete for the public-launch UX scope. The closure path is now explicit: adopt the launch defaults in the final closure pass below, finish the remaining manual validation, and confirm hosted deployment parity.
+- email-first sign-in and registration
+- forgot-password and email-token flows
+- account-created handoff flow after registration and verification
+- profile, address, postal-code, and phone capture
+- watch, favorites, follows, alerts, and saved-search dashboard flow
+- landing page cleanup with paid-ads-first hierarchy, quick browse, and signed-in shortcut surfaces
+- public-launch category improvements including antiques and housewares
+- local discovery based on saved profile location
+- create-flow publish recovery and no-photo metadata fallback
+- jobs-specific create and detail experience
+- public-sale safeguards in create flow and listing detail disclosures
+- homepage paid-ad seller self-serve request flow with manual review state
+- admin homepage ad review queue with approve, pause, reject, seller notifications, and payment-review visibility
+- listing-title and thumbnail previews in seller ad history and admin ad review surfaces
+- token and network copy cleanup across the main launch surfaces
+- brighter accent refresh and clearer selected-state feedback
+- BlockPages post-signup trust CTA as a later trust step
+- wallet-connect UX hardening, including visible fallback messaging when no injected browser wallet is detected
+
+### Remaining Before Full Launch Signoff
+
+- final manual UX regression across sign-in, posting, watch flow, local discovery, trust/copy surfaces, and the paid-ad review flow in the intended hosted environment
+- hosted deployment parity verification for the latest frontend/backend behavior and environment variables
+- explicit product signoff on deferred launch-default decisions such as SMS, exact SEO interpretation, and geography/token matrix
+
+### Deferred Or Decision-Required
+
+- SMS verification scope
+- exact "SEO and google loop" implementation meaning
+- stablecoin launch matrix by geography
+- long-term Jobs protocol model versus the current launch-safe listing abstraction
+
+This means the implementation is functionally complete for the active frontend/public-launch feature tranche, with the remaining work centered on hosted validation, signoff, and deferred product decisions rather than broad new feature construction.
 
 ## Final Closure Pass
 
@@ -276,7 +306,7 @@ Lock the public-launch scope and prevent dealer, subscription, and payment-rail 
 
 ### Status
 
-Mostly complete. Email-first sign-up, password login, password reset, address capture, postal code, phone number, verification email, and post-sign-in routing are implemented. SMS verification remains a decision, not a shipped feature.
+Completed for launch scope. Email-first sign-up, password login, password reset, address capture, postal code, phone number, verification email, post-sign-in routing, and wallet-as-follow-up onboarding are implemented. SMS verification remains a deferred decision, not a missing launch feature.
 
 ### Goal
 
@@ -312,7 +342,7 @@ Make onboarding feel like a consumer marketplace account flow rather than a wall
 
 ### Status
 
-Mostly complete. The landing page now surfaces categories, top ads, and signed-in discovery; the dashboard now groups followed sellers, saved ads, saved searches, and alerts into a watch-first flow.
+Completed for launch scope. The landing page now surfaces paid ads, categories, quick browse actions, and signed-in discovery; the dashboard groups followed sellers, saved ads, saved searches, and alerts into a watch-first flow.
 
 ### Goal
 
@@ -345,7 +375,7 @@ Make the product useful immediately after sign-in and more compelling for repeat
 
 ### Status
 
-Mostly complete. Profile editing now carries phone/address data consistently, postal code persists, and signed-in local discovery uses saved profile location.
+Completed for launch scope. Profile editing now carries phone/address data consistently, postal code persists, signed-in local discovery uses saved profile location, and the account-created/profile-completion handoff makes the remaining setup steps visible to the user.
 
 ### Goal
 
@@ -376,7 +406,7 @@ Make profile data useful for trust and nearby discovery.
 
 ### Status
 
-Mostly complete. The create flow includes publish-recovery handling after upload/listing creation failures, categories include antiques and housewares, photos are optional for text-first posts, and Jobs now have dedicated form/detail copy. The remaining gaps are hosted deployment parity for the updated backend metadata behavior and final manual end-to-end publish QA in the intended environment.
+Completed for launch scope. The create flow includes publish-recovery handling after upload/listing creation failures, categories include antiques and housewares, photos are optional for text-first posts, Jobs now have dedicated form/detail copy, and public-sale safeguards render on the listing detail page. The remaining work is hosted deployment parity and final manual end-to-end publish QA in the intended environment.
 
 ### Goal
 
@@ -414,7 +444,7 @@ Make posting feel stable and understandable for public launch.
 
 ### Status
 
-Mostly complete. User-facing SBUSD/testnet language has been reduced across launch surfaces, saved-search notifications and emails now use human-facing copy, and listing/seller/detail surfaces have been cleaned up. A final trust/copy review pass is still warranted before calling this phase fully closed.
+Completed for active implementation scope. User-facing SBUSD/testnet language has been reduced across launch surfaces, saved-search notifications and emails now use human-facing copy, listing/seller/detail surfaces have been cleaned up, and wallet entry points now show clearer fallback guidance when no injected wallet is present. A final trust/copy review is still part of launch QA, but not a missing implementation slice.
 
 ### Goal
 
@@ -444,7 +474,7 @@ Reduce user confusion from dev-network language and unclear token naming.
 
 ### Status
 
-Mostly complete. The brighter accent system and stronger state visibility are implemented, but this still needs final visual signoff across the full launch journey.
+Completed for active implementation scope. The brighter accent system and stronger state visibility are implemented; the remaining task is final visual signoff across the full hosted launch journey rather than additional core UI work.
 
 ### Goal
 
@@ -505,8 +535,9 @@ These should not block the public-launch tranche.
 
 - completed locally: backend TypeScript builds and frontend production builds passed after each major implementation slice
 - completed locally: a live Sepolia smoke publish validated the current Jobs-compatible launch path using backend `/metadata` plus on-chain listing creation, and the resulting job-tagged listing rendered with the intended job detail inputs
-- still pending: final manual regression across sign-up, password reset, posting, watch flow, local discovery, and trust/copy surfaces in the target deployment environment
-- still pending: redeploy the hosted backend so `/metadata/ipfs` no longer rejects photo-optional posts and the hosted app matches the local fixes
+- completed locally: seller self-serve homepage ad flow, admin review lifecycle, listing-preview loading, and wallet fallback messaging shipped with successful frontend/backend build validation
+- still pending: final manual regression across sign-up, password reset, posting, watch flow, local discovery, trust/copy surfaces, and paid-ad review behavior in the target deployment environment
+- still pending: confirm hosted backend/frontend deployment parity so the live app matches the current local metadata, paid-ad, and wallet UX fixes
 
 ### Functional Validation
 
@@ -537,12 +568,12 @@ These should not block the public-launch tranche.
 - the hosted backend currently needs redeploy parity for the photo-optional metadata controller change; without that, hosted Jobs publishing may still fail on the stale image requirement or Pinata-only path
 - Jobs are currently launch-safe at the UX level but not contract-enforced as non-buyable listings; a deeper protocol change remains post-launch work if hard enforcement is required
 
-## Recommended Next Sprint
+## Remaining Work To Close The Tranche
 
 1. Accept or override the five recommended launch defaults in the final closure pass
-2. Redeploy backend and frontend so hosted create/detail behavior matches the current local Jobs and metadata fixes
-3. Run final manual regression on sign-in, password reset, posting, watch flow, Jobs detail, and local discovery
-4. Verify required backend migrations and hosted deployment parity for the latest frontend/backend slices
+2. Verify hosted backend and frontend parity so live create/detail, paid-ad, and wallet flows match the current local implementation
+3. Run final manual regression on sign-in, password reset, posting, watch flow, Jobs detail, public-sale disclosures, and paid-ad review surfaces
+4. Verify required backend migrations and environment settings for the latest frontend/backend slices
 5. Mark the tranche signed off for public-launch scope if no blocking issues remain
 
 ## Ownership Notes
