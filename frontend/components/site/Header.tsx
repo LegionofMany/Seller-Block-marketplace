@@ -10,6 +10,7 @@ import { AccentCallout } from "@/components/ui/accent-callout";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { fetchJson } from "@/lib/api";
 import { shortenHex } from "@/lib/format";
+import { useInjectedWalletAvailability } from "@/lib/injectedWallet";
 
 function formatIdentityLabel(address: string | null, email?: string | null, displayName?: string | null) {
   if (displayName?.trim()) return displayName.trim();
@@ -23,6 +24,7 @@ export function SiteHeader() {
   const [unreadCount, setUnreadCount] = React.useState(0);
   const { address } = useAccount();
   const auth = useAuth();
+  const { checked: injectedWalletChecked, hasInjectedWallet } = useInjectedWalletAvailability();
 
   React.useEffect(() => {
     let cancelled = false;
@@ -92,7 +94,14 @@ export function SiteHeader() {
 
         <div className="hidden items-center gap-2 sm:flex">
           <div className="market-chip">Public replies, local discovery, wallet settlement</div>
-          <ConnectButton showBalance={false} chainStatus="icon" />
+          <div className="flex flex-col items-start gap-1">
+            <ConnectButton showBalance={false} chainStatus="icon" />
+            {injectedWalletChecked && !hasInjectedWallet ? (
+              <div className="max-w-56 text-[11px] leading-4 text-muted-foreground">
+                No browser wallet detected. Install MetaMask, Rabby, or use WalletConnect from the sign-in page.
+              </div>
+            ) : null}
+          </div>
           {!address && !auth.isAuthenticated ? (
             <Button asChild type="button" variant="outline" size="sm">
               <Link href="/sign-in">Sign in</Link>
@@ -224,6 +233,11 @@ export function SiteHeader() {
               <div className="mt-2">
                 <ConnectButton showBalance={false} chainStatus="icon" />
               </div>
+              {injectedWalletChecked && !hasInjectedWallet ? (
+                <div className="mt-2 text-xs leading-5 text-muted-foreground">
+                  No browser wallet detected here yet. Install MetaMask or Rabby, or use WalletConnect from the sign-in page.
+                </div>
+              ) : null}
               {!address && !auth.isAuthenticated ? (
                 <Button asChild type="button" variant="outline" className="mt-3 h-10 w-full rounded-xl">
                   <Link href="/sign-in" onClick={() => setOpen(false)}>Sign in</Link>

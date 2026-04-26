@@ -2,11 +2,12 @@
 
 import * as React from "react";
 import { WagmiProvider, createConfig, fallback, http } from "wagmi";
-import { injected, walletConnect } from "wagmi/connectors";
+import { injected } from "wagmi/connectors";
 import { defineChain, type Chain } from "viem";
 import { base, baseSepolia, mainnet, sepolia } from "viem/chains";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { RainbowKitProvider, darkTheme } from "@rainbow-me/rainbowkit";
+import { RainbowKitProvider, connectorsForWallets, darkTheme } from "@rainbow-me/rainbowkit";
+import { coinbaseWallet, injectedWallet, metaMaskWallet, walletConnectWallet } from "@rainbow-me/rainbowkit/wallets";
 
 import { type ApiError } from "@/lib/api";
 import { getEnv } from "@/lib/env";
@@ -28,6 +29,9 @@ const knownChainsById = new Map<number, Chain>([
   [base.id, base],
   [baseSepolia.id, baseSepolia],
 ]);
+
+const APP_NAME = "Zonycs";
+const APP_URL = "https://www.zonycs.com";
 
 export function Web3Providers({ children }: { children: React.ReactNode }) {
   const [state, setState] = React.useState<
@@ -70,12 +74,26 @@ export function Web3Providers({ children }: { children: React.ReactNode }) {
       if (!chains.length) throw new Error("No frontend chains configured");
       const configuredChains = [chains[0], ...chains.slice(1)] as readonly [Chain, ...Chain[]];
       const walletConnectAvailability = getWalletConnectAvailability(env.walletConnectProjectId);
-      const connectors = [
-        injected(),
-        ...(walletConnectAvailability === "enabled" && env.walletConnectProjectId
-          ? [walletConnect({ projectId: env.walletConnectProjectId, showQrModal: true })]
-          : []),
-      ];
+      const connectors = env.walletConnectProjectId
+        ? connectorsForWallets(
+            [
+              {
+                groupName: "Wallets",
+                wallets: [
+                  injectedWallet,
+                  metaMaskWallet,
+                  coinbaseWallet,
+                  ...(walletConnectAvailability === "enabled" ? [walletConnectWallet] : []),
+                ],
+              },
+            ],
+            {
+              appName: APP_NAME,
+              appUrl: APP_URL,
+              projectId: env.walletConnectProjectId,
+            }
+          )
+        : [injected()];
       const config = createConfig({
         chains: configuredChains,
         connectors,

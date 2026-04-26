@@ -14,6 +14,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { getEnv } from "@/lib/env";
+import { useInjectedWalletAvailability } from "@/lib/injectedWallet";
 import { getWalletConnectAvailability } from "@/lib/walletConnect";
 
 type RegisterStep = "account" | "contact";
@@ -36,6 +37,7 @@ export default function SignInPage() {
   const env = getEnv();
   const walletConnectAvailability = getWalletConnectAvailability(env.walletConnectProjectId);
   const walletConnectEnabled = walletConnectAvailability === "enabled";
+  const { checked: injectedWalletChecked, hasInjectedWallet } = useInjectedWalletAvailability();
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
   const [confirmPassword, setConfirmPassword] = React.useState("");
@@ -377,6 +379,11 @@ export default function SignInPage() {
                 </Button>
               ) : null}
             </div>
+            {injectedWalletChecked && !hasInjectedWallet ? (
+              <AccentCallout label="No browser wallet detected" tone="amber">
+                This device does not appear to have an injected wallet extension yet. Install MetaMask or Rabby for one-click browser connect, or use WalletConnect to scan from a mobile wallet.
+              </AccentCallout>
+            ) : null}
           </div>
         </CardContent>
       </Card>
