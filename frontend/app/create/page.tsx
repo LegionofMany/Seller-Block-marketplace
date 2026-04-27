@@ -121,6 +121,7 @@ type CreateListingDraft = {
   targetAmount: string;
   minParticipants: string;
   reveal: Hex;
+  serviceLicenseConfirmed?: boolean;
 };
 
 type UploadResponse = {
@@ -293,6 +294,7 @@ export default function CreateListingPage() {
   const [titleStatus, setTitleStatus] = React.useState("");
   const [ownershipConfirmed, setOwnershipConfirmed] = React.useState(false);
   const [publicSaleTermsAccepted, setPublicSaleTermsAccepted] = React.useState(false);
+  const [serviceLicenseConfirmed, setServiceLicenseConfirmed] = React.useState(false);
 
   const [fixedPrice, setFixedPrice] = React.useState("0.01");
 
@@ -410,6 +412,7 @@ export default function CreateListingPage() {
       if (typeof draft.inspectionNotes === "string") setInspectionNotes(draft.inspectionNotes);
       if (typeof draft.transferTerms === "string") setTransferTerms(draft.transferTerms);
       if (typeof draft.titleStatus === "string") setTitleStatus(draft.titleStatus);
+      if (typeof draft.serviceLicenseConfirmed === "boolean") setServiceLicenseConfirmed(draft.serviceLicenseConfirmed);
       if (typeof draft.ownershipConfirmed === "boolean") setOwnershipConfirmed(draft.ownershipConfirmed);
       if (typeof draft.publicSaleTermsAccepted === "boolean") setPublicSaleTermsAccepted(draft.publicSaleTermsAccepted);
       if (typeof draft.fixedPrice === "string") setFixedPrice(draft.fixedPrice);
@@ -495,6 +498,7 @@ export default function CreateListingPage() {
       targetAmount,
       minParticipants,
       reveal,
+      serviceLicenseConfirmed,
     }),
     [
       saleType,
@@ -530,6 +534,7 @@ export default function CreateListingPage() {
       targetAmount,
       minParticipants,
       reveal,
+      serviceLicenseConfirmed,
     ]
   );
 
@@ -564,6 +569,7 @@ export default function CreateListingPage() {
   }
 
   const isJobListing = category === "Jobs";
+  const isServiceListing = category === "Services";
 
   React.useEffect(() => {
     if (!isJobListing) return;
@@ -609,6 +615,7 @@ export default function CreateListingPage() {
             ...(titleStatus.trim() ? [{ trait_type: "titleStatus", value: titleStatus.trim() }] : []),
             { trait_type: "ownershipConfirmed", value: ownershipConfirmed },
             { trait_type: "publicSaleTermsAccepted", value: publicSaleTermsAccepted },
+            ...(category === "Services" ? [{ trait_type: "serviceLicenseConfirmed", value: serviceLicenseConfirmed }] : []),
             { trait_type: "saleTerms", value: "As-is / where-is unless noted otherwise by the seller" },
           ],
     };
@@ -788,22 +795,22 @@ export default function CreateListingPage() {
       return;
     }
 
-    if (!isJobListing && !conditionSummary.trim()) {
+    if (!isJobListing && !isServiceListing && !conditionSummary.trim()) {
       toast.error("Add a condition summary so buyers know what they are looking at");
       return;
     }
 
-    if (!isJobListing && !inspectionNotes.trim()) {
+    if (!isJobListing && !isServiceListing && !inspectionNotes.trim()) {
       toast.error("Add inspection or pickup notes for public-sale listings");
       return;
     }
 
-    if (!isJobListing && !ownershipConfirmed) {
+    if (!isJobListing && !isServiceListing && !ownershipConfirmed) {
       toast.error("Confirm that you have the right to sell this item");
       return;
     }
 
-    if (!isJobListing && !publicSaleTermsAccepted) {
+    if (!isJobListing && !isServiceListing && !publicSaleTermsAccepted) {
       toast.error("Accept the public-sale terms before publishing");
       return;
     }
@@ -1168,6 +1175,20 @@ export default function CreateListingPage() {
                   </>
                 ) : (
                   <>
+                    {isServiceListing ? (
+                      <div className="space-y-3 sm:col-span-2">
+                        <div className="text-sm font-medium">Services mode</div>
+                        <label className="flex items-start gap-3 text-sm text-muted-foreground">
+                          <input
+                            type="checkbox"
+                            className="mt-1 h-4 w-4 rounded border-slate-300"
+                            checked={serviceLicenseConfirmed}
+                            onChange={(e) => setServiceLicenseConfirmed(e.target.checked)}
+                          />
+                          <span>I confirm I hold any required license for this service (no document upload required).</span>
+                        </label>
+                      </div>
+                    ) : null}
                     <div className="space-y-2 sm:col-span-2">
                       <Label>Condition summary</Label>
                       <Textarea
