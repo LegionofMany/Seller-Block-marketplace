@@ -295,6 +295,18 @@ export default function CreateListingPage() {
   const [ownershipConfirmed, setOwnershipConfirmed] = React.useState(false);
   const [publicSaleTermsAccepted, setPublicSaleTermsAccepted] = React.useState(false);
   const [serviceLicenseConfirmed, setServiceLicenseConfirmed] = React.useState(false);
+  // Car-specific
+  const [vin, setVin] = React.useState("");
+  const [mileage, setMileage] = React.useState("");
+  const [dealerCost, setDealerCost] = React.useState("");
+  const [dealerMsrp, setDealerMsrp] = React.useState("");
+  const [salePrice, setSalePrice] = React.useState("");
+  // Antique-specific
+  const [provenance, setProvenance] = React.useState("");
+  // Real-estate-specific
+  const [bedrooms, setBedrooms] = React.useState("");
+  const [bathrooms, setBathrooms] = React.useState("");
+  const [squareFeet, setSquareFeet] = React.useState("");
 
   const [fixedPrice, setFixedPrice] = React.useState("0.01");
 
@@ -413,6 +425,15 @@ export default function CreateListingPage() {
       if (typeof draft.transferTerms === "string") setTransferTerms(draft.transferTerms);
       if (typeof draft.titleStatus === "string") setTitleStatus(draft.titleStatus);
       if (typeof draft.serviceLicenseConfirmed === "boolean") setServiceLicenseConfirmed(draft.serviceLicenseConfirmed);
+      if (typeof draft.vin === "string") setVin(draft.vin);
+      if (typeof draft.mileage === "string") setMileage(draft.mileage);
+      if (typeof draft.dealerCost === "string") setDealerCost(draft.dealerCost);
+      if (typeof draft.dealerMsrp === "string") setDealerMsrp(draft.dealerMsrp);
+      if (typeof draft.salePrice === "string") setSalePrice(draft.salePrice);
+      if (typeof draft.provenance === "string") setProvenance(draft.provenance);
+      if (typeof draft.bedrooms === "string") setBedrooms(draft.bedrooms);
+      if (typeof draft.bathrooms === "string") setBathrooms(draft.bathrooms);
+      if (typeof draft.squareFeet === "string") setSquareFeet(draft.squareFeet);
       if (typeof draft.ownershipConfirmed === "boolean") setOwnershipConfirmed(draft.ownershipConfirmed);
       if (typeof draft.publicSaleTermsAccepted === "boolean") setPublicSaleTermsAccepted(draft.publicSaleTermsAccepted);
       if (typeof draft.fixedPrice === "string") setFixedPrice(draft.fixedPrice);
@@ -499,6 +520,15 @@ export default function CreateListingPage() {
       minParticipants,
       reveal,
       serviceLicenseConfirmed,
+      vin,
+      mileage,
+      dealerCost,
+      dealerMsrp,
+      salePrice,
+      provenance,
+      bedrooms,
+      bathrooms,
+      squareFeet,
     }),
     [
       saleType,
@@ -535,6 +565,15 @@ export default function CreateListingPage() {
       minParticipants,
       reveal,
       serviceLicenseConfirmed,
+      vin,
+      mileage,
+      dealerCost,
+      dealerMsrp,
+      salePrice,
+      provenance,
+      bedrooms,
+      bathrooms,
+      squareFeet,
     ]
   );
 
@@ -616,6 +655,25 @@ export default function CreateListingPage() {
             { trait_type: "ownershipConfirmed", value: ownershipConfirmed },
             { trait_type: "publicSaleTermsAccepted", value: publicSaleTermsAccepted },
             ...(category === "Services" ? [{ trait_type: "serviceLicenseConfirmed", value: serviceLicenseConfirmed }] : []),
+            ...(category === "Cars & Vehicles"
+              ? [
+                  ...(vin.trim() ? [{ trait_type: "vin", value: vin.trim() }] : []),
+                  ...(mileage.trim() ? [{ trait_type: "mileage", value: mileage.trim() }] : []),
+                  ...(dealerCost.trim() ? [{ trait_type: "dealerCost", value: dealerCost.trim() }] : []),
+                  ...(dealerMsrp.trim() ? [{ trait_type: "dealerMsrp", value: dealerMsrp.trim() }] : []),
+                  ...(salePrice.trim() ? [{ trait_type: "salePrice", value: salePrice.trim() }] : []),
+                ]
+              : []),
+            ...((category === "Buy & Sell" && subcategory === "Antiques & Collectibles")
+              ? [...(provenance.trim() ? [{ trait_type: "provenance", value: provenance.trim() }] : [])]
+              : []),
+            ...(category === "Real Estate"
+              ? [
+                  ...(bedrooms.trim() ? [{ trait_type: "bedrooms", value: bedrooms.trim() }] : []),
+                  ...(bathrooms.trim() ? [{ trait_type: "bathrooms", value: bathrooms.trim() }] : []),
+                  ...(squareFeet.trim() ? [{ trait_type: "squareFeet", value: squareFeet.trim() }] : []),
+                ]
+              : []),
             { trait_type: "saleTerms", value: "As-is / where-is unless noted otherwise by the seller" },
           ],
     };
@@ -1197,6 +1255,55 @@ export default function CreateListingPage() {
                         placeholder="Summarize age, wear, known damage, and what is included in the sale."
                       />
                     </div>
+
+                    {category === "Cars & Vehicles" ? (
+                      <>
+                        <div className="space-y-2">
+                          <Label>VIN</Label>
+                          <Input value={vin} onChange={(e) => setVin(e.target.value)} placeholder="Vehicle Identification Number" />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Mileage</Label>
+                          <Input value={mileage} onChange={(e) => setMileage(e.target.value)} placeholder="e.g. 120000 km" />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Dealer cost (optional)</Label>
+                          <Input value={dealerCost} onChange={(e) => setDealerCost(e.target.value)} placeholder="Cost for dealer/internal use" />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>MSRP (optional)</Label>
+                          <Input value={dealerMsrp} onChange={(e) => setDealerMsrp(e.target.value)} placeholder="Manufacturer suggested retail price" />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Sale price (public)</Label>
+                          <Input value={salePrice} onChange={(e) => setSalePrice(e.target.value)} placeholder="Public sale price" />
+                        </div>
+                      </>
+                    ) : null}
+
+                    {category === "Buy & Sell" && subcategory === "Antiques & Collectibles" ? (
+                      <div className="space-y-2 sm:col-span-2">
+                        <Label>Provenance</Label>
+                        <Textarea value={provenance} onChange={(e) => setProvenance(e.target.value)} placeholder="History, provenance, or notes about authenticity" />
+                      </div>
+                    ) : null}
+
+                    {category === "Real Estate" ? (
+                      <>
+                        <div className="space-y-2">
+                          <Label>Bedrooms</Label>
+                          <Input value={bedrooms} onChange={(e) => setBedrooms(e.target.value)} placeholder="e.g. 3" />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Bathrooms</Label>
+                          <Input value={bathrooms} onChange={(e) => setBathrooms(e.target.value)} placeholder="e.g. 2" />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Square feet / area</Label>
+                          <Input value={squareFeet} onChange={(e) => setSquareFeet(e.target.value)} placeholder="e.g. 1200 sqft" />
+                        </div>
+                      </>
+                    ) : null}
                     <div className="space-y-2 sm:col-span-2">
                       <Label>Inspection and pickup notes</Label>
                       <Textarea
