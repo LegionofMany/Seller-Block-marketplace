@@ -956,6 +956,7 @@ export default function ListingDetailPage() {
   const titleStatus = getMetadataAttributeValue(metadata, "titleStatus");
   const ownershipConfirmed = getMetadataAttributeValue(metadata, "ownershipConfirmed") === "true";
   const publicSaleTermsAccepted = getMetadataAttributeValue(metadata, "publicSaleTermsAccepted") === "true";
+  const serviceLicenseConfirmed = getMetadataAttributeValue(metadata, "serviceLicenseConfirmed") === "true";
   const priceLabel = listing ? formatPrice(listing.price, native, activeChainNativeCurrencySymbol) : "—";
   const locationLabel = [metadata?.city, metadata?.region, metadata?.postalCode].filter(Boolean).join(", ");
   const pageDescription = listing
@@ -1126,7 +1127,7 @@ export default function ListingDetailPage() {
                     ) : null}
                   </div>
 
-                  {!isJobPost && (conditionSummary || inspectionNotes || transferTerms || titleStatus || ownershipConfirmed || publicSaleTermsAccepted) ? (
+                  {!isJobPost && (conditionSummary || inspectionNotes || transferTerms || titleStatus || ownershipConfirmed || publicSaleTermsAccepted || serviceLicenseConfirmed) ? (
                     <div className="rounded-2xl border bg-slate-50/80 p-4 space-y-4 sm:p-5">
                       <div>
                         <div className="text-sm font-semibold text-slate-950">Sale terms and disclosures</div>
@@ -1163,6 +1164,7 @@ export default function ListingDetailPage() {
                       <div className="flex flex-wrap gap-2 text-xs">
                         {ownershipConfirmed ? <Badge variant="outline" className="bg-white/90">Seller confirmed right to sell</Badge> : null}
                         {publicSaleTermsAccepted ? <Badge variant="outline" className="bg-white/90">As-is / where-is public sale</Badge> : null}
+                        {serviceLicenseConfirmed ? <Badge variant="outline" className="bg-white/90">Service license confirmed</Badge> : null}
                       </div>
                     </div>
                   ) : null}
