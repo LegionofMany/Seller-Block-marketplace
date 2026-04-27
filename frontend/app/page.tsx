@@ -274,9 +274,7 @@ export default function HomePage() {
             <h1 className="max-w-3xl text-3xl font-semibold tracking-tight text-slate-950 sm:text-5xl">
               Paid ads now lead the Zonycs home page before sign-in or deeper browsing.
             </h1>
-            <p className="max-w-2xl text-sm leading-7 text-slate-700 sm:text-base">
-              This front page is shifting toward the classifieds pattern your client asked for: real sponsored ads first, a clear sign-in option, and the rest of the marketplace underneath instead of competing above the fold.
-            </p>
+            
           </div>
           <div className="flex flex-wrap gap-3">
             <Button asChild size="lg" className="rounded-full px-6">
