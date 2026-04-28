@@ -3,7 +3,7 @@
 import * as React from "react";
 
 import { fetchJson, type ApiError } from "@/lib/api";
-import { ipfsToHttp, isIpfsUri } from "@/lib/ipfs";
+import { ipfsToHttp } from "@/lib/ipfs";
 
 export const LISTING_FALLBACK_IMAGE = "/listing-fallback.svg";
 

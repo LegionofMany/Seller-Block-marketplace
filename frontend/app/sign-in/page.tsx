@@ -118,7 +118,7 @@ export default function SignInPage() {
     return () => {
       cancelled = true;
     };
-  }, [consumeEmailToken, emailLinkStatus, emailToken, pathname, router, searchParams]);
+  }, [consumeEmailToken, emailLinkStatus, emailToken, emailIntent, pathname, router, searchParams]);
 
   const setModeWithQuery = React.useCallback(
     (nextMode: "login" | "register" | "reset") => {

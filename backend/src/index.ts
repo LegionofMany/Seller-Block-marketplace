@@ -22,6 +22,7 @@ import { notificationsRouter } from "./routes/notifications";
 import { settlementRouter } from "./routes/settlement";
 import { favoritesRouter } from "./routes/favorites";
 import { promotionsRouter } from "./routes/promotions";
+import { paymentsRouter } from "./routes/payments";
 import { startMarketplaceIndexer, type MarketplaceIndexerHandle } from "./indexer/marketplaceIndexer";
 import { startNotificationsWorker } from "./services/notifications";
 import { getPinataAuthStatus } from "./services/ipfs";
@@ -211,6 +212,7 @@ async function main() {
   app.use(notificationsRouter());
   app.use(favoritesRouter());
   app.use(promotionsRouter());
+  app.use(paymentsRouter());
   app.use(settlementRouter());
 
   app.use(notFound);

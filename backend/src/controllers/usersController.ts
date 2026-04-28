@@ -95,6 +95,7 @@ export async function updateMyProfile(req: Request, res: Response) {
     city: z.string().max(80).optional(),
     region: z.string().max(80).optional(),
     postalCode: z.string().max(32).optional(),
+    stablecoinAddress: z.string().max(120).optional(),
   }).safeParse(req.body);
   if (!parsed.success) throw new HttpError(400, "Invalid profile payload", "INVALID_PROFILE");
 
@@ -108,6 +109,14 @@ export async function updateMyProfile(req: Request, res: Response) {
   const city = parsed.data.city?.trim() ? parsed.data.city.trim() : null;
   const region = parsed.data.region?.trim() ? parsed.data.region.trim() : null;
   const postalCode = parsed.data.postalCode?.trim() ? parsed.data.postalCode.trim() : null;
+  let stablecoinAddress: string | null = null;
+  if (parsed.data.stablecoinAddress?.trim()) {
+    try {
+      stablecoinAddress = requireAddress(parsed.data.stablecoinAddress.trim(), "stablecoinAddress");
+    } catch (err) {
+      throw new HttpError(400, "Invalid stablecoin address", "INVALID_PROFILE");
+    }
+  }
 
   if (fullName && /[<>]/.test(fullName)) {
     throw new HttpError(400, "Full name contains invalid characters", "INVALID_PROFILE");
@@ -138,6 +147,7 @@ export async function updateMyProfile(req: Request, res: Response) {
     city,
     region,
     postalCode,
+    stablecoinAddress,
     updatedAt: Date.now(),
   };
 

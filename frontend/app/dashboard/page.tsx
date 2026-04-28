@@ -1163,22 +1163,19 @@ export default function DashboardPage() {
     },
     [editingPromotionId]
   );
-  const focusProfileSection = React.useCallback(
-    (section: ProfileFocusSection) => {
-      const params = new URLSearchParams(searchParams.toString());
-      params.delete("tab");
-      params.set("focus", section);
-      const query = params.toString();
-      router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  function focusProfileSection(section: ProfileFocusSection) {
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("tab");
+    params.set("focus", section);
+    const query = params.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
 
-      const node = profileSectionRefs[section].current;
-      if (!node) return;
-      node.scrollIntoView({ behavior: "smooth", block: "start" });
-      const focusTarget = node.querySelector<HTMLElement>("input, textarea, button, select");
-      focusTarget?.focus();
-    },
-    [pathname, router, searchParams]
-  );
+    const node = profileSectionRefs[section].current;
+    if (!node) return;
+    node.scrollIntoView({ behavior: "smooth", block: "start" });
+    const focusTarget = node.querySelector<HTMLElement>("input, textarea, button, select");
+    focusTarget?.focus();
+  }
 
   const { data: lastListingId } = useReadContract({
     address: marketplaceRegistryAddress,
@@ -1361,7 +1358,7 @@ export default function DashboardPage() {
     return () => {
       cancelled = true;
     };
-  }, [address, marketplaceRegistryAddress, publicClient, myListingIds]);
+  }, [address, marketplaceRegistryAddress, publicClient, myListingIds, defaultChainKey, defaultChainId]);
 
   if (envState.error || !envState.env) {
     return (
@@ -1699,7 +1696,8 @@ export default function DashboardPage() {
                         disabled={auth.isLoading}
                         onClick={async () => {
                           try {
-                            const res = await fetchJson<{ user: UserProfile }>("/users/me", {
+                            // Update main profile fields (exclude stablecoinAddress here)
+                            await fetchJson<{ user: UserProfile }>("/users/me", {
                               method: "PUT",
                               headers: { "Content-Type": "application/json" },
                               body: JSON.stringify({
@@ -1710,13 +1708,28 @@ export default function DashboardPage() {
                                 streetAddress2,
                                 city,
                                 region,
-                                    postalCode,
-                                    bio,
-                                    avatarCid,
-                                    stablecoinAddress: stablecoinAddress?.trim() ? stablecoinAddress.trim() : undefined,
+                                postalCode,
+                                bio,
+                                avatarCid,
                               }),
                             });
-                            auth.setUser(res.user);
+
+                            // If a stablecoin address was provided, save it via the dedicated endpoint
+                            const trimmed = stablecoinAddress?.trim();
+                            if (trimmed) {
+                              try {
+                                await fetchJson("/users/me/stablecoin", {
+                                  method: "PUT",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({ stablecoinAddress: trimmed }),
+                                });
+                              } catch (err: unknown) {
+                                // Non-fatal: show error but continue to refresh profile
+                                toast.error(getErrorMessage(err, "Failed to update payout address"));
+                              }
+                            }
+
+                            // Refresh auth user and show success
                             await auth.refresh();
                             toast.success("Profile updated");
                           } catch (error: unknown) {

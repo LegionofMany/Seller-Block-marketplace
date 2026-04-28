@@ -31,6 +31,7 @@ import { useSellerProfile } from "@/lib/hooks/useSellerProfile";
 import { useToastTx } from "@/lib/hooks/useToastTx";
 import { fetchMetadataById, fetchMetadataByUri, getMetadataAttributeValue, getRenderableListingImage, hasCompleteMarketplaceMetadata, isJobMetadata, isSmokeMetadataUri, LISTING_FALLBACK_IMAGE, metadataIdFromUri, type MarketplaceMetadata } from "@/lib/metadata";
 import { fetchJson, type ApiError } from "@/lib/api";
+import { EscrowAcceptCTA } from "@/components/listing/EscrowAcceptCTA";
 import { addBlockedSeller } from "@/lib/blocks";
 import { describeToken, getPublicNetworkLabel } from "@/lib/tokens";
 import {
@@ -395,6 +396,8 @@ export default function ListingDetailPage() {
       cancelled = true;
     };
   }, [listing?.metadataURI]);
+
+  const isCarListing = (metadata?.category ?? "").toLowerCase().includes("car") || (metadata?.subcategory ?? "").toLowerCase().includes("car");
 
   async function blockSeller() {
     if (!address) {
@@ -1453,6 +1456,11 @@ export default function ListingDetailPage() {
                             {permitNonce == null ? (
                               <div className="text-xs text-muted-foreground">
                                 This token must support ERC-2612 permit for the relayer checkout path.
+                              </div>
+                            ) : null}
+                            {isCarListing ? (
+                              <div className="mt-2">
+                                <EscrowAcceptCTA listingId={String(listingId ?? "")} listingChainKey={activeChainKey} />
                               </div>
                             ) : null}
                           </div>

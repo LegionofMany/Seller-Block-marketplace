@@ -160,6 +160,8 @@ function buildQuery(params: ListingsParams | undefined): string {
 export function useListings(params?: ListingsParams) {
   const publicClient = usePublicClient();
 
+  const serializedParams = React.useMemo(() => JSON.stringify(params ?? {}), [params]);
+
   const [data, setData] = React.useState<ListingSummary[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
@@ -311,7 +313,7 @@ export function useListings(params?: ListingsParams) {
     return () => {
       cancelled = true;
     };
-  }, [publicClient, JSON.stringify(params ?? {})]);
+  }, [publicClient, serializedParams, params]);
 
   return { listings: data, isLoading, error };
 }
