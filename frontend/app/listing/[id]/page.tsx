@@ -32,6 +32,7 @@ import { useToastTx } from "@/lib/hooks/useToastTx";
 import { fetchMetadataById, fetchMetadataByUri, getMetadataAttributeValue, getRenderableListingImage, hasCompleteMarketplaceMetadata, isJobMetadata, isSmokeMetadataUri, LISTING_FALLBACK_IMAGE, metadataIdFromUri, type MarketplaceMetadata } from "@/lib/metadata";
 import { fetchJson, type ApiError } from "@/lib/api";
 import { EscrowAcceptCTA } from "@/components/listing/EscrowAcceptCTA";
+import { SellerPayout } from "@/components/listing/SellerPayout";
 import { addBlockedSeller } from "@/lib/blocks";
 import { describeToken, getPublicNetworkLabel } from "@/lib/tokens";
 import {
@@ -1463,6 +1464,9 @@ export default function ListingDetailPage() {
                                 <EscrowAcceptCTA listingId={String(listingId ?? "")} listingChainKey={activeChainKey} />
                               </div>
                             ) : null}
+                            <div className="mt-4">
+                              <SellerPayout sellerAddress={String(listing?.seller ?? "")} />
+                            </div>
                           </div>
                         ) : null}
 

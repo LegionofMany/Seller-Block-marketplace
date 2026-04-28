@@ -96,9 +96,12 @@ export function SiteHeader() {
           <div className="market-chip">Public replies, local discovery, wallet settlement</div>
           <div className="flex flex-col items-start gap-1">
             <ConnectButton showBalance={false} chainStatus="icon" />
+            <div className="max-w-56 text-[11px] leading-4 text-muted-foreground">
+              Click to connect a wallet for signing and settlement. Use MetaMask, Coinbase Wallet, or WalletConnect (mobile).
+            </div>
             {injectedWalletChecked && !hasInjectedWallet ? (
               <div className="max-w-56 text-[11px] leading-4 text-muted-foreground">
-                No browser wallet detected. Install MetaMask, Rabby, or use WalletConnect from the sign-in page.
+                No browser wallet detected. Install MetaMask or Rabby for browser connect, or use WalletConnect from the sign-in page.
               </div>
             ) : null}
           </div>

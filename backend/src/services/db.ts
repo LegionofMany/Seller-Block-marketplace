@@ -1702,6 +1702,31 @@ export async function findPaymentById(_db: Pool | any, id: number): Promise<Paym
   return res.rows[0] ? toPaymentRow(res.rows[0]) : null;
 }
 
+export async function listPaymentsByStatus(_db: Pool | any, status: string, limit = 50): Promise<PaymentRow[]> {
+  const p = ensurePool(_db);
+  const res = await p.query(
+    `SELECT id,
+            useraddress AS "userAddress",
+            listingid AS "listingId",
+            listingchainkey AS "listingChainKey",
+            provider,
+            providersessionid AS "providerSessionId",
+            status,
+            amount,
+            currency,
+            promotiontype AS "promotionType",
+            metadatajson AS "metadataJson",
+            createdat AS "createdAt",
+            updatedat AS "updatedAt"
+     FROM payments
+     WHERE status = $1
+     ORDER BY updatedat ASC
+     LIMIT $2`,
+    [status, limit]
+  );
+  return res.rows.map(toPaymentRow);
+}
+
 export async function createPayment(
   _db: Pool | any,
   input: Omit<PaymentRow, "id" | "metadata" | "createdAt" | "updatedAt"> & { metadata?: Record<string, unknown>; createdAt: number; updatedAt: number }

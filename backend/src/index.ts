@@ -25,6 +25,7 @@ import { promotionsRouter } from "./routes/promotions";
 import { paymentsRouter } from "./routes/payments";
 import { startMarketplaceIndexer, type MarketplaceIndexerHandle } from "./indexer/marketplaceIndexer";
 import { startNotificationsWorker } from "./services/notifications";
+import { startPaymentsWorker } from "./services/paymentsWorker";
 import { getPinataAuthStatus } from "./services/ipfs";
 
 dotenv.config();
@@ -71,6 +72,7 @@ async function main() {
   let shuttingDown = false;
   let indexers: MarketplaceIndexerHandle[] = [];
   let notificationsWorker: ReturnType<typeof startNotificationsWorker> | null = null;
+  let paymentsWorker: ReturnType<typeof startPaymentsWorker> | null = null;
 
   // Render runs behind a proxy; this makes req.ip and rate limiting correct.
   app.set("trust proxy", 1);
@@ -224,6 +226,7 @@ async function main() {
 
   indexers = env.supportedChains.map((chain) => startMarketplaceIndexer(chain));
   notificationsWorker = startNotificationsWorker();
+  paymentsWorker = startPaymentsWorker();
 
   async function shutdown(signal: string) {
     if (shutdownPromise) return shutdownPromise;
@@ -240,6 +243,11 @@ async function main() {
       }
       try {
         notificationsWorker?.stop();
+      } catch {
+        // ignore
+      }
+      try {
+        paymentsWorker?.stop();
       } catch {
         // ignore
       }

@@ -5,6 +5,7 @@ import { HttpError } from "../middlewares/errors";
 import { requireAuthAddress, requireAdmin } from "../middlewares/auth";
 import { getContext } from "../services/context";
 import { createPayment, findPaymentById, updatePayment } from "../services/db";
+import { relayAcceptOrderWithPermit } from "../services/settlement";
 
 const createEscrowPayload = z.object({
   listingId: z.string().min(1),
@@ -71,5 +72,68 @@ export async function reviewPayment(req: Request, res: Response) {
     updatedAt: Date.now(),
   });
 
-  return res.json({ payment: updated });
+  // If admin approved and metadata contains settlement payload, attempt to relay to chain.
+  try {
+    if (updated && updated.status === "approved") {
+      const meta = updated.metadata ?? {};
+      const order = meta.order as any | undefined;
+      const permit = meta.permit as any | undefined;
+      const sellerSignature = typeof meta.sellerSignature === "string" ? meta.sellerSignature : undefined;
+      const buyerSignature = typeof meta.buyerSignature === "string" ? meta.buyerSignature : undefined;
+      const buyer = typeof meta.buyer === "string" ? meta.buyer : undefined;
+      const buyerDeadline = typeof meta.buyerDeadline === "number" ? meta.buyerDeadline : undefined;
+
+      if (order && buyer && buyerDeadline && sellerSignature && buyerSignature && permit) {
+        try {
+          const chainKey = updated.listingChainKey ?? String(meta.chainKey ?? null);
+          const result = await relayAcceptOrderWithPermit({
+            chainKey: chainKey as string,
+            order: order as any,
+            buyer,
+            buyerDeadline,
+            sellerSignature,
+            buyerSignature,
+            permit: permit as { deadline: number; v: number; r: string; s: string },
+          });
+
+          // Persist tx references into metadata
+          const newMeta = { ...(updated.metadata ?? {}), settlement: { txHash: result.txHash, escrowId: result.escrowId, orderHash: result.orderHash } };
+          await updatePayment(getContext().db, {
+            id: updated.id,
+            userAddress: updated.userAddress,
+            listingId: updated.listingId ?? null,
+            listingChainKey: updated.listingChainKey ?? null,
+            provider: updated.provider,
+            providerSessionId: updated.providerSessionId ?? null,
+            status: updated.status,
+            amount: updated.amount,
+            currency: updated.currency,
+            promotionType: updated.promotionType ?? null,
+            metadata: newMeta,
+            updatedAt: Date.now(),
+          });
+        } catch (err: any) {
+          const newMeta = { ...(updated.metadata ?? {}), settlementError: String(err?.message ?? err) };
+          await updatePayment(getContext().db, {
+            id: updated.id,
+            userAddress: updated.userAddress,
+            listingId: updated.listingId ?? null,
+            listingChainKey: updated.listingChainKey ?? null,
+            provider: updated.provider,
+            providerSessionId: updated.providerSessionId ?? null,
+            status: "failed",
+            amount: updated.amount,
+            currency: updated.currency,
+            promotionType: updated.promotionType ?? null,
+            metadata: newMeta,
+            updatedAt: Date.now(),
+          });
+        }
+      }
+    }
+  } catch (err) {
+    // swallow - we've already updated the payment and don't want to surface relayer errors here
+  }
+
+  return res.json({ payment: await findPaymentById(getContext().db, id) });
 }

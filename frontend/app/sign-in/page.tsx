@@ -373,6 +373,7 @@ export default function SignInPage() {
             </AccentCallout>
             <div className="flex flex-wrap gap-3">
               <ConnectButton showBalance={false} chainStatus="icon" />
+              <div className="text-[12px] text-muted-foreground">Click &quot;Connect&quot; to open wallet options. Scan with WalletConnect on mobile or install a browser extension (MetaMask, Rabby) for one-click connect.</div>
               {address && !auth.isAuthenticated ? (
                 <Button type="button" variant="outline" onClick={() => void auth.signIn()} disabled={auth.isLoading}>
                   Use wallet-only sign-in
