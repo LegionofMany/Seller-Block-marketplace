@@ -4,7 +4,7 @@ import { z } from "zod";
 import { HttpError } from "../middlewares/errors";
 import { requireAdmin, requireAuthAddress } from "../middlewares/auth";
 import { getContext } from "../services/context";
-import { createUserFollow, createUserTrustReview, deleteUserFollow, ensureUser, getPublicUserProfile, getUser, isUserFollowing, listFollowedUsers, listTrustQueueProfiles, listUserTrustReviews, listVerifiedUserProfiles, updateUserProfile, updateUserTrust } from "../services/db";
+import { createUserFollow, createUserTrustReview, deleteUserFollow, ensureUser, getPublicUserProfile, getUser, isUserFollowing, listFollowedUsers, listTrustQueueProfiles, listUserTrustReviews, listVerifiedUserProfiles, updateUserProfile, updateUserTrust, updateUserStablecoin } from "../services/db";
 import { requireAddress } from "../utils/validation";
 
 function isAvatarValue(value: string): boolean {
@@ -126,7 +126,7 @@ export async function updateMyProfile(req: Request, res: Response) {
   }
 
   await ensureUser(db, address, Date.now());
-  await updateUserProfile(db, {
+  const profileUpdatePayload: any = {
     address,
     fullName,
     displayName,
@@ -139,8 +139,31 @@ export async function updateMyProfile(req: Request, res: Response) {
     region,
     postalCode,
     updatedAt: Date.now(),
-  });
+  };
 
+  await updateUserProfile(db, profileUpdatePayload);
+
+  const user = await getUser(db, address);
+  return res.json({ user });
+}
+
+export async function updateMyStablecoin(req: Request, res: Response) {
+  const { db } = getContext();
+  const address = requireAuthAddress(req);
+  const parsed = z.object({ stablecoinAddress: z.string().max(80).optional() }).safeParse(req.body ?? {});
+  if (!parsed.success) throw new HttpError(400, "Invalid payload", "INVALID_PAYLOAD");
+
+  let stablecoinAddress: string | null = null;
+  if (parsed.data.stablecoinAddress?.trim()) {
+    try {
+      stablecoinAddress = requireAddress(parsed.data.stablecoinAddress.trim(), "stablecoinAddress");
+    } catch (err) {
+      throw new HttpError(400, "Invalid stablecoin address", "INVALID_PROFILE");
+    }
+  }
+
+  await ensureUser(db, address, Date.now());
+  await updateUserStablecoin(db, address, stablecoinAddress, Date.now());
   const user = await getUser(db, address);
   return res.json({ user });
 }

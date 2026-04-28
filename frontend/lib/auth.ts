@@ -6,6 +6,7 @@ export type UserProfile = {
   avatarCid?: string | null;
   email?: string | null;
   phoneNumber?: string | null;
+  stablecoinAddress?: string | null;
   emailVerifiedAt?: number | null;
   sellerVerifiedAt?: number | null;
   sellerVerifiedBy?: string | null;

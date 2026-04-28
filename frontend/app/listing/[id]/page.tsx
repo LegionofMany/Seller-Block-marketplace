@@ -957,6 +957,12 @@ export default function ListingDetailPage() {
   const ownershipConfirmed = getMetadataAttributeValue(metadata, "ownershipConfirmed") === "true";
   const publicSaleTermsAccepted = getMetadataAttributeValue(metadata, "publicSaleTermsAccepted") === "true";
   const serviceLicenseConfirmed = getMetadataAttributeValue(metadata, "serviceLicenseConfirmed") === "true";
+  const vin = getMetadataAttributeValue(metadata, "vin");
+  const mileage = getMetadataAttributeValue(metadata, "mileage");
+  const provenance = getMetadataAttributeValue(metadata, "provenance");
+  const bedrooms = getMetadataAttributeValue(metadata, "bedrooms");
+  const bathrooms = getMetadataAttributeValue(metadata, "bathrooms");
+  const squareFeet = getMetadataAttributeValue(metadata, "squareFeet");
   const priceLabel = listing ? formatPrice(listing.price, native, activeChainNativeCurrencySymbol) : "—";
   const locationLabel = [metadata?.city, metadata?.region, metadata?.postalCode].filter(Boolean).join(", ");
   const pageDescription = listing
@@ -1152,6 +1158,42 @@ export default function ListingDetailPage() {
                           <div className="text-sm">
                             <div className="text-muted-foreground">Transfer terms</div>
                             <div className="font-medium whitespace-pre-wrap">{transferTerms}</div>
+                          </div>
+                        ) : null}
+                        {vin ? (
+                          <div className="text-sm">
+                            <div className="text-muted-foreground">VIN</div>
+                            <div className="font-medium break-words">{vin}</div>
+                          </div>
+                        ) : null}
+                        {mileage ? (
+                          <div className="text-sm">
+                            <div className="text-muted-foreground">Mileage</div>
+                            <div className="font-medium">{mileage}</div>
+                          </div>
+                        ) : null}
+                        {provenance ? (
+                          <div className="text-sm sm:col-span-2">
+                            <div className="text-muted-foreground">Provenance</div>
+                            <div className="font-medium whitespace-pre-wrap">{provenance}</div>
+                          </div>
+                        ) : null}
+                        {bedrooms ? (
+                          <div className="text-sm">
+                            <div className="text-muted-foreground">Bedrooms</div>
+                            <div className="font-medium">{bedrooms}</div>
+                          </div>
+                        ) : null}
+                        {bathrooms ? (
+                          <div className="text-sm">
+                            <div className="text-muted-foreground">Bathrooms</div>
+                            <div className="font-medium">{bathrooms}</div>
+                          </div>
+                        ) : null}
+                        {squareFeet ? (
+                          <div className="text-sm">
+                            <div className="text-muted-foreground">Square feet</div>
+                            <div className="font-medium">{squareFeet}</div>
                           </div>
                         ) : null}
                         {titleStatus ? (

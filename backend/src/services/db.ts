@@ -73,6 +73,7 @@ export type UserRow = {
   sellerTrustNote?: string | null;
   authMethod: "wallet" | "email";
   linkedWalletAddress?: string | null;
+  stablecoinAddress?: string | null;
   streetAddress1?: string | null;
   streetAddress2?: string | null;
   city?: string | null;
@@ -995,6 +996,7 @@ function toUserRow(r: any): UserRow {
     sellerTrustNote: r.sellerTrustNote ?? r.sellertrustnote ?? null,
     authMethod: String(r.authMethod ?? r.authmethod ?? "wallet") === "email" ? "email" : "wallet",
     linkedWalletAddress: r.linkedWalletAddress ?? r.linkedwalletaddress ?? null,
+    stablecoinAddress: r.stablecoinAddress ?? r.stablecoinaddress ?? null,
     streetAddress1: r.streetAddress1 ?? r.streetaddress1 ?? null,
     streetAddress2: r.streetAddress2 ?? r.streetaddress2 ?? null,
     city: r.city ?? null,
@@ -1276,10 +1278,15 @@ export async function updateUserPasswordHash(_db: Pool | any, address: string, p
   await p.query('UPDATE users SET passwordhash = $2, updatedat = GREATEST(updatedat, $3) WHERE address = $1', [address, passwordHash, updatedAt]);
 }
 
+export async function updateUserStablecoin(_db: Pool | any, address: string, stablecoinAddress: string | null, updatedAt: number) {
+  const p = ensurePool(_db);
+  await p.query('UPDATE users SET stablecoinaddress = $2, updatedat = GREATEST(updatedat, $3) WHERE address = $1', [address, stablecoinAddress, updatedAt]);
+}
+
 export async function getUser(_db: Pool | any, address: string): Promise<UserRow | null> {
   const p = ensurePool(_db);
   const res = await p.query(
-    'SELECT address, fullname AS "fullName", displayname AS "displayName", bio, avatarcid AS "avatarCid", email, phonenumber AS "phoneNumber", emailverifiedat AS "emailVerifiedAt", sellerverifiedat AS "sellerVerifiedAt", sellerverifiedby AS "sellerVerifiedBy", sellertrustnote AS "sellerTrustNote", authmethod AS "authMethod", linkedwalletaddress AS "linkedWalletAddress", streetaddress1 AS "streetAddress1", streetaddress2 AS "streetAddress2", city, region, postalcode AS "postalCode", lastloginat AS "lastLoginAt", createdat AS "createdAt", updatedat AS "updatedAt" FROM users WHERE address = $1',
+    'SELECT address, fullname AS "fullName", displayname AS "displayName", bio, avatarcid AS "avatarCid", email, phonenumber AS "phoneNumber", emailverifiedat AS "emailVerifiedAt", sellerverifiedat AS "sellerVerifiedAt", sellerverifiedby AS "sellerVerifiedBy", sellertrustnote AS "sellerTrustNote", authmethod AS "authMethod", linkedwalletaddress AS "linkedWalletAddress", streetaddress1 AS "streetAddress1", streetaddress2 AS "streetAddress2", city, region, postalcode AS "postalCode", stablecoinaddress AS "stablecoinAddress", lastloginat AS "lastLoginAt", createdat AS "createdAt", updatedat AS "updatedAt" FROM users WHERE address = $1',
     [address]
   );
   return res.rows[0] ? toUserRow(res.rows[0]) : null;
@@ -1388,27 +1395,11 @@ export async function listVerifiedUserProfiles(_db: Pool | any, limit = 12): Pro
   return profiles.filter((profile): profile is PublicUserProfileRow => Boolean(profile));
 }
 
-export async function updateUserProfile(
-  _db: Pool | any,
-  row: {
-    address: string;
-    fullName?: string | null;
-    displayName?: string | null;
-    bio?: string | null;
-    avatarCid?: string | null;
-    phoneNumber?: string | null;
-    streetAddress1?: string | null;
-    streetAddress2?: string | null;
-    city?: string | null;
-    region?: string | null;
-    postalCode?: string | null;
-    updatedAt: number;
-  }
-) {
+export const updateUserProfile = async (_db: Pool | any, row: any) => {
   const p = ensurePool(_db);
   await p.query(
-    `INSERT INTO users(address, fullname, displayName, bio, avatarCid, phonenumber, streetaddress1, streetaddress2, city, region, postalcode, createdAt, updatedAt)
-     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$12)
+    `INSERT INTO users(address, fullname, displayName, bio, avatarCid, phonenumber, streetaddress1, streetaddress2, city, region, postalcode, stablecoinaddress, createdAt, updatedAt)
+     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$13)
      ON CONFLICT (address) DO UPDATE SET
        fullName = EXCLUDED.fullName,
        displayName = EXCLUDED.displayName,
@@ -1420,6 +1411,7 @@ export async function updateUserProfile(
        city = EXCLUDED.city,
        region = EXCLUDED.region,
        postalcode = EXCLUDED.postalcode,
+       stablecoinaddress = EXCLUDED.stablecoinaddress,
        updatedAt = EXCLUDED.updatedAt`,
     [
       row.address,
@@ -1433,10 +1425,11 @@ export async function updateUserProfile(
       row.city ?? null,
       row.region ?? null,
       row.postalCode ?? null,
+      (row as any).stablecoinAddress ?? null,
       row.updatedAt,
     ]
   );
-}
+};
 
 export async function getPublicUserProfile(_db: Pool | any, address: string): Promise<PublicUserProfileRow | null> {
   const p = ensurePool(_db);

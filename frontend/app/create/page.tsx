@@ -122,6 +122,18 @@ type CreateListingDraft = {
   minParticipants: string;
   reveal: Hex;
   serviceLicenseConfirmed?: boolean;
+  // Car fields
+  vin?: string;
+  mileage?: string;
+  dealerCost?: string;
+  dealerMsrp?: string;
+  salePrice?: string;
+  // Antique
+  provenance?: string;
+  // Real estate
+  bedrooms?: string;
+  bathrooms?: string;
+  squareFeet?: string;
 };
 
 type UploadResponse = {

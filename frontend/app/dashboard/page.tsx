@@ -440,6 +440,7 @@ export default function DashboardPage() {
   const [region, setRegion] = React.useState("");
   const [postalCode, setPostalCode] = React.useState("");
   const [isLinkingWallet, setIsLinkingWallet] = React.useState(false);
+  const [stablecoinAddress, setStablecoinAddress] = React.useState("");
   const [followedSellers, setFollowedSellers] = React.useState<string[]>([]);
   const [followedError, setFollowedError] = React.useState<string | null>(null);
   const [favoriteListings, setFavoriteListings] = React.useState<ListingSummary[]>([]);
@@ -553,6 +554,7 @@ export default function DashboardPage() {
     setCity(auth.user?.city ?? "");
     setRegion(auth.user?.region ?? "");
     setPostalCode(auth.user?.postalCode ?? "");
+    setStablecoinAddress(auth.user?.stablecoinAddress ?? "");
   }, [auth.user]);
 
   React.useEffect(() => {
@@ -1622,6 +1624,13 @@ export default function DashboardPage() {
                                 </Button>
                               ) : null}
                             </div>
+                          <div className="mt-3">
+                            <div className="text-sm font-semibold">Payout address</div>
+                            <div className="text-xs text-muted-foreground">Enter the address where you want stablecoin payouts sent, or leave blank to use your linked wallet.</div>
+                            <div className="mt-2 grid gap-2 sm:grid-cols-[1fr_auto]">
+                              <Input value={stablecoinAddress} onChange={(e) => setStablecoinAddress(e.target.value)} placeholder="0x... (optional)" />
+                            </div>
+                          </div>
                           </div>
                         </div>
                       ) : null}
@@ -1701,9 +1710,10 @@ export default function DashboardPage() {
                                 streetAddress2,
                                 city,
                                 region,
-                                postalCode,
-                                bio,
-                                avatarCid,
+                                    postalCode,
+                                    bio,
+                                    avatarCid,
+                                    stablecoinAddress: stablecoinAddress?.trim() ? stablecoinAddress.trim() : undefined,
                               }),
                             });
                             auth.setUser(res.user);
