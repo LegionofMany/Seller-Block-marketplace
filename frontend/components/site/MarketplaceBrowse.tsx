@@ -52,6 +52,49 @@ export function MarketplaceBrowse() {
   const [type, setType] = React.useState<"" | "fixed" | "auction" | "raffle">(() => parseSaleType(searchParams.get("type")));
   const [sort, setSort] = React.useState<"newest" | "price_asc" | "price_desc">(() => parseSort(searchParams.get("sort")));
 
+  const COUNTRY_LIST = [
+    "United States",
+    "Canada",
+    "United Kingdom",
+    "Australia",
+    "Germany",
+    "France",
+    "Spain",
+    "Italy",
+    "Netherlands",
+    "Belgium",
+    "Portugal",
+    "Sweden",
+    "Norway",
+    "Denmark",
+    "Finland",
+    "Ireland",
+    "Poland",
+    "Czech Republic",
+    "Austria",
+    "Switzerland",
+    "India",
+    "China",
+    "Japan",
+    "South Korea",
+    "Singapore",
+    "Hong Kong",
+    "United Arab Emirates",
+    "Saudi Arabia",
+    "South Africa",
+    "Nigeria",
+    "Kenya",
+    "Ghana",
+    "Egypt",
+    "Brazil",
+    "Mexico",
+    "Argentina",
+    "Chile",
+    "Colombia",
+    "Peru",
+    "New Zealand",
+  ];
+
   const [offset, setOffset] = React.useState(() => {
     const raw = Number.parseInt(searchParams.get("offset") ?? "0", 10);
     return Number.isFinite(raw) && raw > 0 ? raw : 0;
@@ -348,10 +391,15 @@ export function MarketplaceBrowse() {
               <Label>City</Label>
               <Input value={city} onChange={(e) => setCity(e.target.value)} placeholder="e.g. Toronto" />
             </div>
-            <div className="space-y-2">
-              <Label>Region/State</Label>
-              <Input value={region} onChange={(e) => setRegion(e.target.value)} placeholder="e.g. Ontario" />
-            </div>
+                <div className="space-y-2">
+                  <Label>Region / Country</Label>
+                  <select className="block w-full rounded-md border bg-white px-3 py-2" value={region} onChange={(e) => setRegion(e.target.value)}>
+                    <option value="">All countries</option>
+                    {COUNTRY_LIST.map((c) => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
+                </div>
             <div className="space-y-2">
               <Label>Postal code</Label>
               <Input value={postalCode} onChange={(e) => setPostalCode(e.target.value)} placeholder="e.g. M5V" />

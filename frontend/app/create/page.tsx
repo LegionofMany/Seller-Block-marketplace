@@ -337,6 +337,8 @@ export default function CreateListingPage() {
   const ZERO_BYTES32 = ("0x" + "00".repeat(32)) as Hex;
   const [reveal, setReveal] = React.useState<Hex>(ZERO_BYTES32);
   const [previewUrls, setPreviewUrls] = React.useState<string[]>([]);
+  const [imageUrls, setImageUrls] = React.useState<string[]>([]);
+  const [newImageUrl, setNewImageUrl] = React.useState("");
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [uploadProgress, setUploadProgress] = React.useState<number>(0);
   const [uploadStage, setUploadStage] = React.useState<"idle" | "uploading" | "publishing">("idle");
@@ -395,12 +397,81 @@ export default function CreateListingPage() {
     };
   }, [files]);
 
+  const COUNTRY_LIST = [
+    "United States",
+    "Canada",
+    "United Kingdom",
+    "Australia",
+    "Germany",
+    "France",
+    "Spain",
+    "Italy",
+    "Netherlands",
+    "Belgium",
+    "Portugal",
+    "Sweden",
+    "Norway",
+    "Denmark",
+    "Finland",
+    "Ireland",
+    "Poland",
+    "Czech Republic",
+    "Austria",
+    "Switzerland",
+    "India",
+    "China",
+    "Japan",
+    "South Korea",
+    "Singapore",
+    "Hong Kong",
+    "United Arab Emirates",
+    "Saudi Arabia",
+    "South Africa",
+    "Nigeria",
+    "Kenya",
+    "Ghana",
+    "Egypt",
+    "Brazil",
+    "Mexico",
+    "Argentina",
+    "Chile",
+    "Colombia",
+    "Peru",
+    "New Zealand",
+  ];
+
   const addFiles = React.useCallback((incoming: File[]) => {
     if (!incoming.length) return;
     setFiles((current) => mergeSelectedFiles(current, incoming));
     setLastUploadError(null);
     setGeneratedMetadataURI("");
   }, []);
+
+  function isValidImageUrl(url: string) {
+    try {
+      new URL(url);
+    } catch {
+      return false;
+    }
+    return /\.(png|jpe?g|gif|webp|svg)(\?|$)/i.test(url);
+  }
+
+  function addImageUrl() {
+    const url = newImageUrl.trim();
+    if (!url) return;
+    if (!isValidImageUrl(url)) {
+      toast.error("Enter a valid image URL (jpg, png, gif, webp, svg)");
+      return;
+    }
+    setImageUrls((s) => {
+      if (s.includes(url)) return s;
+      const next = [...s, url].slice(0, 12);
+      setLastUploadError(null);
+      setGeneratedMetadataURI("");
+      return next;
+    });
+    setNewImageUrl("");
+  }
 
   const removeFileAt = React.useCallback((index: number) => {
     setFiles((current) => current.filter((_, currentIndex) => currentIndex !== index));
@@ -894,7 +965,7 @@ export default function CreateListingPage() {
             setUploadStage("uploading");
             setUploadProgress(0);
             const uploadJson = await uploadImagesWithProgress(env.backendUrl ?? "http://localhost:4000", files, setUploadProgress);
-            return uploadJson.items.map((item) => item.ipfsUri).filter(Boolean);
+            return [...uploadJson.items.map((item) => item.ipfsUri).filter(Boolean), ...imageUrls];
           })()
         : [];
 
@@ -1163,6 +1234,46 @@ export default function CreateListingPage() {
                 </div>
 
                 <div className="space-y-2 sm:col-span-2">
+                  <Label>Add image by URL (optional)</Label>
+                  <div className="flex gap-2">
+                    <Input id="imageUrl" placeholder="https://example.com/photo.jpg" value={newImageUrl} onChange={(e) => setNewImageUrl(e.target.value)} />
+                    <Button type="button" onClick={() => addImageUrl()}>Add</Button>
+                  </div>
+                  {imageUrls.length ? (
+                    <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                      {imageUrls.map((u) => (
+                        <div key={u} className="overflow-hidden rounded-md border bg-muted">
+                          <div className="relative aspect-square w-full bg-slate-100">
+                            <Image
+                              src={u}
+                              alt={u}
+                              fill
+                              className="object-cover"
+                              unoptimized
+                              onError={(e) => {
+                                const el = e.currentTarget as HTMLImageElement;
+                                el.style.opacity = "0.4";
+                              }}
+                            />
+                          </div>
+                          <div className="flex items-center justify-between gap-2 border-t px-2 py-1 text-[11px] text-muted-foreground">
+                            <div className="truncate max-w-[180px] font-mono text-xs">{u}</div>
+                            <div className="flex gap-1">
+                              <Button type="button" size="sm" variant="ghost" onClick={() => navigator.clipboard?.writeText(u) || null}>
+                                Copy
+                              </Button>
+                              <Button type="button" size="sm" variant="ghost" onClick={() => setImageUrls((s) => s.filter((x) => x !== u))}>
+                                Remove
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+
+                <div className="space-y-2 sm:col-span-2">
                   <Label>Category</Label>
                   <div className="flex flex-wrap gap-2">
                     {Object.keys(CATEGORY_TREE).map((entry) => (
@@ -1207,8 +1318,13 @@ export default function CreateListingPage() {
                   <Input value={city} onChange={(e) => setCity(e.target.value)} placeholder="e.g. Toronto" />
                 </div>
                 <div className="space-y-2">
-                  <Label>Region/State</Label>
-                  <Input value={region} onChange={(e) => setRegion(e.target.value)} placeholder="e.g. Ontario" />
+                  <Label>Region / Country</Label>
+                  <select className="block w-full rounded-md border bg-white px-3 py-2" value={region} onChange={(e) => setRegion(e.target.value)}>
+                    <option value="">Select a country</option>
+                    {COUNTRY_LIST.map((c) => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
                 </div>
                 <div className="space-y-2">
                   <Label>Postal code</Label>

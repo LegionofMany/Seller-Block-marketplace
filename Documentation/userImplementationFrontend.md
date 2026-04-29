@@ -1,575 +1,155 @@
 
-# Seller Block Marketplace — Frontend Guide
 
-This guide explains, in plain language, how to run the frontend and how to use the app once it opens in the browser.
+# Seller Block Marketplace — Frontend User Guide (Updated)
 
-It is written for someone who is not a developer. If you follow the steps in order, you should be able to:
+This document explains how to run and manually test the frontend and summarizes the current user-facing features in this release.
 
-- start the frontend on your computer
-- open the marketplace in your browser
-- sign in with email
-- connect a wallet when you need one
-- browse listings
-- save favorites and follow sellers
-- create a listing
-- create a normal listing or a job post
-- request a homepage paid ad for one of your listings
-- use the dashboard
+Core updates in this release
+---------------------------
+- Image-by-URL support: users can add image URLs in the Create flow. URLs are validated (file extension + URL syntax) and render a preview thumbnail in the form before publishing.
+- File uploads: existing file-upload flow remains supported and uploads files to `POST /uploads/images` which returns IPFS URIs.
+- Country-select for Region: the Create and Marketplace Browse filters now offer a selectable country list instead of a free-text region field.
+- Listing attributes: category-specific attributes are included and displayed on listings (VIN, mileage, provenance, bedrooms, bathrooms, squareFeet, etc.).
+- `stablecoinAddress` profile field: sellers can save a payout stablecoin address in their profile; the `SellerPayout` component surfaces it.
+- Payments & escrow: backend endpoints exist for creating payments/escrow rows (manual-review CTA in dashboard). A background worker polls approved payments and will relay settlement rows to the on-chain settlement contract when metadata contains the required payload.
 
-## What this app is
+Important environment variables
+-------------------------------
+- `PINATA_JWT` — required on backend for `POST /uploads/images` (Pinata IPFS pinning).
+- `RELAYER_PRIVATE_KEY` — relayer wallet private key for settlement relays (used by payments worker). Keep this secret.
 
-Seller Block Marketplace is a classifieds-style marketplace frontend built with Next.js.
-
-The current app is centered around normal user flows first:
-
-- email sign-in
-- password reset
-- public marketplace browsing
-- dashboard watch activity
-- profile and address details
-- listing creation and publishing
-- jobs-specific posting flow for public hiring ads
-- public-sale disclosure flow for ordinary sale listings
-- seller self-serve homepage ad requests
-- admin review tools for paid homepage ads
-
-Wallet connection still exists, but it is not the first thing a normal user needs to do.
-
-## Before you start
-
-You need these items on your computer:
-
-1. Windows with PowerShell
-2. Node.js 18.18 or newer
-3. npm
-4. The project files already downloaded on your machine
-
-To check whether Node.js is installed, open PowerShell and run:
+Quick test checklist (manual)
+----------------------------
+1. Ensure backend is running and reachable from the frontend (`NEXT_PUBLIC_BACKEND_URL` in `frontend/.env.local`).
+2. Start the frontend:
 
 ```powershell
-node -v
-npm -v
-```
-
-If both commands return a version number, you are ready to continue.
-
-## Important note about the backend
-
-The frontend can open by itself, but the full app experience depends on the backend API.
-
-You need the backend if you want to use features like:
-
-- email sign-in
-- password reset
-- favorites and follows
-- saved searches and alerts
-- metadata creation during listing publish
-- text-first metadata fallback for no-photo posts such as jobs
-- faster marketplace and dashboard data loading
-
-If the backend is not running, the frontend may still open, but important parts of the app will not work correctly.
-
-## Frontend folder
-
-All frontend commands in this guide run from:
-
-```powershell
-c:\Users\user\Desktop\marketPlace\Seller-Block-marketplace\frontend
-```
-
-## First-time setup
-
-Open PowerShell and run:
-
-```powershell
-Set-Location "c:\Users\user\Desktop\marketPlace\Seller-Block-marketplace\frontend"
-npm install
-```
-
-This installs the frontend packages.
-
-## Create the frontend environment file
-
-This project expects a `.env.local` file inside the `frontend` folder.
-
-Create a file named:
-
-```text
-frontend/.env.local
-```
-
-Add the values your environment needs. For a typical local setup, the most important values are:
-
-```env
-NEXT_PUBLIC_BACKEND_URL=http://localhost:4000
-NEXT_PUBLIC_SITE_URL=http://localhost:3000
-NEXT_PUBLIC_CHAIN_CONFIG_JSON={"defaultChainKey":"sepolia","chains":[{"key":"sepolia","name":"Sepolia","chainId":11155111,"rpcUrl":"YOUR_RPC_URL","marketplaceRegistryAddress":"YOUR_MARKETPLACE_REGISTRY_ADDRESS","nativeCurrencySymbol":"ETH","nativeCurrencyName":"Ether"}]}
-```
-
-Notes:
-
-- replace `YOUR_RPC_URL` with the RPC URL used by your project
-- replace `YOUR_MARKETPLACE_REGISTRY_ADDRESS` with the marketplace registry address for your environment
-- if your team already has a working `.env.local`, use that instead of creating a new one from scratch
-
-Optional but useful frontend values:
-
-- `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID`
-- `NEXT_PUBLIC_IPFS_GATEWAY_BASE_URL`
-- `NEXT_PUBLIC_BLOCKPAGES_URL`
-- `NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION`
-
-## Start the frontend
-
-From the `frontend` folder, run:
-
-```powershell
-npm run dev
-```
-
-When the server starts, open this address in your browser:
-
-```text
-http://localhost:3000
-```
-
-## Check that the frontend is working
-
-When the app opens successfully, you should be able to visit these pages:
-
-- Home page: `/`
-- Marketplace: `/marketplace`
-- Sign in: `/sign-in`
-- Dashboard: `/dashboard`
-- Create listing: `/create`
-
-If those pages load, the frontend is running.
-
-## How a normal user uses the app
-
-## 1. Start at the home page
-
-The home page is the public marketplace entry point.
-
-It highlights:
-
-- categories
-- homepage paid ads first
-- top or featured listings
-- saved and followed activity for signed-in users
-- trust and marketplace guidance
-- quick links to post an ad, open the marketplace, or continue to watch tools
-
-Use the home page if you want a quick overview before searching deeper.
-
-## 2. Sign in
-
-Open the sign-in page at `/sign-in`.
-
-The app supports:
-
-- email sign-in
-- password login
-- password reset
-- wallet connection as a follow-up option
-
-For a normal user, the easiest path is email sign-in.
-
-Typical flow:
-
-1. Open `/sign-in`
-2. Create an account with email
-3. Fill in the contact details step
-4. After account creation, Seller Block opens an account-created handoff page
-5. Verify the email if prompted
-6. Use the guided links on that handoff page to open the correct profile setup area
-7. Finish the profile details in the dashboard
-
-If password reset is needed, use the reset option on the sign-in page.
-
-### After the account is created
-
-New users are no longer left inside the sign-in form after registration.
-
-Seller Block now opens a dedicated account-created page that explains:
-
-- whether the verification email was sent
-- whether the email has already been confirmed
-- what the next account steps are
-- direct links into the dashboard profile areas that still need attention
-
-This makes the onboarding flow feel more like a normal marketplace account setup.
-
-### If you click Connect Wallet and no wallet appears
-
-The frontend now shows a small helper message if your browser does not detect an installed wallet extension.
-
-If that happens:
-
-1. install a browser wallet such as MetaMask or Rabby
-2. reload the page
-3. or use WalletConnect from the sign-in page to connect a mobile wallet
-
-This prevents the wallet button from feeling blank or broken.
-
-## 3. Browse the marketplace
-
-Open `/marketplace`.
-
-This is where users can:
-
-- browse active listings
-- search by keyword
-- filter by category
-- use local discovery when profile location exists
-- save search patterns
-
-If the backend is connected, results load faster and saved-search features work better.
-
-## 4. Open a listing
-
-Click any listing card to open its details page.
-
-The listing page shows the main information for that item, such as:
-
-- title
-- price or compensation summary
-- seller information
-- trust indicators
-- listing type
-- current status
-
-If the listing is a job post, the page now emphasizes:
-
-- company or employer
-- compensation summary
-- work mode such as on-site, hybrid, or remote
-- application contact details
-
-It no longer leads with normal buyer checkout language for job posts.
-
-If the listing is a normal public-sale post, the page can also show:
-
-- condition summary
-- inspection and pickup notes
-- transfer or release terms
-- title or ownership-document status
-- public-sale safeguard notices carried from the create form
-
-Depending on the listing and the user account, the page may allow actions like:
-
-- save or favorite
-- buy
-- bid
-- enter raffle
-- confirm delivery
-- request refund
-
-## 5. Create a listing
-
-Open `/create`.
-
-This page is where a seller can publish a new item.
-
-The form is designed around public marketplace use, not technical contract language.
-
-Users should fill in:
-
-- a clear title
-- a plain-language description
-- photos if the post needs them
-- location details
-- price or auction settings for normal sale listings
-- the right category
-
-If the category is `Jobs`, the form changes into a hiring-style flow.
-
-For Jobs, the app asks for:
-
-- role title
-- role description
-- city, region, or postal code
-- email or phone contact for applicants
-- company or employer name
-- compensation summary
-- work mode such as on-site, hybrid, or remote
-
-Main listing types:
-
-- fixed price
-- auction
-- raffle
-
-Jobs do not use the auction, raffle, or token selection panels in the form.
-
-If the listing is a normal sale listing, the form now also asks for public-sale safeguard details such as:
-
-- condition summary
-- inspection notes
-- transfer terms
-- title or document status
-- seller confirmation that they have the right to sell the item
-
-These details appear again on the public listing page after publishing.
-
-Important:
-
-- the backend must be available for metadata creation and recovery support
-- text-only posts such as jobs can now publish without photos
-- photo-based posts still need the image upload route and its backend support
-- wallet-related actions may still be required depending on the settlement path
-- if the app shows a draft recovery or publish recovery message, follow that prompt instead of starting over
-
-### Publishing with or without photos
-
-The create page now has two practical publish paths:
-
-1. With photos
-
-- the app uploads images first
-- then it sends the metadata through the IPFS publish route
-
-2. Without photos
-
-- the app can publish metadata without using the IPFS image route
-- this is the intended path for text-first posts such as jobs or quick public notices
-
-Important note:
-
-- if the seller wants to publish a listing with photos, the backend still needs image/IPFS support configured correctly
-- if the seller does not need photos, the app can now continue through the no-photo metadata path instead of failing immediately
-
-## 6. Use the dashboard
-
-Open `/dashboard`.
-
-The dashboard is the main account area.
-
-It currently centers around three main sections:
-
-- `Profile`
-- `Watch`
-- `My listings`
-
-### Profile
-
-Use this section to manage:
-
-- identity details
-- email status
-- address
-- phone number
-- postal code
-- profile information buyers may see
-
-The Profile section now includes a guided account setup checklist.
-
-This checklist can:
-
-- show which setup steps are already complete
-- highlight what is still missing
-- jump the user directly to the missing section such as email verification, contact details, bio, or seller wallet setup
-
-This means users do not need to search the form manually to find the next missing item.
-
-The Profile section may also show an `Increase KYC` prompt that opens BlockPages.
-
-This is a later trust step.
-
-It is not meant to block normal account creation.
-
-### Watch
-
-Use this section to manage:
-
-- followed sellers
-- saved ads
-- saved searches
-- alerts and watch activity
-
-This is the section users return to when they want to pick up where they left off.
-
-### My listings
-
-Use this section to:
-
-- review items you created
-- open listing details again
-- check listing activity connected to your seller account
-
-This section also now includes the seller self-serve homepage ad request area.
-
-From this area a seller can:
-
-- choose one of their listings
-- enter a campaign name and sponsor label
-- submit a homepage paid ad request
-- review their existing ad request history with listing title and thumbnail previews
-
-For the current release, payment collection is still manual. The request is saved first and reviewed later.
-
-### Notifications
-
-The dashboard notifications area is where users can see activity such as:
-
-- saved-search and watch alerts
-- seller-request review notifications for homepage ads
-- approval or rejection updates from admin review
-
-### Admin listing tools
-
-If the signed-in account has admin access, the dashboard also shows an extra listing management panel.
-
-Admins can use this panel to:
-
-- search by seller address or listing id
-- filter listings by chain and active status
-- see the exact number of matching listings returned by the server
-- load more results when the first group is not enough
-- remove listings from the marketplace index for moderation or cleanup
-
-This area is only for trusted marketplace operators. Regular buyers and sellers do not need it.
-
-### Admin homepage ad review tools
-
-If the signed-in account has admin access, the dashboard also includes homepage ad review controls.
-
-Admins can:
-
-- open the seller ad request queue
-- view the linked listing title and thumbnail instead of only the listing id
-- approve a request
-- pause a request
-- reject a request
-- see the payment review state beside the approval state
-
-This is part of the current manual paid-ad workflow. Stripe is not the live path yet.
-
-## When a wallet is needed
-
-The app is no longer explained as wallet-first, but some flows may still require a wallet connection.
-
-For new users, wallet setup is now treated as a later seller step inside the profile/dashboard experience.
-
-Examples:
-
-- seller-side blockchain actions
-- settlement actions
-- contract-linked listing operations
-- owner or admin tools
-- optional wallet-based sign-in for existing wallet users
-
-If a wallet is needed, the app will guide the user at that point.
-
-## Common problems and simple fixes
-
-## Frontend opens, but data looks empty
-
-Likely cause:
-
-- the backend is not running
-- `NEXT_PUBLIC_BACKEND_URL` is wrong
-
-What to do:
-
-1. Confirm the backend is running
-2. Check `frontend/.env.local`
-3. Restart the frontend server
-
-## Sign-in does not work
-
-Likely cause:
-
-- backend auth routes are unavailable
-- email settings are not configured on the backend
-
-What to do:
-
-1. Check backend health
-2. Confirm the frontend is pointing to the correct backend URL
-3. Confirm backend email configuration is set correctly
-
-## Create page fails during publish
-
-Likely cause:
-
-- metadata upload or listing publish support is not available from the backend
-- a wallet or chain action was not confirmed
-- a photo-based publish was attempted but the backend does not have its IPFS image support configured
-
-What to do:
-
-1. Keep the draft if the recovery message appears
-2. Confirm backend connectivity
-3. If the post does not need photos, remove the photos and try again
-4. Retry from the recovery prompt instead of rebuilding the entire listing
-
-### Jobs post fails during publish
-
-Likely cause:
-
-- no contact email or phone was entered
-- no location information was entered
-- wallet or chain confirmation was not completed
-
-What to do:
-
-1. Make sure at least one contact method is filled in
-2. Make sure city, region, or postal code is filled in
-3. Retry the wallet confirmation if it was cancelled
-
-## Wallet actions are not working
-
-Likely cause:
-
-- wrong chain configuration
-- missing wallet connection
-- missing project env values
-- no injected browser wallet installed on the device
-
-What to do:
-
-1. Confirm the frontend chain configuration is correct
-2. Confirm wallet connection is active
-3. Reload the page after changing wallet network
-4. If the page says no browser wallet was detected, install MetaMask or Rabby or use WalletConnect from the sign-in page
-
-## Commands summary
-
-Use these commands in PowerShell:
-
-```powershell
-Set-Location "c:\Users\user\Desktop\marketPlace\Seller-Block-marketplace\frontend"
+cd Seller-Block-marketplace/frontend
 npm install
 npm run dev
 ```
 
-Useful extra commands:
+3. Open `http://localhost:3000`.
+4. Sign up at `/sign-in` (email) or sign in with a test account.
+5. Go to `/create` and try these flows:
+   - Add an image by URL (paste a valid image URL ending in `.jpg`, `.png`, `.webp`, etc.). The preview thumbnail should appear.
+   - Upload images from disk and confirm they appear in the preview grid.
+   - Select a country from the Region / Country dropdown and confirm it persists in the draft.
+   - Fill category-specific attributes (VIN, mileage for Cars; provenance for Antiques; bedrooms/bathrooms for Real Estate) and publish a no-photo listing to verify metadata path.
+6. Verify metadata created in the backend: after publishing, inspect `POST /metadata` or the public listing page.
 
-```powershell
-npm run build
-npm run start
-npm run lint
-```
+Notes on image previews and optimization
+---------------------------------------
+Previews for external URLs are rendered as unoptimized `next/image` elements (unoptimized flag) to avoid requiring image proxy configuration. This is intentional for quick manual testing; production optimization may require adding external domains to `next.config.js` or a custom loader.
 
-## Simple success checklist
+Testing image uploads via curl
+------------------------------
+Example `curl` to upload a single image (replace `BACKEND_URL` and `/path/to/image.jpg`):
 
-You can consider the frontend ready for a layperson to use when all of these are true:
+```bash
+BACKEND_URL=https://seller-block-marketplace-4.onrender.com
+## Welcome to Zonycs (zonycs.com) — Quick User Guide
 
-1. `npm install` completes without errors
-2. `npm run dev` starts the app
-3. `http://localhost:3000` opens successfully
-4. `/sign-in`, `/marketplace`, `/dashboard`, and `/create` all load
-5. the backend is reachable from the frontend
-6. email sign-in works
-7. users can browse, watch, and create listings without confusion
-8. users can publish a no-photo job post without confusion
-9. users understand when a wallet extension is missing instead of seeing an empty wallet state
-10. sellers can request homepage ad placement from the dashboard if that feature is enabled for their account
+This guide is for end users of the live site at https://zonycs.com. It explains, in simple terms, how to sign in, create listings, add photos (by URL or upload), and the difference between off-chain (regular) and on-chain (blockchain) publishing.
 
-## Final note
+Who this is for
+---------------
+Anyone who wants to list items, post jobs, or browse and respond to listings on zonycs.com — no developer knowledge required.
 
-For the current app, the simplest way to explain it to a non-technical user is this:
+Quick overview — two publishing modes
+-----------------------------------
+- Off-chain (easy): create listings, post job ads, and upload photos. No crypto wallet is required for browsing, saving drafts, or publishing basic listings. This is what most users will do.
+- On-chain (optional): to finalize an on-chain listing or enable crypto settlement, connect a wallet (MetaMask or WalletConnect). The app will prompt you when a blockchain signature or transaction is required. On-chain publishing means the listing's record is anchored on the configured blockchain and settlement can happen with tokens.
 
-Seller Block Marketplace is a marketplace website. Start the backend, start the frontend, open the browser, sign in with email, browse the marketplace, and use the dashboard to manage profile, watched items, your listings, job posts, and homepage ad requests.
+Simple test account (use these values for testing on the live site)
+-----------------------------------------------------------------
+- Full name: John Doe
+- Display name: John's Garage
+- Email: test+1@example.com
+- Password: Password123!
+- Phone: +1 555-0100
+- Street address: 123 Main St
+- City: Anytown
+- Country: Canada
+- Postal code: M5V 2T6
+
+Step-by-step: Sign in and create a basic listing (no wallet needed)
+----------------------------------------------------------------
+1. Open https://zonycs.com in your browser.
+2. Click "Sign in" and choose "Create account" (or sign in with the email account above).
+3. After signing in, click "Create" to open the listing form.
+4. Fill the required fields:
+    - Title (e.g. Used 2015 Honda Civic — reliable commuter)
+    - Description (short, plain language)
+    - Category → pick the category (e.g. Cars & Vehicles)
+    - City / Country / Postal code
+5. Optional: add details in category fields (VIN, mileage for cars; provenance for antiques; bedrooms for real estate).
+6. To add a photo by URL: paste an image URL into "Add image by URL" and click Add — a thumbnail should appear.
+7. Or upload photos from your device using "Choose from gallery".
+8. Click Publish. The app will upload metadata and create the public listing. You do not need a wallet for this basic publish in most cases — the app will guide you if a wallet is required.
+
+Step-by-step: Create an on-chain listing (wallet required)
+------------------------------------------------------
+1. Connect a browser wallet (MetaMask) or use WalletConnect in the app (there will be a "Connect wallet" button).
+2. Fill the listing form as above and click Publish.
+3. When a blockchain transaction is required, your wallet will show a confirmation popup with gas/fee details. Approve the transaction to finalize the on-chain publish.
+4. After the transaction confirms, the listing will be anchored on-chain and settlement features (if used) can proceed.
+
+Example listing data (copy/paste into form fields)
+--------------------------------------------------
+Car listing (image-by-URL):
+- Title: Used 2015 Honda Civic — reliable commuter
+- Description: Clean local car, two owners, well maintained.
+- Category: Cars & Vehicles → Cars
+- City: Anytown
+- Country: Canada
+- Postal code: M5V 2T6
+- VIN: 1HGCM82633A004352
+- Mileage: 132000
+- Fixed price: 4500
+- Image URL (paste into "Add image by URL"):
+   - https://upload.wikimedia.org/wikipedia/commons/3/3e/2016_Honda_Civic_EXT.jpg
+
+Antique listing (example):
+- Title: Antique wooden chest — provenance included
+- Category: Buy & Sell → Antiques & Collectibles
+- Provenance: Estate of the Smith family, acquired 1954
+- Image URL (optional): https://upload.wikimedia.org/wikipedia/commons/4/47/Antique_chest_example.jpg
+
+Real-estate example:
+- Title: 2-bedroom apartment near downtown
+- Bedrooms: 2
+- Bathrooms: 1
+- Square feet: 800
+
+Where to put a payout address (seller stablecoin address)
+------------------------------------------------------
+If you are a seller and want to receive token payouts, open your Profile (click your avatar → Profile) and look for the Payout or Seller Payout section. Paste your stablecoin address there. This is optional and only needed if you will receive crypto payouts.
+
+What happens when you publish (lay terms)
+----------------------------------------
+- Off-chain publish: the app sends the listing details to the site backend and creates a public listing page you and buyers can see. No wallet interaction required.
+- On-chain publish: after preparing the listing, the app asks your wallet to sign or send a small blockchain transaction. This registers the listing on the blockchain. You will need some gas on the selected network to complete this.
+
+Image URLs — tips and quick checks
+---------------------------------
+- Use public image URLs that end with `.jpg`, `.jpeg`, `.png`, `.webp`, or `.gif`.
+- If a URL doesn't show a preview, try another URL (some servers block direct embedding).
+- Example safe URLs: Wikimedia images provided above.
+
+Troubleshooting (user-friendly)
+------------------------------
+- I pasted an image URL but nothing showed: try a different URL (use the example Wikimedia links), or upload a photo from your device.
+- I tried to publish and nothing happened: check for an error message at the top of the page. If it mentions a wallet, connect your wallet or choose the option to publish without on-chain settlement.
+- I can't sign in: use the email you registered with and check your spam for any confirmation emails.
+
+Safety and privacy
+------------------
+- Do not share private keys with anyone. Never paste a wallet private key into the website.
+- Use test data or throwaway emails if you are experimenting on the live site.
+
+If you'd like this guide added as a short help panel on the site (or linked from the footer), I can prepare a compact version suitable for the UI.
+
+Suggested commit message if you want to commit this file:
+`docs: user-facing guide for zonycs.com — on-chain and off-chain steps, example data`
 
