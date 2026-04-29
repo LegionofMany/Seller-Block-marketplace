@@ -33,7 +33,7 @@ export function ListingCard({ row }: { row: ListingSummary }) {
 
   return (
     <Link href={buildListingHref(row.id, row.chainKey)} className="block">
-      <Card className="h-full transition-colors hover:bg-accent/30 active:bg-accent/40">
+      <Card className="h-full transition-colors duration-150 hover:bg-accent/10 active:bg-accent/20">
         <CardHeader>
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
@@ -53,7 +53,7 @@ export function ListingCard({ row }: { row: ListingSummary }) {
           </div>
         </CardHeader>
         <CardContent>
-          <div className="mb-3 overflow-hidden rounded-md border bg-muted/70">
+          <div className="mb-3 overflow-hidden rounded-md border bg-muted">
             <div className="relative h-40 w-full">
               <Image
                 src={imageUrl}

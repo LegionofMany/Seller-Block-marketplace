@@ -393,7 +393,11 @@ export function MarketplaceBrowse() {
             </div>
                 <div className="space-y-2">
                   <Label>Region / Country</Label>
-                  <select className="block w-full rounded-md border bg-white px-3 py-2" value={region} onChange={(e) => setRegion(e.target.value)}>
+                  <select
+                    className="block w-full rounded-md border bg-white px-3 py-2 text-slate-900 dark:text-slate-100"
+                    value={region}
+                    onChange={(e) => setRegion(e.target.value)}
+                  >
                     <option value="">All countries</option>
                     {COUNTRY_LIST.map((c) => (
                       <option key={c} value={c}>{c}</option>

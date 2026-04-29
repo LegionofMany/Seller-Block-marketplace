@@ -48,21 +48,16 @@ Example `curl` to upload a single image (replace `BACKEND_URL` and `/path/to/ima
 
 ```bash
 BACKEND_URL=https://seller-block-marketplace-4.onrender.com
-## Welcome to Zonycs (zonycs.com) — Quick User Guide
+## Zonycs — Quick User Guide (for non-technical users)
 
-This guide is for end users of the live site at https://zonycs.com. It explains, in simple terms, how to sign in, create listings, add photos (by URL or upload), and the difference between off-chain (regular) and on-chain (blockchain) publishing.
+This guide is written for regular users of the live site at https://zonycs.com. It shows how to sign in, create listings, add multiple images (by URL or upload), and how to submit a homepage ad (paid ad request) for review — all in plain language.
 
-Who this is for
----------------
-Anyone who wants to list items, post jobs, or browse and respond to listings on zonycs.com — no developer knowledge required.
+Who this guide is for
+---------------------
+Anyone who wants to buy, sell, or post jobs on Zonycs without needing any technical knowledge.
 
-Quick overview — two publishing modes
------------------------------------
-- Off-chain (easy): create listings, post job ads, and upload photos. No crypto wallet is required for browsing, saving drafts, or publishing basic listings. This is what most users will do.
-- On-chain (optional): to finalize an on-chain listing or enable crypto settlement, connect a wallet (MetaMask or WalletConnect). The app will prompt you when a blockchain signature or transaction is required. On-chain publishing means the listing's record is anchored on the configured blockchain and settlement can happen with tokens.
-
-Simple test account (use these values for testing on the live site)
------------------------------------------------------------------
+Test account (sample values you can use)
+--------------------------------------
 - Full name: John Doe
 - Display name: John's Garage
 - Email: test+1@example.com
@@ -73,83 +68,90 @@ Simple test account (use these values for testing on the live site)
 - Country: Canada
 - Postal code: M5V 2T6
 
-Step-by-step: Sign in and create a basic listing (no wallet needed)
-----------------------------------------------------------------
-1. Open https://zonycs.com in your browser.
-2. Click "Sign in" and choose "Create account" (or sign in with the email account above).
-3. After signing in, click "Create" to open the listing form.
-4. Fill the required fields:
-    - Title (e.g. Used 2015 Honda Civic — reliable commuter)
-    - Description (short, plain language)
-    - Category → pick the category (e.g. Cars & Vehicles)
-    - City / Country / Postal code
-5. Optional: add details in category fields (VIN, mileage for cars; provenance for antiques; bedrooms for real estate).
-6. To add a photo by URL: paste an image URL into "Add image by URL" and click Add — a thumbnail should appear.
-7. Or upload photos from your device using "Choose from gallery".
-8. Click Publish. The app will upload metadata and create the public listing. You do not need a wallet for this basic publish in most cases — the app will guide you if a wallet is required.
+Sign in and create a listing (step-by-step)
+------------------------------------------
+1. Open your browser and go to https://zonycs.com.
+2. Click "Sign in" and create an account using the sample values above (or sign in if you already have an account).
+3. Click "Create" to open the listing form.
+4. Fill the main fields: Title, Description, Category, City, Country, Postal code.
+5. Fill extra fields for your category if applicable (VIN/mileage for cars, provenance for antiques, bedrooms for real estate).
 
-Step-by-step: Create an on-chain listing (wallet required)
-------------------------------------------------------
-1. Connect a browser wallet (MetaMask) or use WalletConnect in the app (there will be a "Connect wallet" button).
-2. Fill the listing form as above and click Publish.
-3. When a blockchain transaction is required, your wallet will show a confirmation popup with gas/fee details. Approve the transaction to finalize the on-chain publish.
-4. After the transaction confirms, the listing will be anchored on-chain and settlement features (if used) can proceed.
+Adding images — multiple URLs and files (detailed)
+------------------------------------------------
+Zonycs supports up to 12 images per listing. You can mix image URLs and files.
 
-Example listing data (copy/paste into form fields)
---------------------------------------------------
-Car listing (image-by-URL):
-- Title: Used 2015 Honda Civic — reliable commuter
-- Description: Clean local car, two owners, well maintained.
-- Category: Cars & Vehicles → Cars
-- City: Anytown
-- Country: Canada
-- Postal code: M5V 2T6
-- VIN: 1HGCM82633A004352
-- Mileage: 132000
-- Fixed price: 4500
-- Image URL (paste into "Add image by URL"):
+Add images by URL:
+- Find "Add image by URL" in the Create form.
+- Paste one image URL and click "Add".
+- Repeat to add more URLs (up to 12 total images combined with files).
+- Example safe image URLs to try:
    - https://upload.wikimedia.org/wikipedia/commons/3/3e/2016_Honda_Civic_EXT.jpg
+   - https://upload.wikimedia.org/wikipedia/commons/6/6e/2017_Toyota_Camry_SE.jpg
+   - https://upload.wikimedia.org/wikipedia/commons/4/47/Antique_chest_example.jpg
+- Tips: URLs should end in `.jpg`, `.jpeg`, `.png`, `.webp`, or `.gif`. If the thumbnail does not load, try another URL.
 
-Antique listing (example):
-- Title: Antique wooden chest — provenance included
-- Category: Buy & Sell → Antiques & Collectibles
-- Provenance: Estate of the Smith family, acquired 1954
-- Image URL (optional): https://upload.wikimedia.org/wikipedia/commons/4/47/Antique_chest_example.jpg
+Upload image files from your device:
+- Click "Choose from gallery" or "Take photo".
+- In the file picker, select multiple images (hold Ctrl or Shift to multi-select).
+- The app shows local previews immediately. Files are uploaded when you publish.
 
-Real-estate example:
-- Title: 2-bedroom apartment near downtown
-- Bedrooms: 2
-- Bathrooms: 1
-- Square feet: 800
+Managing images before publish:
+- To reorder, drag or use any provided controls (if available) — otherwise the order you add them is used.
+- To remove an image click Remove on the thumbnail.
 
-Where to put a payout address (seller stablecoin address)
-------------------------------------------------------
-If you are a seller and want to receive token payouts, open your Profile (click your avatar → Profile) and look for the Payout or Seller Payout section. Paste your stablecoin address there. This is optional and only needed if you will receive crypto payouts.
+How the app handles images when you publish:
+- If you uploaded files, the site uploads them and stores them (you will see upload progress); these are included in the listing.
+- Image URLs you added are saved as-is into the listing metadata.
 
-What happens when you publish (lay terms)
-----------------------------------------
-- Off-chain publish: the app sends the listing details to the site backend and creates a public listing page you and buyers can see. No wallet interaction required.
-- On-chain publish: after preparing the listing, the app asks your wallet to sign or send a small blockchain transaction. This registers the listing on the blockchain. You will need some gas on the selected network to complete this.
+Example: create a car listing with multiple images
+------------------------------------------------
+1. Title: Used 2015 Honda Civic — reliable commuter
+2. Description: Clean local car, two owners, well maintained.
+3. Category: Cars & Vehicles → Cars
+4. VIN: 1HGCM82633A004352
+5. Mileage: 132000
+6. Add images:
+    - Paste the Honda Civic image URL above and click Add.
+    - Click Choose from gallery and select one local photo.
+7. Click Publish.
 
-Image URLs — tips and quick checks
----------------------------------
-- Use public image URLs that end with `.jpg`, `.jpeg`, `.png`, `.webp`, or `.gif`.
-- If a URL doesn't show a preview, try another URL (some servers block direct embedding).
-- Example safe URLs: Wikimedia images provided above.
+Posting a homepage ad (create a paid ad request)
+-----------------------------------------------
+Zonycs supports a seller-request flow to show a listing as a homepage ad. This is a manual-review workflow:
 
-Troubleshooting (user-friendly)
-------------------------------
-- I pasted an image URL but nothing showed: try a different URL (use the example Wikimedia links), or upload a photo from your device.
-- I tried to publish and nothing happened: check for an error message at the top of the page. If it mentions a wallet, connect your wallet or choose the option to publish without on-chain settlement.
-- I can't sign in: use the email you registered with and check your spam for any confirmation emails.
+1. Go to your Dashboard (click your avatar → Dashboard).
+2. Find the section labeled "Ads" or "Promote listing".
+3. Click "Create ad request" or "New ad".
+4. Select which listing to promote from your existing listings.
+5. Enter a Campaign name (e.g., "Spring Sale — Civic") and a Sponsor label (e.g., "John's Garage").
+6. Choose a thumbnail: use the listing's images or upload/select a specific image.
+7. Submit the request.
 
-Safety and privacy
-------------------
-- Do not share private keys with anyone. Never paste a wallet private key into the website.
-- Use test data or throwaway emails if you are experimenting on the live site.
+What happens next:
+- The ad request is saved and sent for manual review by the site admin team.
+- The Dashboard shows the request status (Pending, Approved, Rejected) and any payment state.
+- If payment is required, follow the instructions shown in the Dashboard (the site will display payment options or steps).
 
-If you'd like this guide added as a short help panel on the site (or linked from the footer), I can prepare a compact version suitable for the UI.
+On-chain vs Off-chain publishing (simple explanation)
+--------------------------------------------------
+- Off-chain: most users will publish this way. The listing appears on the site without you needing a crypto wallet.
+- On-chain: if a listing requires a blockchain transaction (for settlement or registry), the app asks you to connect a wallet. Your wallet will pop up a confirmation — approve it to complete the on-chain publish.
 
-Suggested commit message if you want to commit this file:
-`docs: user-facing guide for zonycs.com — on-chain and off-chain steps, example data`
+Troubleshooting (plain language)
+-------------------------------
+- Image URL doesn't show a preview: use one of the example Wikimedia URLs, or upload a file from your device.
+- Upload fails or shows an error: try publishing without images (text-only) and contact support if the problem persists.
+- Can't sign in: double-check your email and password and check your spam folder for confirmation emails.
+
+Safety and privacy reminder
+--------------------------
+- Never paste private keys or seed phrases into the site.
+- Use an email you control for account recovery.
+
+Want this guide added to the site footer or help panel?
+----------------------------------------------------
+If you want, I can shorten this into a compact help panel to link from the site footer or Dashboard. I can also commit the file with this content.
+
+Suggested commit message if you want to commit this update:
+`docs: user-facing guide for zonycs.com — images, ads, and simple publishing steps`
 
