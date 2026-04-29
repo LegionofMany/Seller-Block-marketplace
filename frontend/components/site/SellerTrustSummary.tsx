@@ -27,7 +27,9 @@ export function SellerTrustSummary({ profile, variant = "compact" }: { profile: 
   if (variant === "compact") {
     return (
       <div className="flex flex-wrap items-center gap-2">
-        {sellerVerified ? <Badge className="border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-50">Verified seller</Badge> : null}
+        {sellerVerified ? (
+          <Badge className="border-transparent bg-primary text-primary-foreground hover:opacity-95">Verified seller</Badge>
+        ) : null}
         <Badge variant="outline">Rep {formatReputation(stats.reputation)}</Badge>
         <Badge variant="outline">Response {formatPercent(stats.responseRate)}</Badge>
       </div>
@@ -37,7 +39,7 @@ export function SellerTrustSummary({ profile, variant = "compact" }: { profile: 
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap items-center gap-2">
-        {sellerVerified ? <Badge className="border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-50">Verified seller</Badge> : null}
+        {sellerVerified ? <Badge className="border-transparent bg-primary text-primary-foreground hover:opacity-95">Verified seller</Badge> : null}
         <Badge variant="outline">Rep {formatReputation(stats.reputation)}</Badge>
         <Badge variant="outline">Response {formatPercent(stats.responseRate)}</Badge>
         <Badge variant="outline">Followers {stats.followerCount}</Badge>

@@ -14,7 +14,7 @@ const badgeVariants = cva(
       },
     },
     defaultVariants: {
-      variant: "secondary",
+      variant: "default",
     },
   }
 );
