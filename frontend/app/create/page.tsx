@@ -26,6 +26,7 @@ import { describeToken, getDefaultSettlementToken, getPublicNetworkLabel, getTok
 import { getChainConfigById, getEnv } from "@/lib/env";
 import { buildListingHref } from "@/lib/listings";
 import { CATEGORY_TREE, subcategoriesFor } from "@/lib/categories";
+import { COUNTRY_LIST, CITY_MAP } from "@/lib/locations";
 
 const createListingAbi = [
   {
@@ -1315,14 +1316,38 @@ export default function CreateListingPage() {
 
                 <div className="space-y-2">
                   <Label>City</Label>
-                  <Input value={city} onChange={(e) => setCity(e.target.value)} placeholder="e.g. Toronto" />
+                  {region && CITY_MAP[region] ? (
+                    <select
+                      className="block w-full rounded-md border bg-white dark:bg-slate-700 px-3 py-2 text-slate-900 dark:text-slate-100"
+                      value={city}
+                      onChange={(e) => setCity(e.target.value)}
+                    >
+                      <option value="">All cities</option>
+                      {CITY_MAP[region].map((c) => (
+                        <option key={c} value={c}>
+                          {c}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <Input value={city} onChange={(e) => setCity(e.target.value)} placeholder="e.g. Toronto" />
+                  )}
                 </div>
                 <div className="space-y-2">
                   <Label>Region / Country</Label>
-                  <select className="block w-full rounded-md border bg-white px-3 py-2" value={region} onChange={(e) => setRegion(e.target.value)}>
+                  <select
+                    className="block w-full rounded-md border bg-white dark:bg-slate-700 px-3 py-2 text-slate-900 dark:text-slate-100"
+                    value={region}
+                    onChange={(e) => {
+                      setRegion(e.target.value);
+                      setCity("");
+                    }}
+                  >
                     <option value="">Select a country</option>
                     {COUNTRY_LIST.map((c) => (
-                      <option key={c} value={c}>{c}</option>
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
                     ))}
                   </select>
                 </div>

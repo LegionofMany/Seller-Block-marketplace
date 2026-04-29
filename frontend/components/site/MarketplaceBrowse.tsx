@@ -19,6 +19,7 @@ import { getEnv } from "@/lib/env";
 import { formatLocationLabel, getProfileLocationFilter } from "@/lib/location";
 import { fetchJson, type ApiError } from "@/lib/api";
 import { useListings } from "@/lib/hooks/useListings";
+import { COUNTRY_LIST, CITY_MAP } from "@/lib/locations";
 
 function normalizeSearchValue(value: string | null) {
   const trimmed = value?.trim();
@@ -52,58 +53,7 @@ export function MarketplaceBrowse() {
   const [type, setType] = React.useState<"" | "fixed" | "auction" | "raffle">(() => parseSaleType(searchParams.get("type")));
   const [sort, setSort] = React.useState<"newest" | "price_asc" | "price_desc">(() => parseSort(searchParams.get("sort")));
 
-  const COUNTRY_LIST = [
-    "United States",
-    "Canada",
-    "United Kingdom",
-    "Australia",
-    "Germany",
-    "France",
-    "Spain",
-    "Italy",
-    "Netherlands",
-    "Belgium",
-    "Portugal",
-    "Sweden",
-    "Norway",
-    "Denmark",
-    "Finland",
-    "Ireland",
-    "Poland",
-    "Czech Republic",
-    "Austria",
-    "Switzerland",
-    "India",
-    "China",
-    "Japan",
-    "South Korea",
-    "Singapore",
-    "Hong Kong",
-    "United Arab Emirates",
-    "Saudi Arabia",
-    "South Africa",
-    "Nigeria",
-    "Kenya",
-    "Ghana",
-    "Egypt",
-    "Brazil",
-    "Mexico",
-    "Argentina",
-    "Chile",
-    "Colombia",
-    "Peru",
-    "New Zealand",
-  ];
-
-  const CITY_MAP: Record<string, string[]> = {
-    "United States": ["New York", "Los Angeles", "Chicago", "Houston", "Miami"],
-    Canada: ["Toronto", "Vancouver", "Montreal", "Calgary"],
-    "United Kingdom": ["London", "Manchester", "Birmingham"],
-    Australia: ["Sydney", "Melbourne", "Brisbane"],
-    Germany: ["Berlin", "Munich", "Hamburg"],
-    India: ["Mumbai", "Delhi", "Bengaluru"],
-    Japan: ["Tokyo", "Osaka", "Nagoya"],
-  };
+  
 
   const [offset, setOffset] = React.useState(() => {
     const raw = Number.parseInt(searchParams.get("offset") ?? "0", 10);
