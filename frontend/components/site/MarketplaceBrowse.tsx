@@ -95,6 +95,16 @@ export function MarketplaceBrowse() {
     "New Zealand",
   ];
 
+  const CITY_MAP: Record<string, string[]> = {
+    "United States": ["New York", "Los Angeles", "Chicago", "Houston", "Miami"],
+    Canada: ["Toronto", "Vancouver", "Montreal", "Calgary"],
+    "United Kingdom": ["London", "Manchester", "Birmingham"],
+    Australia: ["Sydney", "Melbourne", "Brisbane"],
+    Germany: ["Berlin", "Munich", "Hamburg"],
+    India: ["Mumbai", "Delhi", "Bengaluru"],
+    Japan: ["Tokyo", "Osaka", "Nagoya"],
+  };
+
   const [offset, setOffset] = React.useState(() => {
     const raw = Number.parseInt(searchParams.get("offset") ?? "0", 10);
     return Number.isFinite(raw) && raw > 0 ? raw : 0;
@@ -389,12 +399,27 @@ export function MarketplaceBrowse() {
             </div>
             <div className="space-y-2">
               <Label>City</Label>
-              <Input value={city} onChange={(e) => setCity(e.target.value)} placeholder="e.g. Toronto" />
+              {region && CITY_MAP[region] ? (
+                <select
+                  className="block w-full rounded-md border bg-white dark:bg-slate-700 px-3 py-2 text-slate-900 dark:text-slate-100"
+                  value={city}
+                  onChange={(e) => setCity(e.target.value)}
+                >
+                  <option value="">All cities</option>
+                  {CITY_MAP[region].map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <Input value={city} onChange={(e) => setCity(e.target.value)} placeholder="e.g. Toronto" />
+              )}
             </div>
                 <div className="space-y-2">
                   <Label>Region / Country</Label>
                   <select
-                    className="block w-full rounded-md border bg-white px-3 py-2 text-slate-900 dark:text-slate-100"
+                    className="block w-full rounded-md border bg-white dark:bg-slate-700 px-3 py-2 text-slate-900 dark:text-slate-100"
                     value={region}
                     onChange={(e) => setRegion(e.target.value)}
                   >

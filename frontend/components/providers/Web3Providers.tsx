@@ -74,6 +74,7 @@ export function Web3Providers({ children }: { children: React.ReactNode }) {
       if (!chains.length) throw new Error("No frontend chains configured");
       const configuredChains = [chains[0], ...chains.slice(1)] as readonly [Chain, ...Chain[]];
       const walletConnectAvailability = getWalletConnectAvailability(env.walletConnectProjectId);
+      const appUrl = (typeof window !== "undefined" && window.location?.origin) || APP_URL;
       const connectors = env.walletConnectProjectId
         ? connectorsForWallets(
             [
@@ -89,7 +90,7 @@ export function Web3Providers({ children }: { children: React.ReactNode }) {
             ],
             {
               appName: APP_NAME,
-              appUrl: APP_URL,
+              appUrl,
               projectId: env.walletConnectProjectId,
             }
           )

@@ -110,7 +110,6 @@
   h4 {
     letter-spacing: -0.03em;
   }
-}
 
 @layer components {
   .market-shell {
@@ -398,6 +397,17 @@
     .market-stat {
       padding: 0.75rem 0.875rem;
     }
+  }
+
+  /* Temporary override: disable small vendor animations that trigger UI flicker
+     (e.g. WalletConnect / w3m shake). Remove when upstream issue is resolved. */
+  .w3m-shake,
+  [class*="w3m-shake"],
+  .w3m-animate,
+  [class*="w3m-animate"] {
+    animation: none !important;
+    transition: none !important;
+  }
 
     .market-chip {
       padding: 0.35rem 0.65rem;
