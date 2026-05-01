@@ -34,7 +34,15 @@ function rowsFromExec(execResult) {
 }
 
 function selectAll(sqliteDb, sql) {
-  return rowsFromExec(sqliteDb.exec(sql));
+  try {
+    return rowsFromExec(sqliteDb.exec(sql));
+  } catch (err) {
+    if (err.message.includes('no such table')) {
+      console.warn(`Skipping missing table: ${sql.split(' ')[3]}`);
+      return [];
+    }
+    throw err;
+  }
 }
 
 async function run() {

@@ -85,9 +85,25 @@ Add images by URL:
 - Paste one image URL and click "Add".
 - Repeat to add more URLs (up to 12 total images combined with files).
 - Example safe image URLs to try:
+   - https://images.unsplash.com/photo-1542362567-b07e54358753?auto=format&fit=crop&w=1350&q=80
+   - https://images.unsplash.com/photo-1502877338535-766e1452684a?auto=format&fit=crop&w=1350&q=80
    - https://upload.wikimedia.org/wikipedia/commons/3/3e/2016_Honda_Civic_EXT.jpg
    - https://upload.wikimedia.org/wikipedia/commons/6/6e/2017_Toyota_Camry_SE.jpg
-   - https://upload.wikimedia.org/wikipedia/commons/4/47/Antique_chest_example.jpg
+   - https://images.unsplash.com/photo-1511919884226-fd3cad34687c?auto=format&fit=crop&w=1350&q=80
+
+  https://uplo ad.wikimedia.org/wikipedia/commons/3/3e/2016_Honda_Civic_EXT.jpg
+https://upload.wikimedia.org/wikipedia/commons/6/6e/2017_Toyota_Camry_SE.jpg
+https://upload.wikimedia.org/wikipedia/commons/4/47/Antique_chest_example.jpg
+
+https://images.unsplash.com/photo-1619767886558-efdc259cde1a
+https://images.unsplash.com/photo-1626668893632-6f3a4466d22f
+https://images.unsplash.com/photo-1605559424843-9e4c228bf1c2
+https://images.unsplash.com/photo-1580273916550-e323be2ae537
+
+https://upload.wikimedia.org/wikipedia/commons/8/8e/2018_Toyota_Camry_SE_front_6.1.18.jpg
+https://upload.wikimedia.org/wikipedia/commons/3/3e/2018_Toyota_Camry_XSE_interior.jpg
+https://upload.wikimedia.org/wikipedia/commons/7/7e/Toyota_Camry_rear.jpg
+
 - Tips: URLs should end in `.jpg`, `.jpeg`, `.png`, `.webp`, or `.gif`. If the thumbnail does not load, try another URL.
 
 Upload image files from your device:
