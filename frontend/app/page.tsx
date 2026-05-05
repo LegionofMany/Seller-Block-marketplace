@@ -13,6 +13,7 @@ import { CATEGORY_TREE } from "@/lib/categories";
 import { type ListingSummary, useListings } from "@/lib/hooks/useListings";
 import { formatLocationLabel, getProfileLocationFilter } from "@/lib/location";
 import { buildMarketplaceHref } from "@/lib/marketplace";
+import { fetchMetadataByUri } from "@/lib/metadata";
 
 type FavoriteListing = {
   listingChainKey: string;
@@ -75,6 +76,7 @@ export default function HomePage() {
   const [localListings, setLocalListings] = React.useState<ListingSummary[]>([]);
   const [localError, setLocalError] = React.useState<string | null>(null);
   const [isLoadingLocal, setIsLoadingLocal] = React.useState(false);
+  const [freshListingMeta, setFreshListingMeta] = React.useState<Record<string, { title: string; image: string; location: string }>>({});
   const savedLocation = React.useMemo(() => getProfileLocationFilter(auth.user), [auth.user]);
   const savedLocationLabel = React.useMemo(() => formatLocationLabel(savedLocation), [savedLocation]);
 
@@ -265,14 +267,91 @@ export default function HomePage() {
   );
   const featuredCategories = React.useMemo(() => Object.keys(CATEGORY_TREE).slice(0, 6), []);
 
+  React.useEffect(() => {
+    let cancelled = false;
+
+    async function run() {
+      if (!freshListings.length) return;
+
+      const missing = freshListings.filter(
+        (listing) => !freshListingMeta[listing.id]
+      );
+      if (!missing.length) return;
+
+      await Promise.all(
+        missing.map(async (listing) => {
+          try {
+            let res: {
+              title?: string;
+              image?: string;
+              images?: string[];
+              city?: string;
+              region?: string;
+            } | null = null;
+
+            const uri = listing.metadataURI;
+            const isIpfs = uri.startsWith("ipfs://");
+            const isLocalMeta = uri.startsWith("metadata://sha256/");
+
+            if (isLocalMeta) {
+              // Use backend lookup for local metadata URIs
+              res = await fetchJson(
+                `/metadata/lookup?uri=${encodeURIComponent(uri)}`,
+                { timeoutMs: 5_000 }
+              );
+            } else if (isIpfs) {
+              // Use the frontend lib helper for IPFS URIs
+              res = await fetchMetadataByUri(uri);
+            }
+
+            if (cancelled) return;
+
+            const image =
+              (Array.isArray(res?.images) && res.images[0]) ||
+              res?.image ||
+              "";
+            const location = [res?.city, res?.region]
+              .filter(Boolean)
+              .join(", ");
+
+            setFreshListingMeta((current) => ({
+              ...current,
+              [listing.id]: {
+                title: res?.title?.trim() || "Listing",
+                image,
+                location,
+              },
+            }));
+          } catch {
+            if (!cancelled) {
+              setFreshListingMeta((current) => ({
+                ...current,
+                [listing.id]: {
+                  title: "Listing",
+                  image: "",
+                  location: "",
+                },
+              }));
+            }
+          }
+        })
+      );
+    }
+
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [freshListings, freshListingMeta]);
+
   return (
     <div className="space-y-8">
       <section className="space-y-4 rounded-[2rem] border border-amber-300/70 bg-[linear-gradient(135deg,rgba(255,248,228,0.95),rgba(255,255,255,0.98))] px-5 py-6 shadow-[0_30px_80px_rgba(146,64,14,0.08)] sm:px-8 sm:py-8">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div className="space-y-3">
-            <div className="market-section-title">Homepage paid ads</div>
+            <div className="market-section-title">Featured ads</div>
             <h1 className="max-w-3xl text-3xl font-semibold tracking-tight text-slate-950 sm:text-5xl">
-              Paid ads now lead the Zonycs home page before sign-in or deeper browsing.
+              Discover great deals from sellers near you.
             </h1>
             
           </div>
@@ -297,16 +376,32 @@ export default function HomePage() {
           <Card className="border-amber-200/70 bg-white/90">
             <CardContent className="flex flex-col gap-4 p-6 lg:flex-row lg:items-center lg:justify-between">
               <div className="space-y-1">
-                <div className="text-sm font-semibold text-slate-950">No homepage paid ads are live right now.</div>
+                <div className="text-sm font-semibold text-slate-950">No featured ads are live right now.</div>
                 <div className="text-sm text-slate-700">
-                  As soon as a sponsored campaign is activated, it will appear here first for every visitor before the rest of the marketplace flow.
+                  {auth.isAdmin
+                    ? "Activate a sponsored campaign to have it appear here first for every visitor."
+                    : auth.isAuthenticated
+                      ? "Want your listing seen first? Request a homepage ad placement from your dashboard."
+                      : "Sellers can promote their listings here to reach buyers before they browse the marketplace."}
                 </div>
               </div>
-              {auth.isAdmin ? (
-                <Button asChild className="rounded-full">
-                  <Link href="/dashboard">Create homepage ad</Link>
-                </Button>
-              ) : null}
+              <div className="flex flex-wrap gap-3">
+                {auth.isAdmin ? (
+                  <Button asChild className="rounded-full">
+                    <Link href="/dashboard">Manage featured ads</Link>
+                  </Button>
+                ) : null}
+                {auth.isAuthenticated && !auth.isAdmin ? (
+                  <Button asChild className="rounded-full">
+                    <Link href="/dashboard?tab=watch&section=promote">Request a featured ad</Link>
+                  </Button>
+                ) : null}
+                {!auth.isAuthenticated ? (
+                  <Button asChild variant="outline" className="rounded-full">
+                    <Link href="/sign-in">Sign in to promote</Link>
+                  </Button>
+                ) : null}
+              </div>
             </CardContent>
           </Card>
         ) : (
@@ -330,10 +425,10 @@ export default function HomePage() {
             <div className="market-section-title">Zonycs marketplace</div>
             <div className="space-y-3">
               <h1 className="max-w-3xl text-3xl font-semibold tracking-tight text-slate-950 sm:text-5xl">
-                Post ads, discover local inventory, and sign in only when you need the account tools.
+                Buy and sell anything — locally or online.
               </h1>
               <p className="max-w-2xl text-sm leading-7 text-slate-700 sm:text-base">
-                The public entry point is being narrowed down to the pieces that matter most: homepage paid ads, a direct post-ad path, a clear sign-in option, and live marketplace inventory that feels closer to familiar classifieds sites.
+                Zonycs is a marketplace for everyone. Post a free ad in minutes, browse local listings, and connect with buyers and sellers in your area.
               </p>
             </div>
             <div className="flex flex-wrap gap-3">
@@ -360,16 +455,16 @@ export default function HomePage() {
 
           <div className="space-y-3">
             <div className="market-stat bg-white/85">
-              <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Landing page priorities</div>
-              <div className="mt-2 text-xl font-semibold text-slate-950">Paid ads first. Posting and browsing stay one click away.</div>
+              <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Why Zonycs?</div>
+              <div className="mt-2 text-xl font-semibold text-slate-950">Free to browse. Free to post. Secure transactions powered by blockchain escrow.</div>
               <div className="mt-2 text-sm text-slate-700">
-                The first screen should read like a marketplace front page, not a control panel. Sponsored inventory leads and the rest of the tools stay compact until the user chooses them.
+                Whether you are selling a car, finding a job, or picking up furniture down the street — Zonycs keeps it simple and safe.
               </div>
             </div>
             <AccentCallout label="Watch-first flow" tone={auth.isAuthenticated ? "mint" : "blue"}>
               {auth.isAuthenticated
-                ? "Signed-in members still get watched items, followed sellers, and personalized discovery, but those now sit behind the first homepage impression instead of ahead of it."
-                : "Visitors can browse right away, then sign in when they want saved searches, watched ads, and account tools."}
+                ? "Welcome back! Your watched items and followed sellers are ready in your dashboard."
+                : "No account needed to browse. Sign in when you are ready to save favourites, follow sellers, and get alerts."}
             </AccentCallout>
           </div>
         </div>
@@ -378,8 +473,8 @@ export default function HomePage() {
       <section className="grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
         <Card className="market-panel market-panel-spotlight market-panel-spotlight-mint">
           <CardHeader>
-            <CardTitle>Quick browse</CardTitle>
-            <CardDescription>Keep the next step simple: browse fast, post fast, or sign in for personalized tools.</CardDescription>
+            <CardTitle>Browse by category</CardTitle>
+            <CardDescription>Find what you are looking for faster — explore listings by category or post your own ad in minutes.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -404,11 +499,11 @@ export default function HomePage() {
 
         <Card className="market-panel market-panel-spotlight market-panel-spotlight-blue">
           <CardHeader>
-            <CardTitle>{auth.isAuthenticated ? "Your shortcuts" : "Sign in when you want the extras"}</CardTitle>
+            <CardTitle>{auth.isAuthenticated ? "Your activity" : "Your personal marketplace"}</CardTitle>
             <CardDescription>
               {auth.isAuthenticated
-                ? "Saved ads and followed sellers stay available without crowding the opening screen."
-                : "Browsing stays public. Sign in only when you want favorites, follows, and saved-search tools."}
+                ? "Pick up where you left off — your saved ads and followed sellers are ready."
+                : "Sign in to save favourites, follow sellers, and get alerts when new ads match your searches."}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -486,7 +581,7 @@ export default function HomePage() {
             <div>
               <div className="market-section-title">Nearby inventory</div>
               <h2 className="text-2xl font-semibold tracking-tight text-slate-950">Fresh ads around {savedLocationLabel || "your area"}</h2>
-              <p className="mt-1 text-sm text-muted-foreground">Signed-in discovery uses your saved location so nearby inventory can surface before generic marketplace results.</p>
+              <p className="mt-1 text-sm text-muted-foreground">Listings near you based on your saved location in your profile.</p>
             </div>
             <Button asChild variant="outline" className="rounded-full">
               <Link href={buildMarketplaceHref(savedLocation ?? {})}>Refine local search</Link>
@@ -529,8 +624,8 @@ export default function HomePage() {
         <div className="flex items-end justify-between gap-4">
           <div>
             <div className="market-section-title">Live marketplace</div>
-            <h2 className="text-2xl font-semibold tracking-tight text-slate-950">Fresh ads now</h2>
-            <p className="mt-1 text-sm text-muted-foreground">Recent inventory stays visible here after sign-in prompts, categories, and featured ads are handled above.</p>
+            <h2 className="text-2xl font-semibold tracking-tight text-slate-950">Latest listings</h2>
+            <p className="mt-1 text-sm text-muted-foreground">Browse the most recently posted ads from sellers across all categories.</p>
           </div>
           <Button asChild variant="outline" className="rounded-full">
             <Link href="/marketplace">Open full marketplace</Link>
@@ -559,7 +654,7 @@ export default function HomePage() {
         <Card className="market-panel market-panel-spotlight market-panel-spotlight-blue">
           <CardHeader>
             <CardTitle>Most viewed ads</CardTitle>
-            <CardDescription>Popular listings now reflect real buyer attention instead of placeholder ranking.</CardDescription>
+            <CardDescription>The listings buyers are looking at most right now.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             {mostViewedError ? <AccentCallout label="Most viewed ads" tone="amber">{mostViewedError}</AccentCallout> : null}
@@ -582,8 +677,8 @@ export default function HomePage() {
 
         <Card className="market-panel market-panel-spotlight market-panel-spotlight-amber">
           <CardHeader>
-            <CardTitle>Marketplace safety</CardTitle>
-            <CardDescription>Trust and safety belong in the buyer journey, not buried in documentation.</CardDescription>
+            <CardTitle>Stay safe on Zonycs</CardTitle>
+            <CardDescription>Tips to help you buy and sell with confidence.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             {safetyWarnings.map((warning) => (
@@ -597,20 +692,48 @@ export default function HomePage() {
         <Card className="market-panel market-panel-spotlight market-panel-spotlight-mint">
           <CardHeader>
             <CardTitle>Fresh this week</CardTitle>
-            <CardDescription>Fresh inventory stays visible without letting utility controls take over the page.</CardDescription>
+            <CardDescription>New listings posted recently — check back often for the latest ads.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            {freshListings.slice(0, 4).map((listing) => (
-              <Link key={listing.id} href={`/listing/${listing.id}?chain=${listing.chainKey}`} className="block rounded-2xl border p-4 transition-colors hover:bg-accent/20">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <div className="text-sm font-semibold text-slate-950">{listing.saleType === 0 ? "Fixed price" : listing.saleType === 1 ? "Auction" : "Raffle"}</div>
-                    <div className="mt-1 break-all text-xs text-muted-foreground">{listing.id}</div>
+            {freshListings.slice(0, 4).map((listing) => {
+              const meta = freshListingMeta[listing.id];
+              return (
+                <Link
+                  key={listing.id}
+                  href={`/listing/${listing.id}?chain=${listing.chainKey}`}
+                  className="block rounded-2xl border bg-white/90 p-4 transition-colors hover:bg-accent/20"
+                >
+                  <div className="flex items-start gap-3">
+                    {meta?.image ? (
+                      <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-xl border bg-muted">
+                        <img
+                          src={meta.image}
+                          alt={meta.title}
+                          className="h-full w-full object-cover"
+                        />
+                      </div>
+                    ) : (
+                      <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl border bg-muted text-xs text-muted-foreground">
+                        {listing.saleType === 0 ? "Fixed" : listing.saleType === 1 ? "Auction" : "Raffle"}
+                      </div>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm font-semibold text-slate-950">
+                        {meta?.title || "Loading..."}
+                      </div>
+                      {meta?.location ? (
+                        <div className="mt-1 truncate text-xs text-muted-foreground">
+                          {meta.location}
+                        </div>
+                      ) : null}
+                      <div className="mt-1 text-xs text-muted-foreground">
+                        {listing.saleType === 0 ? "Fixed price" : listing.saleType === 1 ? "Auction" : "Raffle"} · {listing.chainKey}
+                      </div>
+                    </div>
                   </div>
-                  <div className="text-xs text-muted-foreground">{listing.chainKey}</div>
-                </div>
-              </Link>
-            ))}
+                </Link>
+              );
+            })}
             <Button asChild variant="ghost" className="w-full justify-start rounded-xl">
               <Link href="/marketplace">See all live listings</Link>
             </Button>
@@ -621,12 +744,12 @@ export default function HomePage() {
       <section className="grid gap-4 lg:grid-cols-[1fr_1fr]">
         <Card className="market-panel market-panel-spotlight market-panel-spotlight-blue">
           <CardHeader>
-            <CardTitle>Sign in on any device</CardTitle>
-            <CardDescription>Email-first access stays available without getting in the way of the homepage ad experience.</CardDescription>
+            <CardTitle>Access your account anywhere</CardTitle>
+            <CardDescription>Sign in with email on any device — phone, tablet, or desktop.</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <AccentCallout label="Account access" tone="blue">
-              Use the sign-in surface to create an account, recover a password, connect a wallet later, and move into the watch-first signed-in flow.
+              Create an account, reset your password, or connect a wallet from your profile settings whenever you are ready.
             </AccentCallout>
             <Button asChild className="rounded-full">
               <Link href="/sign-in">Open sign-in</Link>

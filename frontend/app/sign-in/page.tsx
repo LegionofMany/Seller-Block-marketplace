@@ -17,8 +17,8 @@ import { getEnv } from "@/lib/env";
 import { useInjectedWalletAvailability } from "@/lib/injectedWallet";
 import { getWalletConnectAvailability } from "@/lib/walletConnect";
 
-type RegisterStep = "account" | "contact";
-type RegisterFlowStage = RegisterStep | "verify" | "complete";
+type RegisterStep = "account" | "contact" | "verify" | "complete";
+type RegisterFlowStage = RegisterStep;
 
 const REGISTER_STEPS: Array<{ key: RegisterFlowStage; label: string; summary: string }> = [
   { key: "account", label: "Account details", summary: "Name, email, and password" },
@@ -179,6 +179,7 @@ export default function SignInPage() {
           region: region.trim() || undefined,
           postalCode: postalCode.trim() || undefined,
         });
+        setRegisterStep("verify");
         const nextParams = new URLSearchParams();
         nextParams.set("email", email.trim());
         nextParams.set("email_sent", result.emailVerificationSent ? "1" : "0");
@@ -291,6 +292,101 @@ export default function SignInPage() {
           <div className="flex flex-wrap gap-3">
             <Button type="button" variant="outline" onClick={() => setRegisterStep("account")} disabled={emailDisabled}>
               Back to account details
+            </Button>
+          </div>
+        </>
+      );
+    }
+
+    if (registerStep === "verify") {
+      return (
+        <>
+          <AccentCallout label="Step 3 of 4" tone="mint">
+            A verification email has been sent to {email.trim() || "your email address"}. Open it and click the link to confirm your account before continuing.
+          </AccentCallout>
+
+          <div className="rounded-2xl border border-slate-200/80 bg-white/70 px-4 py-3 space-y-3">
+            <div className="text-sm font-semibold text-slate-950">
+              What to do next
+            </div>
+            <div className="text-sm text-slate-700 space-y-2">
+              <div>
+                1. Check your inbox for an email from Zonycs.
+              </div>
+              <div>
+                2. Click the verification link inside the email.
+              </div>
+              <div>
+                3. Once verified, return here and sign in to complete your profile.
+              </div>
+            </div>
+          </div>
+
+          <AccentCallout label="No email received?" tone="amber">
+            Check your spam or junk folder. If you still cannot find it, go back and confirm your email address is correct, then try registering again.
+          </AccentCallout>
+
+          <div className="flex flex-wrap gap-3">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setModeWithQuery("login")}
+              disabled={emailDisabled}
+            >
+              Go to sign in
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => setRegisterStep("contact")}
+              disabled={emailDisabled}
+            >
+              Back to contact details
+            </Button>
+          </div>
+        </>
+      );
+    }
+
+    if (registerStep === "complete") {
+      return (
+        <>
+          <AccentCallout label="Step 4 of 4" tone="mint">
+            Your account is verified. Sign in and head to your dashboard to finish setting up your public seller profile — add a bio, avatar, and connect a wallet if you plan to list items for sale.
+          </AccentCallout>
+
+          <div className="rounded-2xl border border-slate-200/80 bg-white/70 px-4 py-3 space-y-3">
+            <div className="text-sm font-semibold text-slate-950">
+              Complete your profile
+            </div>
+            <div className="text-sm text-slate-700 space-y-2">
+              <div>
+                ✓ Add a profile photo and bio so buyers can trust your listings.
+              </div>
+              <div>
+                ✓ Connect a wallet from your dashboard if you want to post blockchain-backed listings.
+              </div>
+              <div>
+                ✓ Set up your saved searches and notification preferences.
+              </div>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-3">
+            <Button
+              type="button"
+              onClick={() => setModeWithQuery("login")}
+              disabled={emailDisabled}
+            >
+              Sign in to complete profile
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setModeWithQuery("login")}
+              disabled={emailDisabled}
+            >
+              Go to sign in
             </Button>
           </div>
         </>

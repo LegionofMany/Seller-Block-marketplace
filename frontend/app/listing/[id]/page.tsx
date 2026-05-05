@@ -212,6 +212,18 @@ export default function ListingDetailPage() {
   const [isFavorite, setIsFavorite] = React.useState(false);
   const [isFavoriteLoading, setIsFavoriteLoading] = React.useState(false);
   const [commentDraft, setCommentDraft] = React.useState("");
+  const [isReportModalOpen, setIsReportModalOpen] = React.useState(false);
+  const [reportReason, setReportReason] = React.useState("spam");
+  const [reportDetails, setReportDetails] = React.useState("");
+  const [isSubmittingReport, setIsSubmittingReport] = React.useState(false);
+  const [isBlockModalOpen, setIsBlockModalOpen] = React.useState(false);
+  const [isSubmittingBlock, setIsSubmittingBlock] = React.useState(false);
+  const [isReuploadModalOpen, setIsReuploadModalOpen] = React.useState(false);
+  const [reuploadTitle, setReuploadTitle] = React.useState("");
+  const [reuploadDescription, setReuploadDescription] = React.useState("");
+  const [reuploadImage, setReuploadImage] = React.useState("");
+  const [isSubmittingReupload, setIsSubmittingReupload] = React.useState(false);
+  const [reuploadError, setReuploadError] = React.useState<string | null>(null);
   const [sellerOrder, setSellerOrder] = React.useState<ListingOrderIntent | null>(null);
   const [sellerOrderError, setSellerOrderError] = React.useState<string | null>(null);
   const [isLoadingSellerOrder, setIsLoadingSellerOrder] = React.useState(false);
@@ -400,7 +412,7 @@ export default function ListingDetailPage() {
 
   const isCarListing = (metadata?.category ?? "").toLowerCase().includes("car") || (metadata?.subcategory ?? "").toLowerCase().includes("car");
 
-  async function blockSeller() {
+  async function confirmBlockSeller() {
     if (!address) {
       toast.error("Connect your wallet to block a seller.");
       return;
@@ -424,6 +436,7 @@ export default function ListingDetailPage() {
     ].join("\n");
 
     try {
+      setIsSubmittingBlock(true);
       const signature = await walletClient.signMessage({ message });
       await fetchJson<{ ok: true }>("/safety/block", {
         method: "POST",
@@ -432,31 +445,28 @@ export default function ListingDetailPage() {
         timeoutMs: 7_000,
       });
     } catch (error: unknown) {
-      // If backend is down, we still want local blocking to work.
       toast.error(getErrorMessage(error, "Failed to save block on backend"));
+    } finally {
+      setIsSubmittingBlock(false);
     }
 
     addBlockedSeller(blocker, blocked);
-    toast.success("Seller blocked locally");
+    toast.success("Seller blocked");
+    setIsBlockModalOpen(false);
   }
 
-  async function reportListing() {
+  async function submitReport() {
     if (!listingId) return;
-    const reasonRaw = window
-      .prompt("Report reason: spam, prohibited, scam, duplicate, harassment, other", "spam")
-      ?.trim()
-      .toLowerCase();
-    if (!reasonRaw) return;
     const allowed = new Set(["spam", "prohibited", "scam", "duplicate", "harassment", "other"]);
-    if (!allowed.has(reasonRaw)) {
-      toast.error("Invalid report reason");
+    if (!allowed.has(reportReason)) {
+      toast.error("Select a valid report reason");
       return;
     }
-    const details = window.prompt("Optional details (max 1000 chars)")?.trim();
-
-    const issuedAt = Date.now();
 
     try {
+      setIsSubmittingReport(true);
+      const issuedAt = Date.now();
+
       if (address && walletClient) {
         const message = [
           "Seller-Block Marketplace",
@@ -464,7 +474,7 @@ export default function ListingDetailPage() {
           `Reporter: ${address}`,
           "TargetType: listing",
           `TargetId: ${listingId}`,
-          `Reason: ${reasonRaw}`,
+          `Reason: ${reportReason}`,
           `IssuedAt: ${new Date(issuedAt).toISOString()}`,
         ].join("\n");
 
@@ -479,8 +489,8 @@ export default function ListingDetailPage() {
             targetType: "listing",
             targetId: listingId,
             chainKey: activeChainKey,
-            reason: reasonRaw,
-            ...(details ? { details: details.slice(0, 1000) } : {}),
+            reason: reportReason,
+            ...(reportDetails.trim() ? { details: reportDetails.trim().slice(0, 1000) } : {}),
           }),
           timeoutMs: 7_000,
         });
@@ -492,16 +502,21 @@ export default function ListingDetailPage() {
             targetType: "listing",
             targetId: listingId,
             chainKey: activeChainKey,
-            reason: reasonRaw,
-            ...(details ? { details: details.slice(0, 1000) } : {}),
+            reason: reportReason,
+            ...(reportDetails.trim() ? { details: reportDetails.trim().slice(0, 1000) } : {}),
           }),
           timeoutMs: 7_000,
         });
       }
 
       toast.success("Report submitted");
+      setIsReportModalOpen(false);
+      setReportReason("spam");
+      setReportDetails("");
     } catch (error: unknown) {
       toast.error(getErrorMessage(error, "Failed to submit report"));
+    } finally {
+      setIsSubmittingReport(false);
     }
   }
 
@@ -509,7 +524,7 @@ export default function ListingDetailPage() {
     const body = commentDraft.trim();
     if (!listingId || !body) return;
     if (!auth.isAuthenticated) {
-      toast.error("Sign in with your wallet to comment");
+      toast.error("Sign in to your account to leave a comment");
       return;
     }
 
@@ -562,48 +577,61 @@ export default function ListingDetailPage() {
     }
   }
 
-  async function reuploadMissingMetadata() {
+  function reuploadMissingMetadata() {
+    setReuploadTitle("");
+    setReuploadDescription("");
+    setReuploadImage("");
+    setReuploadError(null);
+    setIsReuploadModalOpen(true);
+  }
+
+  async function submitMetadataReupload() {
     if (!isSeller || !metadataId || !listing?.metadataURI) return;
 
-    const title = window.prompt("Metadata title (required)")?.trim() ?? "";
-    if (!title) return;
-
-    const description = window.prompt("Metadata description (required)")?.trim() ?? "";
-    if (!description) return;
-
-    const image = window.prompt("Metadata image URL (required)")?.trim() ?? "";
-    if (!image) return;
+    if (!reuploadTitle.trim()) {
+      setReuploadError("Title is required");
+      return;
+    }
+    if (!reuploadDescription.trim()) {
+      setReuploadError("Description is required");
+      return;
+    }
+    if (!reuploadImage.trim()) {
+      setReuploadError("Image URL is required");
+      return;
+    }
 
     try {
-      setIsReuploadingMetadata(true);
+      setIsSubmittingReupload(true);
+      setReuploadError(null);
+
       const res = await fetchJson<{ metadataURI: string; id: string }>("/metadata", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          title,
-          description,
-          image,
+          title: reuploadTitle.trim(),
+          description: reuploadDescription.trim(),
+          image: reuploadImage.trim(),
           attributes: [],
         }),
         timeoutMs: 7_000,
       });
 
       if (res.id.toLowerCase() !== metadataId.toLowerCase()) {
-        window.alert(
-          `Uploaded metadata, but the generated id does not match this listing.\n\nExpected: ${metadataId}\nGot: ${res.id}\n\nThis listing will still show the old metadata URI.`
+        setReuploadError(
+          `Uploaded metadata but the generated ID does not match this listing. Expected: ${metadataId} — Got: ${res.id}. This listing will still show the old metadata URI.`
         );
         return;
       }
 
       const md = await fetchMetadataById(metadataId);
       setMetadata(md);
-      window.alert("Metadata uploaded and linked successfully.");
+      toast.success("Metadata uploaded and linked successfully");
+      setIsReuploadModalOpen(false);
     } catch (error: unknown) {
-      window.alert(getErrorMessage(error, "Failed to upload metadata"));
+      setReuploadError(getErrorMessage(error, "Failed to upload metadata"));
     } finally {
-      setIsReuploadingMetadata(false);
+      setIsSubmittingReupload(false);
     }
   }
 
@@ -659,7 +687,7 @@ export default function ListingDetailPage() {
       return;
     }
     if (settlementToken.isNative) {
-      toast.error("Gasless settlement currently supports permit-enabled ERC20 listings only");
+      toast.error("This listing uses native currency. Use the standard on-chain purchase flow instead of gasless checkout.");
       return;
     }
     if (permitNonce == null) {
@@ -885,20 +913,6 @@ export default function ListingDetailPage() {
           <div className="text-xs text-muted-foreground break-words">
             Marketplace data is temporarily being rate limited on the {publicNetworkLabel.toLowerCase()}. Try again shortly.
           </div>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  if (!loadingListing && !listing) {
-    return (
-      <Card>
-        <CardContent className="p-6 space-y-2">
-          <div className="text-sm font-semibold">Listing not found</div>
-          <div className="text-sm text-muted-foreground break-words">
-            This ad is no longer available, or the marketplace could not find it on the selected network.
-          </div>
-          <div className="text-xs text-muted-foreground break-words">Listing id: {listingId}</div>
         </CardContent>
       </Card>
     );
@@ -1225,28 +1239,31 @@ export default function ListingDetailPage() {
                     </div>
 
                     <div className="rounded-2xl border p-3 space-y-3 sm:p-4">
+                  {!auth.isAuthenticated ? (
+                    <AccentCallout label="Join the conversation" tone="blue">
+                      Sign in to join the conversation. Use email or connect a wallet from your profile.
+                      <div className="mt-3">
+                        <Button asChild size="sm" variant="outline" className="rounded-full">
+                          <Link href="/sign-in">Sign in</Link>
+                        </Button>
+                      </div>
+                    </AccentCallout>
+                  ) : null}
                   <Textarea
                     value={commentDraft}
                     onChange={(e) => setCommentDraft(e.target.value)}
-                    placeholder={auth.isAuthenticated ? "Ask a public question about this listing" : "Connect and sign in with your wallet to join the discussion"}
+                    placeholder={auth.isAuthenticated ? "Ask a public question about this listing" : "Sign in to leave a comment"}
                     rows={4}
                     maxLength={1000}
-                    disabled={isSubmittingComment}
+                    disabled={isSubmittingComment || !auth.isAuthenticated}
                   />
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                     <div className="text-xs text-muted-foreground">
                       {auth.isAuthenticated
-                        ? "Comments are public and tied to your wallet profile."
-                        : address
-                          ? "Use wallet sign-in before posting."
-                          : "Use the RainbowKit wallet connect button in the header, then sign in to comment."}
+                        ? "Comments are public and tied to your profile."
+                        : "Sign in to your account to leave a comment."}
                     </div>
                     <div className="flex gap-2">
-                      {!auth.isAuthenticated && address ? (
-                        <Button type="button" variant="outline" onClick={() => void auth.signIn()} disabled={auth.isLoading}>
-                          Sign in with wallet
-                        </Button>
-                      ) : null}
                       <Button type="button" onClick={() => void submitComment()} disabled={!commentDraft.trim() || isSubmittingComment || !auth.isAuthenticated}>
                         Post comment
                       </Button>
@@ -1304,10 +1321,10 @@ export default function ListingDetailPage() {
                       ) : null}
                     </div>
                     <div className="flex flex-col gap-2 sm:flex-row">
-                      <Button type="button" variant="outline" size="lg" className="w-full sm:w-auto" onClick={blockSeller}>
+                      <Button type="button" variant="outline" size="lg" className="w-full sm:w-auto" onClick={() => setIsBlockModalOpen(true)}>
                         Block seller
                       </Button>
-                      <Button type="button" variant="outline" size="lg" className="w-full sm:w-auto" onClick={reportListing}>
+                      <Button type="button" variant="outline" size="lg" className="w-full sm:w-auto" onClick={() => setIsReportModalOpen(true)}>
                         Report listing
                       </Button>
                     </div>
@@ -1330,7 +1347,7 @@ export default function ListingDetailPage() {
                         </Button>
                       ) : null}
                     </div>
-                    <Button type="button" variant="outline" size="lg" className="w-full sm:w-auto" onClick={reportListing}>
+                    <Button type="button" variant="outline" size="lg" className="w-full sm:w-auto" onClick={() => setIsReportModalOpen(true)}>
                       Report listing
                     </Button>
                   </div>
@@ -1390,6 +1407,11 @@ export default function ListingDetailPage() {
 
                         {isSeller ? (
                           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                            {native ? (
+                              <AccentCallout label="Gasless checkout" tone="amber">
+                                Gasless checkout is only available for ERC20 permit-enabled token listings. This listing uses the native currency ({activeChainNativeCurrencySymbol}), so buyers will complete payment directly on-chain. No gasless setup is needed.
+                              </AccentCallout>
+                            ) : null}
                             {!auth.isAuthenticated ? (
                               <Button type="button" variant="outline" onClick={() => void auth.signIn()} disabled={auth.isLoading}>
                                 Sign in with wallet
@@ -1409,6 +1431,11 @@ export default function ListingDetailPage() {
 
                         {!isSeller ? (
                           <div className="flex flex-col gap-2">
+                            {!canUseGaslessSettlement && native ? (
+                              <AccentCallout label="Payment method" tone="blue">
+                                This listing is priced in {activeChainNativeCurrencySymbol}. Payment is completed directly on-chain — connect your wallet and use the standard purchase flow below.
+                              </AccentCallout>
+                            ) : null}
                             {!auth.isAuthenticated && address ? (
                               <Button type="button" variant="outline" onClick={() => void auth.signIn()} disabled={auth.isLoading}>
                                 Sign in with wallet
@@ -1857,6 +1884,177 @@ export default function ListingDetailPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Report Modal */}
+      {isReportModalOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <Card className="w-full max-w-md">
+            <CardContent className="space-y-4 p-6">
+              <div className="text-base font-semibold text-slate-950">
+                Report this listing
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="reportReason">Reason</Label>
+                <select
+                  id="reportReason"
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-950"
+                  value={reportReason}
+                  onChange={(e) => setReportReason(e.target.value)}
+                >
+                  <option value="spam">Spam</option>
+                  <option value="prohibited">Prohibited item</option>
+                  <option value="scam">Scam</option>
+                  <option value="duplicate">Duplicate listing</option>
+                  <option value="harassment">Harassment</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="reportDetails">
+                  Details (optional)
+                </Label>
+                <Textarea
+                  id="reportDetails"
+                  placeholder="Add any additional details..."
+                  value={reportDetails}
+                  onChange={(e) => setReportDetails(e.target.value)}
+                  maxLength={1000}
+                  rows={3}
+                />
+              </div>
+              <div className="flex gap-3">
+                <Button
+                  className="flex-1"
+                  onClick={() => void submitReport()}
+                  disabled={isSubmittingReport}
+                >
+                  {isSubmittingReport ? "Submitting..." : "Submit report"}
+                </Button>
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => {
+                    setIsReportModalOpen(false);
+                    setReportReason("spam");
+                    setReportDetails("");
+                  }}
+                  disabled={isSubmittingReport}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      ) : null}
+
+      {/* Block Seller Modal */}
+      {isBlockModalOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <Card className="w-full max-w-md">
+            <CardContent className="space-y-4 p-6">
+              <div className="text-base font-semibold text-slate-950">
+                Block this seller?
+              </div>
+              <div className="text-sm text-slate-700">
+                Blocking this seller will hide their listings from your marketplace view. This action is stored locally and reported to our safety team.
+              </div>
+              <div className="flex gap-3">
+                <Button
+                  variant="destructive"
+                  className="flex-1"
+                  onClick={() => void confirmBlockSeller()}
+                  disabled={isSubmittingBlock}
+                >
+                  {isSubmittingBlock ? "Blocking..." : "Yes, block seller"}
+                </Button>
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => setIsBlockModalOpen(false)}
+                  disabled={isSubmittingBlock}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      ) : null}
+
+      {/* Reupload Metadata Modal */}
+      {isReuploadModalOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <Card className="w-full max-w-md">
+            <CardContent className="space-y-4 p-6">
+              <div className="text-base font-semibold text-slate-950">
+                Restore listing metadata
+              </div>
+              <div className="text-sm text-slate-700">
+                This listing is missing its public metadata. Provide a title, description, and image URL to restore it.
+              </div>
+
+              {reuploadError ? (
+                <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                  {reuploadError}
+                </div>
+              ) : null}
+
+              <div className="space-y-2">
+                <Label htmlFor="reuploadTitle">Title</Label>
+                <Input
+                  id="reuploadTitle"
+                  placeholder="Listing title"
+                  value={reuploadTitle}
+                  onChange={(e) => setReuploadTitle(e.target.value)}
+                  disabled={isSubmittingReupload}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="reuploadDescription">Description</Label>
+                <Textarea
+                  id="reuploadDescription"
+                  placeholder="Describe the item..."
+                  value={reuploadDescription}
+                  onChange={(e) => setReuploadDescription(e.target.value)}
+                  disabled={isSubmittingReupload}
+                  rows={3}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="reuploadImage">Image URL</Label>
+                <Input
+                  id="reuploadImage"
+                  placeholder="https://example.com/image.jpg"
+                  value={reuploadImage}
+                  onChange={(e) => setReuploadImage(e.target.value)}
+                  disabled={isSubmittingReupload}
+                />
+              </div>
+
+              <div className="flex gap-3">
+                <Button
+                  className="flex-1"
+                  onClick={() => void submitMetadataReupload()}
+                  disabled={isSubmittingReupload}
+                >
+                  {isSubmittingReupload ? "Uploading..." : "Upload metadata"}
+                </Button>
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => setIsReuploadModalOpen(false)}
+                  disabled={isSubmittingReupload}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      ) : null}
     </div>
   );
 }

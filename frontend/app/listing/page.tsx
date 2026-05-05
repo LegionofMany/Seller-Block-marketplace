@@ -1,3 +1,5 @@
-import ListingsPage from "../page";
+import { redirect } from "next/navigation";
 
-export default ListingsPage;
+export default function ListingIndexPage() {
+  redirect("/marketplace");
+}

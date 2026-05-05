@@ -398,49 +398,6 @@ export default function CreateListingPage() {
     };
   }, [files]);
 
-  const COUNTRY_LIST = [
-    "United States",
-    "Canada",
-    "United Kingdom",
-    "Australia",
-    "Germany",
-    "France",
-    "Spain",
-    "Italy",
-    "Netherlands",
-    "Belgium",
-    "Portugal",
-    "Sweden",
-    "Norway",
-    "Denmark",
-    "Finland",
-    "Ireland",
-    "Poland",
-    "Czech Republic",
-    "Austria",
-    "Switzerland",
-    "India",
-    "China",
-    "Japan",
-    "South Korea",
-    "Singapore",
-    "Hong Kong",
-    "United Arab Emirates",
-    "Saudi Arabia",
-    "South Africa",
-    "Nigeria",
-    "Kenya",
-    "Ghana",
-    "Egypt",
-    "Brazil",
-    "Mexico",
-    "Argentina",
-    "Chile",
-    "Colombia",
-    "Peru",
-    "New Zealand",
-  ];
-
   const addFiles = React.useCallback((incoming: File[]) => {
     if (!incoming.length) return;
     setFiles((current) => mergeSelectedFiles(current, incoming));

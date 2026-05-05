@@ -1034,7 +1034,7 @@ export default function DashboardPage() {
     () => [
       { key: "profile" as const, label: "Profile", description: "Identity, address, and account settings.", tone: "mint", count: auth.user?.postalCode?.trim() ? auth.user.postalCode.trim() : auth.user?.email?.trim() || "Setup" },
       { key: "watch" as const, label: "Watch", description: "Followed sellers, saved ads, alerts, and search watches.", tone: "blue", count: String(followedSellers.length + favoriteListings.length + savedSearches.length + notificationUnreadCount) },
-      { key: "my-listings" as const, label: "My listings", description: "Ads connected to your current seller wallet.", tone: "amber", count: Array.isArray(myListingIds) ? String(myListingIds.length) : "-" },
+      { key: "my-listings" as const, label: "My listings", description: "Your active and past listings on the marketplace.", tone: "amber", count: Array.isArray(myListingIds) ? String(myListingIds.length) : "-" },
     ],
     [auth.user?.email, auth.user?.postalCode, favoriteListings.length, followedSellers.length, myListingIds, notificationUnreadCount, savedSearches.length]
   );
@@ -1236,129 +1236,74 @@ export default function DashboardPage() {
 
   React.useEffect(() => {
     let cancelled = false;
+
     async function run() {
-      if (!address) {
+      if (!auth.isAuthenticated) {
         setMyListingIds([]);
         setMyListings([]);
         return;
       }
 
-      // Prefer backend API (indexed DB). Fallback to on-chain logs if API isn't available.
+      // Use wallet address if connected, otherwise fall back to
+      // the authenticated user's linked wallet address.
+      const sellerAddress =
+        address ?? auth.user?.linkedWalletAddress ?? null;
+
+      if (!sellerAddress) {
+        setMyListingIds([]);
+        setMyListings([]);
+        return;
+      }
+
       try {
         setMyListingIds(null);
-        const resp = await fetchJson<{ items: Array<{ id: string }> }>(
-          `/seller/${address}/listings?limit=100&offset=0`,
-          { timeoutMs: 5_000 }
+        setMyListings(null);
+
+        const resp = await fetchJson<{
+          items: BackendListingRow[];
+        }>(
+          `/seller/${sellerAddress}/listings?limit=100&offset=0`,
+          { timeoutMs: 7_000 }
         );
-        const ids = resp.items.map((r) => r.id as Hex);
-        if (!cancelled) setMyListingIds(Array.from(new Set(ids)));
-        return;
-      } catch {
-        // ignore, fallback below
-      }
 
-      if (!publicClient) {
-        setMyListingIds([]);
-        return;
-      }
-      try {
-        setMyListingIds(null);
-        const SAFE_LOG_SCAN_BLOCKS = 25_000n;
-        const latest = await publicClient.getBlockNumber();
-        const safeFromBlock = latest > SAFE_LOG_SCAN_BLOCKS ? latest - SAFE_LOG_SCAN_BLOCKS : 0n;
+        const items = resp.items ?? [];
 
-        const primaryFromBlock =
-          fromBlock !== 0n ? (fromBlock > latest ? safeFromBlock : fromBlock) : safeFromBlock;
-
-        const logs = await publicClient.getLogs({
-          address: marketplaceRegistryAddress,
-          event: listingCreatedEvent,
-          fromBlock: primaryFromBlock,
-          toBlock: "latest",
-        });
-
-        const ids = logs
-          .map((log) => getListingCreatedLogArgs(log.args))
-          .filter((log) => log.seller?.toLowerCase() === address.toLowerCase())
-          .map((log) => log.id)
-          .filter(Boolean)
-          .map((id) => id as Hex)
-          .reverse();
-        if (!cancelled) setMyListingIds(Array.from(new Set(ids)));
-      } catch {
-        if (!cancelled) setMyListingIds([]);
-      }
-    }
-    run();
-    return () => {
-      cancelled = true;
-    };
-  }, [address, fromBlock, marketplaceRegistryAddress, publicClient]);
-
-  React.useEffect(() => {
-    let cancelled = false;
-    async function run() {
-      if (!address) {
-        setMyListings([]);
-        return;
-      }
-
-      if (!publicClient) {
-        setMyListings([]);
-        return;
-      }
-
-      // Still loading IDs
-      if (myListingIds === null) {
-        setMyListings(null);
-        return;
-      }
-
-      if (myListingIds.length === 0) {
-        setMyListings([]);
-        return;
-      }
-
-      try {
-        setMyListings(null);
-        const ids = myListingIds.slice(0, 50);
-        const results = await publicClient.multicall({
-          allowFailure: true,
-          contracts: ids.map((id) => ({
-            address: marketplaceRegistryAddress,
-            abi: marketplaceRegistryAbi,
-            functionName: "listings",
-            args: [id],
-          })),
-        });
-
-        const rows = ids
-          .map((id, i) => {
-            const r = results[i];
-            if (!r || r.status !== "success") return null;
-            const parsed = parseListing(r.result);
-            return {
-              id,
-              chainKey: defaultChainKey,
-              chainId: defaultChainId ?? 0,
-              seller: (address ?? zeroAddress) as Address,
-              status: Number(parsed.status),
-              buyer: parsed.buyer,
-            };
-          })
-          .filter(Boolean) as DashboardListingRow[];
-
-        if (!cancelled) setMyListings(rows);
-      } catch {
-        if (!cancelled) setMyListings([]);
+        if (!cancelled) {
+          const ids = Array.from(
+            new Set(items.map((r) => r.id as Hex))
+          );
+          setMyListingIds(ids);
+          setMyListings(
+            items.map((row) => ({
+              id: row.id as Hex,
+              chainKey: row.chainKey,
+              chainId: row.chainId,
+              seller: row.seller as Address,
+              status: (row.active ? 1 : 2) as Parameters<
+                typeof statusLabel
+              >[0],
+              buyer: zeroAddress,
+            }))
+          );
+        }
+      } catch (error: unknown) {
+        if (!cancelled) {
+          setMyListingIds([]);
+          setMyListings([]);
+          toast.error(
+            getErrorMessage(error, "Failed to load your listings")
+          );
+        }
       }
     }
 
-    run();
+    void run();
     return () => {
       cancelled = true;
     };
-  }, [address, marketplaceRegistryAddress, publicClient, myListingIds, defaultChainKey, defaultChainId]);
+  }, [address, auth.isAuthenticated, auth.user?.linkedWalletAddress]);
+
+
 
   if (envState.error || !envState.env) {
     return (

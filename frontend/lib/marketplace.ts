@@ -9,6 +9,7 @@ export type MarketplaceRouteFilters = {
   maxPrice?: string;
   type?: "fixed" | "auction" | "raffle";
   sort?: "newest" | "price_asc" | "price_desc";
+  seller?: string;
   offset?: number;
 };
 
@@ -24,6 +25,7 @@ export function buildMarketplaceHref(params?: MarketplaceRouteFilters | null) {
   if (params?.maxPrice?.trim()) sp.set("maxPrice", params.maxPrice.trim());
   if (params?.type) sp.set("type", params.type);
   if (params?.sort && params.sort !== "newest") sp.set("sort", params.sort);
+  if (params?.seller?.trim()) sp.set("seller", params.seller.trim());
   if ((params?.offset ?? 0) > 0) sp.set("offset", String(params?.offset ?? 0));
   const query = sp.toString();
   return query ? `/marketplace?${query}` : "/marketplace";

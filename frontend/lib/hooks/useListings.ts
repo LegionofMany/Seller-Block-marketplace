@@ -35,6 +35,7 @@ export type ListingsParams = {
   maxPrice?: string;
   type?: "fixed" | "auction" | "raffle";
   sort?: "newest" | "price_asc" | "price_desc";
+  seller?: string;
   limit?: number;
   offset?: number;
 };
@@ -154,6 +155,7 @@ function buildQuery(params: ListingsParams | undefined): string {
   if (p.maxPrice) sp.set("maxPrice", p.maxPrice);
   if (p.type) sp.set("type", p.type);
   if (p.sort) sp.set("sort", p.sort);
+  if (p.seller) sp.set("seller", p.seller);
   return sp.toString();
 }
 
