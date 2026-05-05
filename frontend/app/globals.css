@@ -2,8 +2,8 @@
 
 /* shadcn-style design tokens (HSL channels) */
 :root {
-  --background: 188 35% 97%;
-  --foreground: 210 30% 14%;
+  --background: 214 60% 97%;
+  --foreground: 222 45% 12%;
 
   --card: 0 0% 100%;
   --card-foreground: 210 25% 14%;
@@ -14,20 +14,20 @@
   --primary: 187 84% 41%;
   --primary-foreground: 0 0% 100%;
 
-  --secondary: 186 34% 92%;
-  --secondary-foreground: 210 28% 18%;
+  --secondary: 214 55% 91%;
+  --secondary-foreground: 222 40% 16%;
 
-  --muted: 188 26% 93%;
-  --muted-foreground: 204 12% 39%;
+  --muted: 214 45% 92%;
+  --muted-foreground: 215 20% 42%;
 
-  --accent: 182 55% 90%;
-  --accent-foreground: 210 28% 18%;
+  --accent: 213 85% 90%;
+  --accent-foreground: 222 40% 16%;
 
   --destructive: 0 78% 56%;
   --destructive-foreground: 0 0% 98%;
 
-  --border: 188 24% 82%;
-  --input: 188 24% 82%;
+  --border: 214 40% 82%;
+  --input: 214 40% 82%;
   --ring: 166 76% 38%;
 
   /* Brighter accent tuning for improved visibility */
@@ -108,9 +108,9 @@
 
   body {
     background:
-      radial-gradient(circle at top left, hsla(173, 71%, 46%, 0.14), transparent 28%),
-      radial-gradient(circle at top right, hsla(197, 86%, 53%, 0.12), transparent 24%),
-      linear-gradient(180deg, hsl(var(--background)), hsl(191 34% 94%));
+      radial-gradient(circle at top left, hsla(214, 85%, 55%, 0.13), transparent 28%),
+      radial-gradient(circle at top right, hsla(210, 90%, 60%, 0.11), transparent 24%),
+      linear-gradient(180deg, hsl(var(--background)), hsl(214 65% 94%));
     color: hsl(var(--foreground));
   }
 
@@ -131,7 +131,7 @@
     position: fixed;
     inset: 0;
     pointer-events: none;
-    background-image: linear-gradient(hsla(188, 44%, 42%, 0.07) 1px, transparent 1px), linear-gradient(90deg, hsla(188, 44%, 42%, 0.07) 1px, transparent 1px);
+    background-image: linear-gradient(hsla(214, 70%, 45%, 0.07) 1px, transparent 1px), linear-gradient(90deg, hsla(214, 70%, 45%, 0.07) 1px, transparent 1px);
     background-size: 28px 28px;
     mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.4), transparent 85%);
   }
@@ -141,8 +141,8 @@
     overflow: hidden;
     border: 1px solid hsl(var(--border));
     border-radius: calc(var(--radius) + 0.5rem);
-    background: linear-gradient(135deg, rgba(255, 255, 255, 0.97), rgba(233, 252, 249, 0.94));
-    box-shadow: 0 20px 50px rgba(18, 74, 77, 0.09);
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.97), rgba(230, 242, 255, 0.94));
+    box-shadow: 0 20px 50px rgba(18, 54, 110, 0.09);
   }
 
   .market-hero::after {
@@ -153,7 +153,7 @@
     width: 12rem;
     height: 12rem;
     border-radius: 9999px;
-    background: radial-gradient(circle, hsla(186, 92%, 54%, 0.24), transparent 70%);
+    background: radial-gradient(circle, hsla(213, 92%, 62%, 0.24), transparent 70%);
   }
 
   .market-panel {
@@ -228,7 +228,7 @@
   .market-note {
     border-radius: 1rem;
     border: 1px dashed hsl(var(--border));
-    background: rgba(235, 251, 248, 0.82);
+    background: rgba(230, 242, 255, 0.82);
     padding: 0.9rem 1rem;
     color: hsl(var(--muted-foreground));
   }
@@ -341,9 +341,9 @@
   }
 
   .market-tab-button:hover {
-    background: rgba(240, 253, 251, 0.94);
+    background: rgba(239, 246, 255, 0.94);
     border-color: hsl(var(--ring));
-    box-shadow: 0 10px 22px rgba(18, 74, 77, 0.08);
+    box-shadow: 0 10px 22px rgba(18, 54, 120, 0.08);
   }
 
   .market-tab-button-mint {
@@ -362,18 +362,18 @@
   }
 
   .market-tab-button-active {
-    border-color: hsl(var(--ring));
-    background: linear-gradient(180deg, rgba(242, 255, 253, 0.99), rgba(217, 243, 238, 0.94));
-    box-shadow: 0 18px 36px rgba(18, 74, 77, 0.20);
+    border-color: rgba(22, 163, 74, 0.55);
+    background: linear-gradient(180deg, rgba(240, 255, 244, 0.99), rgba(209, 250, 229, 0.94));
+    box-shadow: 0 18px 36px rgba(15, 90, 45, 0.22);
     transform: translateY(-3px);
-    outline: 3px solid hsl(var(--primary) / 0.12);
+    outline: 3px solid rgba(22, 163, 74, 0.15);
     transition: box-shadow 160ms ease, transform 160ms ease, outline-color 160ms ease;
   }
 
   .market-tab-button-active-mint {
-    border-color: rgba(24, 141, 127, 0.34);
-    background: linear-gradient(180deg, rgba(239, 255, 252, 0.98), rgba(213, 245, 236, 0.92));
-    box-shadow: 0 14px 28px rgba(18, 92, 79, 0.16);
+    border-color: rgba(22, 163, 74, 0.42);
+    background: linear-gradient(180deg, rgba(236, 255, 243, 0.98), rgba(187, 247, 208, 0.92));
+    box-shadow: 0 14px 28px rgba(15, 90, 45, 0.20);
   }
 
   .market-tab-button-active-blue {

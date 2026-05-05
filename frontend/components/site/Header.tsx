@@ -183,20 +183,20 @@ export function SiteHeader() {
           aria-modal="true"
           className={
             open
-              ? "fixed inset-y-0 right-0 w-[88%] max-w-[20rem] border-l bg-background shadow-lg transition-transform duration-200 ease-out translate-x-0"
-              : "fixed inset-y-0 right-0 w-[88%] max-w-[20rem] border-l bg-background shadow-lg transition-transform duration-200 ease-out translate-x-full"
+              ? "fixed inset-y-0 right-0 w-[88%] max-w-[20rem] border-l border-blue-200 bg-gradient-to-b from-blue-600 to-blue-700 shadow-xl shadow-blue-900/30 transition-transform duration-200 ease-out translate-x-0"
+              : "fixed inset-y-0 right-0 w-[88%] max-w-[20rem] border-l border-blue-200 bg-gradient-to-b from-blue-600 to-blue-700 shadow-xl shadow-blue-900/30 transition-transform duration-200 ease-out translate-x-full"
           }
         >
-          <div className="flex items-center justify-between border-b px-4 py-3">
+          <div className="flex items-center justify-between border-b border-blue-500/50 px-4 py-3">
             <div>
-              <div className="text-sm font-semibold">Menu</div>
-              <div className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Browse and manage</div>
+              <div className="text-sm font-semibold text-white">Menu</div>
+              <div className="text-[11px] uppercase tracking-[0.16em] text-blue-200">Browse and manage</div>
             </div>
             <Button
               type="button"
               variant="ghost"
               size="icon"
-              className="h-10 w-10"
+              className="h-10 w-10 text-white hover:text-blue-100"
               aria-label="Close menu"
               onClick={() => setOpen(false)}
             >
@@ -216,23 +216,23 @@ export function SiteHeader() {
             <AccentCallout label="Marketplace flow" tone="blue" className="text-xs">
               Public replies, local discovery, and wallet settlement are all available from the main marketplace flow.
             </AccentCallout>
-            <Button asChild variant="ghost" className="h-10 w-full justify-start rounded-xl" onClick={() => setOpen(false)}>
+            <Button asChild variant="ghost" className="h-10 w-full justify-start rounded-xl text-white hover:bg-blue-500/40 hover:text-white" onClick={() => setOpen(false)}>
               <Link href="/marketplace">Listings</Link>
             </Button>
-            <Button asChild variant="ghost" className="h-10 w-full justify-start rounded-xl" onClick={() => setOpen(false)}>
+            <Button asChild variant="ghost" className="h-10 w-full justify-start rounded-xl text-white hover:bg-blue-500/40 hover:text-white" onClick={() => setOpen(false)}>
               <Link href="/create">Create</Link>
             </Button>
-            <Button asChild variant="ghost" className="h-10 w-full justify-start rounded-xl" onClick={() => setOpen(false)}>
+            <Button asChild variant="ghost" className="h-10 w-full justify-start rounded-xl text-white hover:bg-blue-500/40 hover:text-white" onClick={() => setOpen(false)}>
               <Link href="/dashboard">Dashboard</Link>
             </Button>
             {auth.isAuthenticated ? (
-              <Button asChild variant="ghost" className="h-10 w-full justify-start rounded-xl" onClick={() => setOpen(false)}>
+              <Button asChild variant="ghost" className="h-10 w-full justify-start rounded-xl text-white hover:bg-blue-500/40 hover:text-white" onClick={() => setOpen(false)}>
                 <Link href="/dashboard#notifications">Alerts{unreadCount > 0 ? ` (${unreadCount})` : ""}</Link>
               </Button>
             ) : null}
 
-            <div className="rounded-2xl border bg-accent/20 p-3 pt-3">
-              <div className="text-xs text-muted-foreground">Wallet</div>
+            <div className="rounded-2xl border border-blue-400/40 bg-blue-500/30 p-3 pt-3">
+              <div className="text-xs text-blue-100">Wallet</div>
               <div className="mt-2">
                 <ConnectButton showBalance={false} chainStatus="icon" />
               </div>
@@ -252,10 +252,10 @@ export function SiteHeader() {
                 </Button>
               ) : null}
               {auth.isAuthenticated ? (
-                <div className="mt-3 truncate text-xs text-muted-foreground">{formatIdentityLabel(auth.address, auth.user?.email, auth.user?.displayName)}</div>
+                <div className="mt-3 truncate text-xs text-blue-100">{formatIdentityLabel(auth.address, auth.user?.email, auth.user?.displayName)}</div>
               ) : null}
               {auth.isAuthenticated ? (
-                <Button type="button" variant="ghost" className="mt-3 h-10 w-full rounded-xl" onClick={auth.signOut}>
+                <Button type="button" variant="ghost" className="mt-3 h-10 w-full rounded-xl text-white hover:bg-blue-500/40 hover:text-white" onClick={auth.signOut}>
                   Sign out
                 </Button>
               ) : null}

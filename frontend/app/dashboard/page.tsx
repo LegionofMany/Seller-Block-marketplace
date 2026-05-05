@@ -1321,27 +1321,27 @@ export default function DashboardPage() {
             <div className="market-section-title">Your account</div>
             <div className="space-y-2">
               <h1 className="text-2xl font-semibold tracking-tight text-slate-950 sm:text-4xl">Run your account with a cleaner market rhythm.</h1>
-              <p className="max-w-2xl text-[13px] leading-6 text-muted-foreground sm:text-base">Profile, watch activity, and live inventory now sit inside one sharper account shell, so follows, saved ads, alerts, and listings feel like one continuous flow.</p>
+              <p className="max-w-2xl text-[13px] leading-6 text-slate-600 sm:text-base">Profile, watch activity, and live inventory sit inside one account shell — follows, saved ads, alerts, and listings in one continuous flow.</p>
             </div>
           </div>
 
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-3">
             <div className="market-stat">
-              <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Follows</div>
-              <div className="mt-2 text-2xl font-semibold">{followedSellers.length}</div>
+              <div className="text-xs uppercase tracking-[0.18em] text-slate-500 font-semibold">Follows</div>
+              <div className="mt-2 text-2xl font-bold text-slate-900">{followedSellers.length}</div>
             </div>
             <div className="market-stat">
-              <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Saved ads</div>
-              <div className="mt-2 text-2xl font-semibold">{favoriteListings.length}</div>
+              <div className="text-xs uppercase tracking-[0.18em] text-slate-500 font-semibold">Saved ads</div>
+              <div className="mt-2 text-2xl font-bold text-slate-900">{favoriteListings.length}</div>
             </div>
             <div className="market-stat">
-              <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Unread alerts</div>
-              <div className="mt-2 text-2xl font-semibold">{notificationUnreadCount}</div>
+              <div className="text-xs uppercase tracking-[0.18em] text-slate-500 font-semibold">Unread alerts</div>
+              <div className="mt-2 text-2xl font-bold text-slate-900">{notificationUnreadCount}</div>
             </div>
             <div className="market-stat">
-              <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">My listings</div>
-              <div className="mt-2 text-2xl font-semibold">{Array.isArray(myListingIds) ? myListingIds.length : "—"}</div>
-              <div className="mt-1 text-sm text-muted-foreground">Listings tied to your current seller wallet.</div>
+              <div className="text-xs uppercase tracking-[0.18em] text-slate-500 font-semibold">My listings</div>
+              <div className="mt-2 text-2xl font-bold text-slate-900">{Array.isArray(myListingIds) ? myListingIds.length : "—"}</div>
+              <div className="mt-1 text-xs text-slate-500">Your active and past listings.</div>
             </div>
           </div>
         </div>
@@ -1361,9 +1361,51 @@ export default function DashboardPage() {
             }
             onClick={() => selectAccountTab(tab.key)}
           >
-            <span className="text-sm font-semibold text-slate-950">{tab.label}</span>
-            <span className="mt-1 text-xs text-muted-foreground">{tab.description}</span>
-            <span className="mt-3 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">{tab.count}</span>
+            <div className="flex items-center justify-between gap-2">
+              <span className={`text-sm font-bold tracking-tight ${
+                accountTab === tab.key 
+                  ? "text-slate-950" 
+                  : "text-slate-700"
+              }`}>
+                {tab.label}
+              </span>
+              <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold tabular-nums ${
+                tab.tone === "mint" 
+                  ? "bg-emerald-100 text-emerald-800" 
+                  : tab.tone === "blue" 
+                    ? "bg-blue-100 text-blue-800" 
+                    : "bg-amber-100 text-amber-800"
+              }`}>
+                {tab.count}
+              </span>
+            </div>
+            <span className={`mt-1.5 block text-xs leading-5 ${
+              accountTab === tab.key 
+                ? "text-slate-600" 
+                : "text-slate-500"
+            }`}>
+              {tab.description}
+            </span>
+            <div className={`mt-3 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] ${
+              tab.tone === "mint" 
+                ? "text-emerald-700" 
+                : tab.tone === "blue" 
+                  ? "text-blue-700" 
+                  : "text-amber-700"
+            }`}>
+              <span className={`inline-block h-1.5 w-1.5 rounded-full ${
+                tab.tone === "mint" 
+                  ? "bg-emerald-500" 
+                  : tab.tone === "blue" 
+                    ? "bg-blue-500" 
+                    : "bg-amber-500"
+              }`} />
+              {tab.key === "profile" 
+                ? "Account" 
+                : tab.key === "watch" 
+                  ? "Activity" 
+                  : "Listings"}
+            </div>
           </button>
         ))}
       </div>
@@ -1376,17 +1418,17 @@ export default function DashboardPage() {
         <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
           <div>
             <div className="market-section-title">{activeTabMeta.label}</div>
-            <div className="mt-1 text-sm text-muted-foreground">{activeTabMeta.description}</div>
+            <div className="mt-1 text-sm font-medium text-slate-700">{activeTabMeta.description}</div>
           </div>
           <div className="flex flex-wrap gap-2">
             {accountTab === "watch" ? (
-              <Button asChild variant="outline" size="sm">
+              <Button asChild size="sm" className="rounded-full bg-blue-600 text-white hover:bg-blue-700 border-0">
                 <Link href="/marketplace">Browse marketplace</Link>
               </Button>
             ) : null}
             {accountTab === "my-listings" ? (
-              <Button asChild variant="outline" size="sm">
-                <Link href="/create">Create listing</Link>
+              <Button asChild size="sm" className="rounded-full bg-amber-600 text-white hover:bg-amber-700 border-0">
+                <Link href="/create">Post a listing</Link>
               </Button>
             ) : null}
           </div>
@@ -1690,32 +1732,37 @@ export default function DashboardPage() {
               </Card>
 
                 {auth.isAdmin ? (
-              <Card className="market-panel market-panel-spotlight market-panel-spotlight-amber border-amber-300/60 bg-[linear-gradient(180deg,rgba(255,252,244,0.92),rgba(255,255,255,0.98))]">
-          <CardHeader>
-            <div className="market-section-title">Homepage paid ads</div>
-            <CardTitle>Create and manage paid homepage ads</CardTitle>
-            <CardDescription>Use real listing ids to decide which paid ads land first on the public home page.</CardDescription>
+              <Card className="market-panel overflow-hidden border-slate-700/80 bg-[linear-gradient(160deg,#1e2433_0%,#252d40_60%,#1a2235_100%)] shadow-xl shadow-slate-900/30">
+          <CardHeader className="border-b border-slate-700/60 pb-5">
+            <div className="flex items-center justify-between">
+              <div className="market-section-title text-slate-400">Homepage paid ads</div>
+              <span className="rounded-full bg-amber-500/20 px-3 py-1 text-xs font-bold uppercase tracking-wide text-amber-400 border border-amber-500/30">
+                Admin only
+              </span>
+            </div>
+            <CardTitle className="text-white">Create and manage paid homepage ads</CardTitle>
+            <CardDescription className="text-slate-400 font-medium">Use real listing IDs to decide which paid ads land first on the public home page.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-5 p-4 pt-0 sm:p-6 sm:pt-0">
             <div className="grid gap-3 sm:grid-cols-3">
-              <div className="market-stat bg-white/90">
-                <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Total campaigns</div>
-                <div className="mt-2 text-2xl font-semibold">{promotions.length}</div>
+              <div className="rounded-2xl border border-slate-600/60 bg-slate-800/60 p-4">
+                <div className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Total campaigns</div>
+                <div className="mt-2 text-3xl font-bold text-white">{promotions.length}</div>
               </div>
-              <div className="market-stat bg-white/90">
-                <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Live now</div>
-                <div className="mt-2 text-2xl font-semibold">{promotions.filter((item) => item.status === "active").length}</div>
+              <div className="rounded-2xl border border-emerald-600/40 bg-emerald-900/30 p-4">
+                <div className="text-xs font-bold uppercase tracking-[0.18em] text-emerald-400">Live now</div>
+                <div className="mt-2 text-3xl font-bold text-emerald-300">{promotions.filter((item) => item.status === "active").length}</div>
               </div>
-              <div className="market-stat bg-white/90">
-                <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Admin identity</div>
-                <div className="mt-2 break-all text-sm font-semibold">{auth.user?.email?.trim() || auth.address || "Signed in"}</div>
+              <div className="rounded-2xl border border-slate-600/60 bg-slate-800/60 p-4">
+                <div className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Admin identity</div>
+                <div className="mt-2 break-all text-xs font-bold text-slate-200">{auth.user?.email?.trim() || auth.address || "Signed in"}</div>
               </div>
             </div>
 
-            <div className="rounded-2xl border bg-white/85 p-4 space-y-4">
+            <div className="rounded-2xl border border-slate-600/50 bg-slate-800/50 p-4 space-y-4">
               <div className="space-y-1">
-                <div className="text-sm font-semibold">Seller trust controls</div>
-                <div className="text-sm text-muted-foreground">Promote trusted sellers with an admin-managed verification badge and a short internal trust note that appears publicly on the profile and listing surfaces.</div>
+                <div className="text-sm font-bold text-white">Seller trust controls</div>
+                <div className="text-sm font-medium text-slate-400">Promote trusted sellers with a verification badge and a short trust note visible on their profile and listings.</div>
               </div>
               <div className="grid gap-4 xl:grid-cols-[minmax(280px,0.8fr)_minmax(0,1.2fr)]">
                 <div className="space-y-3">
@@ -1775,10 +1822,10 @@ export default function DashboardPage() {
               </div>
 
               <div className="grid gap-4 xl:grid-cols-2">
-                <div className="rounded-2xl border bg-white/90 p-4 space-y-3">
+                <div className="rounded-2xl border border-slate-600/50 bg-slate-700/40 p-4 space-y-3">
                   <div>
-                    <div className="text-sm font-semibold">Review queue</div>
-                    <div className="text-sm text-muted-foreground">Seller profiles waiting for a first trust decision.</div>
+                    <div className="text-sm font-bold text-white">Review queue</div>
+                    <div className="text-sm font-medium text-slate-400">Seller profiles waiting for a first trust decision.</div>
                   </div>
                   {isLoadingTrustAdmin ? (
                     <div className="space-y-2">
@@ -1794,15 +1841,15 @@ export default function DashboardPage() {
                       <button
                         key={profile.user.address}
                         type="button"
-                        className="w-full rounded-2xl border p-3 text-left transition-colors hover:bg-accent/20"
+                        className="w-full rounded-2xl border border-slate-500/40 bg-slate-600/30 p-3 text-left transition-colors hover:bg-slate-500/40"
                         onClick={() => setAdminTrustAddress(profile.user.address)}
                       >
                         <div className="flex items-start justify-between gap-3">
                           <div className="space-y-1">
-                            <div className="font-medium">{profile.user.displayName?.trim() || shortenHex(profile.user.address)}</div>
-                            <div className="text-xs text-muted-foreground break-all">{profile.user.address}</div>
+                            <div className="font-bold text-white">{profile.user.displayName?.trim() || shortenHex(profile.user.address)}</div>
+                            <div className="text-xs text-slate-400 break-all">{profile.user.address}</div>
                           </div>
-                          <div className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Review</div>
+                          <div className="rounded-full bg-amber-500/20 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-amber-400 border border-amber-500/30">Review</div>
                         </div>
                         <div className="mt-2">
                           <SellerTrustSummary profile={profile} variant="detail" />
@@ -1812,10 +1859,10 @@ export default function DashboardPage() {
                   )}
                 </div>
 
-                <div className="rounded-2xl border bg-white/90 p-4 space-y-3">
+                <div className="rounded-2xl border border-slate-600/50 bg-slate-700/40 p-4 space-y-3">
                   <div>
-                    <div className="text-sm font-semibold">Verified sellers</div>
-                    <div className="text-sm text-muted-foreground">Recently approved sellers stay visible for fast review and note cleanup.</div>
+                    <div className="text-sm font-bold text-white">Verified sellers</div>
+                    <div className="text-sm font-medium text-slate-400">Recently approved sellers stay visible for fast review and note cleanup.</div>
                   </div>
                   {isLoadingTrustAdmin ? (
                     <div className="space-y-2">
@@ -1831,15 +1878,15 @@ export default function DashboardPage() {
                       <button
                         key={profile.user.address}
                         type="button"
-                        className="w-full rounded-2xl border p-3 text-left transition-colors hover:bg-accent/20"
+                        className="w-full rounded-2xl border border-slate-500/40 bg-slate-600/30 p-3 text-left transition-colors hover:bg-slate-500/40"
                         onClick={() => setAdminTrustAddress(profile.user.address)}
                       >
                         <div className="flex items-start justify-between gap-3">
                           <div className="space-y-1">
-                            <div className="font-medium">{profile.user.displayName?.trim() || shortenHex(profile.user.address)}</div>
-                            <div className="text-xs text-muted-foreground break-all">{profile.user.address}</div>
+                            <div className="font-bold text-white">{profile.user.displayName?.trim() || shortenHex(profile.user.address)}</div>
+                            <div className="text-xs text-slate-400 break-all">{profile.user.address}</div>
                           </div>
-                          <div className="text-xs text-muted-foreground">{profile.user.sellerVerifiedAt ? formatDateTime(profile.user.sellerVerifiedAt) : "Verified"}</div>
+                          <div className="text-xs font-medium text-slate-400">{profile.user.sellerVerifiedAt ? formatDateTime(profile.user.sellerVerifiedAt) : "Verified"}</div>
                         </div>
                         <div className="mt-2">
                           <SellerTrustSummary profile={profile} variant="detail" />
@@ -1850,10 +1897,10 @@ export default function DashboardPage() {
                 </div>
               </div>
 
-              <div className="rounded-2xl border bg-white/90 p-4 space-y-3">
+              <div className="rounded-2xl border border-slate-600/50 bg-slate-700/40 p-4 space-y-3">
                 <div>
-                  <div className="text-sm font-semibold">Trust review history</div>
-                  <div className="text-sm text-muted-foreground">Every trust decision stays visible as an auditable review trail.</div>
+                  <div className="text-sm font-bold text-white">Trust review history</div>
+                  <div className="text-sm font-medium text-slate-400">Every trust decision stays visible as an auditable review trail.</div>
                 </div>
                 {isLoadingTrustAdmin ? (
                   <div className="space-y-2">
@@ -1871,20 +1918,20 @@ export default function DashboardPage() {
                       <button
                         key={item.id}
                         type="button"
-                        className="w-full rounded-2xl border p-3 text-left transition-colors hover:bg-accent/20"
+                        className="w-full rounded-2xl border border-slate-500/40 bg-slate-600/30 p-3 text-left transition-colors hover:bg-slate-500/40"
                         onClick={() => setAdminTrustAddress(item.userAddress)}
                       >
                         <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                           <div className="space-y-1">
-                            <div className="font-medium">{item.sellerVerified ? "Verified seller" : "Verification cleared"}</div>
-                            <div className="text-xs text-muted-foreground break-all">Seller: {item.userAddress}</div>
-                            <div className="text-xs text-muted-foreground">Reviewer: {item.reviewer}</div>
+                            <div className="font-bold text-white">{item.sellerVerified ? "Verified seller" : "Verification cleared"}</div>
+                            <div className="text-xs text-slate-400 break-all">Seller: {item.userAddress}</div>
+                            <div className="text-xs text-slate-400">Reviewer: {item.reviewer}</div>
                             {item.sellerTrustNote?.trim() ? <div className="text-sm text-slate-700">{item.sellerTrustNote.trim()}</div> : null}
                             {item.previousSellerTrustNote?.trim() && item.previousSellerTrustNote.trim() !== item.sellerTrustNote?.trim() ? (
                               <div className="text-xs text-muted-foreground">Previous note: {item.previousSellerTrustNote.trim()}</div>
                             ) : null}
                           </div>
-                          <div className="text-xs text-muted-foreground">{formatDateTime(item.createdAt)}</div>
+                          <div className="text-xs font-medium text-slate-400">{formatDateTime(item.createdAt)}</div>
                         </div>
                       </button>
                     ))}
@@ -1896,8 +1943,8 @@ export default function DashboardPage() {
             <div className="grid gap-5 xl:grid-cols-[minmax(0,1.1fr)_minmax(320px,0.9fr)]">
               <div className="space-y-3">
                 <div>
-                  <div className="text-sm font-semibold">Seller ad request queue</div>
-                  <div className="text-sm text-muted-foreground">Approve pending self-serve homepage requests directly from the review queue.</div>
+                  <div className="text-sm font-bold text-white">Seller ad request queue</div>
+                  <div className="text-sm font-medium text-slate-400">Approve pending self-serve homepage requests directly from the review queue.</div>
                 </div>
 
                 {isLoadingPromotions ? (
@@ -1979,8 +2026,8 @@ export default function DashboardPage() {
 
                 <div className="flex items-center justify-between gap-3">
                   <div>
-                    <div className="text-sm font-semibold">Managed homepage ads</div>
-                    <div className="text-sm text-muted-foreground">Review timing, priority, and labeling for live or manually curated homepage ads.</div>
+                    <div className="text-sm font-bold text-white">Managed homepage ads</div>
+                    <div className="text-sm font-medium text-slate-400">Review timing, priority, and labeling for live or manually curated homepage ads.</div>
                   </div>
                   <Button
                     type="button"
@@ -2901,13 +2948,18 @@ export default function DashboardPage() {
             {auth.isAdmin ? (
               <Card className="market-panel market-panel-spotlight market-panel-spotlight-amber border-amber-300/60 bg-[linear-gradient(180deg,rgba(255,252,244,0.92),rgba(255,255,255,0.98))]">
                 <CardHeader>
-                  <div className="market-section-title">Admin listings</div>
-                  <CardTitle>Listing removal panel</CardTitle>
-                  <CardDescription>Review recently indexed marketplace listings and remove them without relying on the seller-scoped inventory tab.</CardDescription>
+                  <div className="flex items-center justify-between">
+                    <div className="market-section-title">Admin listings</div>
+                    <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-bold uppercase tracking-wide text-amber-800">
+                      Admin only
+                    </span>
+                  </div>
+                  <CardTitle className="text-slate-950">Listing removal panel</CardTitle>
+                  <CardDescription className="text-slate-600 font-medium">Review recently indexed marketplace listings and remove them without relying on the seller-scoped inventory tab.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4 p-4 pt-0 sm:p-6 sm:pt-0">
                   <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div className="text-sm text-muted-foreground">Latest indexed inventory across the marketplace.</div>
+                    <div className="text-sm font-semibold text-slate-700">Latest indexed inventory across the marketplace.</div>
                     <Button type="button" variant="outline" size="sm" disabled={isLoadingAdminListings} onClick={() => setDashboardRefreshKey((current) => current + 1)}>
                       {isLoadingAdminListings ? "Refreshing..." : "Refresh listings"}
                     </Button>
@@ -2952,7 +3004,7 @@ export default function DashboardPage() {
                       </select>
                     </div>
                     <div className="sm:col-span-2 xl:col-span-3 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
-                      <div>Showing {adminListings.length} of {adminListingsTotal} matching listings.</div>
+                      <div className="font-medium text-slate-700">Showing {adminListings.length} of {adminListingsTotal} matching listings.</div>
                       {adminListingSearch || adminListingChainFilter !== "all" || adminListingStatusFilter !== "all" ? (
                         <Button
                           type="button"
@@ -2989,12 +3041,22 @@ export default function DashboardPage() {
                   ) : (
                     <div className="space-y-2">
                       {adminListings.map((row) => (
-                        <div key={`${row.chainKey}:${row.id}`} className="rounded-2xl border bg-white/85 px-4 py-3 text-sm shadow-sm">
+                        <div key={`${row.chainKey}:${row.id}`} className="rounded-2xl border border-amber-100 bg-white px-4 py-3 text-sm shadow-sm hover:border-amber-200 transition-colors">
                           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                            <div className="min-w-0 flex-1 space-y-1">
-                              <div className="break-all font-medium text-slate-950">{row.id}</div>
-                              <div className="text-xs text-muted-foreground">{statusLabel(row.status)} on {row.chainKey}</div>
-                              <div className="text-xs text-muted-foreground break-all">Seller: {row.seller}</div>
+                            <div className="min-w-0 flex-1 space-y-1.5">
+                              <div className="flex items-center gap-2">
+                                <span className={`inline-block h-2 w-2 rounded-full shrink-0 ${row.status === 1 ? "bg-emerald-500" : "bg-slate-300"}`} />
+                                <div className="break-all text-xs font-mono font-medium text-slate-700">{row.id}</div>
+                              </div>
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${row.status === 1 ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-600"}`}>
+                                  {statusLabel(row.status)}
+                                </span>
+                                <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-bold text-blue-700">
+                                  {row.chainKey}
+                                </span>
+                              </div>
+                              <div className="text-xs font-medium text-slate-600 break-all">Seller: {row.seller}</div>
                             </div>
                             <div className="flex shrink-0 flex-col gap-2 sm:flex-row">
                               <Button asChild variant="outline" size="sm" className="w-full sm:w-auto">
@@ -3118,19 +3180,19 @@ export default function DashboardPage() {
       </Card>
 
       <details className="market-details market-panel overflow-hidden">
-        <summary className="flex items-center justify-between gap-3 px-4 py-4 sm:px-6 sm:py-5">
+        <summary className="flex cursor-pointer items-center justify-between gap-3 px-4 py-4 sm:px-6 sm:py-5 hover:bg-slate-50/50 transition-colors">
           <div>
             <div className="market-section-title">Advanced tools</div>
-            <div className="mt-1 text-lg font-semibold">Wallet withdrawals and owner utilities</div>
-            <div className="mt-1 text-sm text-muted-foreground">Hidden by default so the main dashboard stays marketplace-first.</div>
+            <div className="mt-1 text-lg font-bold text-slate-950">Wallet withdrawals and owner utilities</div>
+            <div className="mt-1 text-sm font-medium text-slate-600">Hidden by default so the main dashboard stays marketplace-first.</div>
           </div>
-          <div className="text-sm font-medium text-muted-foreground">Expand</div>
+          <div className="flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-slate-700 shadow-sm">Expand</div>
         </summary>
         <div className="space-y-4 border-t px-4 py-4 sm:px-6 sm:py-6">
           <div className="rounded-2xl border p-3 space-y-3 sm:p-4">
             <div>
-              <div className="text-sm font-semibold">Withdraw payout</div>
-              <div className="text-sm text-muted-foreground">Withdraw your credits from EscrowVault through the registry.</div>
+              <div className="text-sm font-bold text-slate-950">Withdraw payout</div>
+              <div className="text-sm font-medium text-slate-600">Withdraw your credits from EscrowVault through the registry.</div>
             </div>
             <div className="space-y-2">
               <Label>Token address (optional)</Label>
@@ -3166,34 +3228,34 @@ export default function DashboardPage() {
           <div className="rounded-2xl border p-3 space-y-4 sm:p-4">
             <div>
               <div className="text-sm font-semibold">Owner tools</div>
-              <div className="text-sm text-muted-foreground">Admin and owner-only utilities for EscrowVault and the registry.</div>
+              <div className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold uppercase tracking-wide text-slate-600 inline-block">Admin and owner-only utilities</div>
             </div>
           <div className="space-y-2 text-sm">
             <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-              <div className="text-muted-foreground">Registry owner</div>
-              <div className="font-medium break-all sm:text-right">{typeof registryOwner === "string" ? registryOwner : "—"}</div>
+              <div className="text-sm font-semibold text-slate-600">Registry owner</div>
+              <div className="text-sm font-bold text-slate-950 break-all sm:text-right font-mono">{typeof registryOwner === "string" ? registryOwner : "—"}</div>
             </div>
             <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-              <div className="text-muted-foreground">Vault owner</div>
-              <div className="font-medium break-all sm:text-right">{typeof vaultOwner === "string" ? vaultOwner : "—"}</div>
+              <div className="text-sm font-semibold text-slate-600">Vault owner</div>
+              <div className="text-sm font-bold text-slate-950 break-all sm:text-right font-mono">{typeof vaultOwner === "string" ? vaultOwner : "—"}</div>
             </div>
             <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-              <div className="text-muted-foreground">Vault controller</div>
-              <div className="font-medium break-all sm:text-right">{typeof vaultControllerOnchain === "string" ? vaultControllerOnchain : "—"}</div>
+              <div className="text-sm font-semibold text-slate-600">Vault controller</div>
+              <div className="text-sm font-bold text-slate-950 break-all sm:text-right font-mono">{typeof vaultControllerOnchain === "string" ? vaultControllerOnchain : "—"}</div>
             </div>
             <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-              <div className="text-muted-foreground">Vault arbiter</div>
-              <div className="font-medium break-all sm:text-right">{typeof vaultArbiterOnchain === "string" ? vaultArbiterOnchain : "—"}</div>
+              <div className="text-sm font-semibold text-slate-600">Vault arbiter</div>
+              <div className="text-sm font-bold text-slate-950 break-all sm:text-right font-mono">{typeof vaultArbiterOnchain === "string" ? vaultArbiterOnchain : "—"}</div>
             </div>
             <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-              <div className="text-muted-foreground">Protocol fee</div>
-              <div className="font-medium sm:text-right">
+              <div className="text-sm font-semibold text-slate-600">Protocol fee</div>
+              <div className="text-sm font-bold text-slate-950 sm:text-right">
                 {typeof protocolFeeBps === "bigint" ? `${protocolFeeBps.toString()} bps` : "—"}
               </div>
             </div>
             <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-              <div className="text-muted-foreground">Fee recipient</div>
-              <div className="font-medium break-all sm:text-right">{typeof feeRecipient === "string" ? feeRecipient : "—"}</div>
+              <div className="text-sm font-semibold text-slate-600">Fee recipient</div>
+              <div className="text-sm font-bold text-slate-950 break-all sm:text-right font-mono">{typeof feeRecipient === "string" ? feeRecipient : "—"}</div>
             </div>
           </div>
 
@@ -3269,7 +3331,7 @@ export default function DashboardPage() {
                 </div>
               </>
             ) : (
-              <div className="text-xs text-muted-foreground">
+              <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-600">
                 Connect the EscrowVault owner wallet to manage controller/arbiter.
               </div>
             )}
@@ -3341,14 +3403,14 @@ export default function DashboardPage() {
                 </div>
               </>
             ) : (
-              <div className="text-xs text-muted-foreground">
+              <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-600">
                 Connect the MarketplaceRegistry owner wallet to manage registry arbiter and withdraw fees.
               </div>
             )}
           </div>
 
           <div className="rounded-md border p-3 space-y-3 sm:p-4">
-            <div className="text-sm font-semibold">Inspect EscrowVault (read-only)</div>
+            <div className="text-sm font-bold text-slate-950">Inspect EscrowVault (read-only)</div>
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label>Escrow id (bytes32)</Label>
