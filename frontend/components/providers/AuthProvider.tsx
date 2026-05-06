@@ -127,31 +127,61 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     try {
       setIsLoading(true);
-      const nonce = await fetchJson<{ address: string; nonce: string; message: string }>("/auth/nonce", {
+
+      const nonce = await fetchJson<{
+        address: string;
+        nonce: string;
+        message: string;
+      }>("/auth/nonce", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ address: walletAddress }),
+        timeoutMs: 8_000,
       });
 
-      const signature = await signMessageAsync({ message: nonce.message });
-      const verified = await fetchJson<AuthSessionResponse>("/auth/verify", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          address: walletAddress,
-          nonce: nonce.nonce,
-          signature,
-        }),
-      });
+      let signature: string;
+      try {
+        signature = await signMessageAsync({ message: nonce.message });
+      } catch {
+        toast.error(
+          "Wallet signature cancelled or failed. " +
+          "Please try again."
+        );
+        return;
+      }
+
+      const verified = await fetchJson<AuthSessionResponse>(
+        "/auth/verify",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            address: walletAddress,
+            nonce: nonce.nonce,
+            signature,
+          }),
+          timeoutMs: 8_000,
+        }
+      );
 
       applySession(verified);
-      toast.success("Signed in");
+
+      // Force a profile refresh after sign-in so the
+      // header and dashboard reflect the new session
+      await refresh();
+
+      toast.success(
+        verified.user?.displayName
+          ? `Welcome back, ${verified.user.displayName}!`
+          : "Signed in successfully"
+      );
     } catch (error: unknown) {
-      toast.error(getErrorMessage(error, "Sign in failed"));
+      const msg = getErrorMessage(error, "Sign in failed");
+      toast.error(msg);
     } finally {
       setIsLoading(false);
     }
-  }, [applySession, walletAddress, signMessageAsync]);
+  }, [applySession, refresh, walletAddress, signMessageAsync]);
 
   const signInWithEmail = React.useCallback(async ({ email, password }: { email: string; password: string }) => {
     try {
