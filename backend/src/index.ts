@@ -23,10 +23,12 @@ import { settlementRouter } from "./routes/settlement";
 import { favoritesRouter } from "./routes/favorites";
 import { promotionsRouter } from "./routes/promotions";
 import { paymentsRouter } from "./routes/payments";
+import { airdropRouter } from "./routes/airdrop";
 import { startMarketplaceIndexer, type MarketplaceIndexerHandle } from "./indexer/marketplaceIndexer";
 import { startNotificationsWorker } from "./services/notifications";
 import { startPaymentsWorker } from "./services/paymentsWorker";
 import { getPinataAuthStatus } from "./services/ipfs";
+import { runSaleCascade } from "./services/cascadeService";
 
 dotenv.config();
 
@@ -216,6 +218,7 @@ async function main() {
   app.use(promotionsRouter());
   app.use(paymentsRouter());
   app.use(settlementRouter());
+  app.use(airdropRouter());
 
   app.use(notFound);
   app.use(errorHandler);
@@ -227,6 +230,23 @@ async function main() {
   indexers = env.supportedChains.map((chain) => startMarketplaceIndexer(chain));
   notificationsWorker = startNotificationsWorker();
   paymentsWorker = startPaymentsWorker();
+
+  // Run sale cascade check every 6 hours
+  const CASCADE_INTERVAL_MS = 6 * 60 * 60 * 1000;
+
+  setInterval(() => {
+    void runSaleCascade().then(({ processed, errors }) => {
+      if (processed > 0 || errors > 0) {
+        logger.info(
+          { processed, errors },
+          "[cascade] processed sale cascade"
+        );
+      }
+    });
+  }, CASCADE_INTERVAL_MS);
+
+  // Also run once immediately on startup
+  void runSaleCascade();
 
   async function shutdown(signal: string) {
     if (shutdownPromise) return shutdownPromise;

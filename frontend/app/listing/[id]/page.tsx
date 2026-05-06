@@ -637,6 +637,14 @@ export default function ListingDetailPage() {
 
   const isSeller = Boolean(address && listing && address.toLowerCase() === listing.seller.toLowerCase());
   const isBuyer = Boolean(address && listing && address.toLowerCase() === listing.buyer.toLowerCase());
+  // True when the connected user is the confirmed buyer and there is an active escrow for this listing.
+  const isBuyerWithActiveEscrow = React.useMemo(() => {
+    if (!address || !settlementEscrow) return false;
+    const isConfirmedBuyer = settlementEscrow.buyer?.toLowerCase() === address.toLowerCase();
+    // Escrow status 1 = Active/Funded, 2 = Completed.
+    const isActiveOrFunded = settlementEscrow.status === 1 || settlementEscrow.status === 2;
+    return isConfirmedBuyer && isActiveOrFunded;
+  }, [address, settlementEscrow]);
   const isArbiter = Boolean(
     address &&
       typeof arbiterAddress === "string" &&
@@ -982,7 +990,19 @@ export default function ListingDetailPage() {
   const bathrooms = getMetadataAttributeValue(metadata, "bathrooms");
   const squareFeet = getMetadataAttributeValue(metadata, "squareFeet");
   const priceLabel = listing ? formatPrice(listing.price, native, activeChainNativeCurrencySymbol) : "—";
-  const locationLabel = [metadata?.city, metadata?.region, metadata?.postalCode].filter(Boolean).join(", ");
+  const metadataAddress = metadata as (MarketplaceMetadata & { streetAddress1?: string; streetAddress2?: string }) | null;
+  const sellerUser = sellerProfile?.user;
+  const sellerAddressLines = [
+    metadataAddress?.streetAddress1 ?? sellerUser?.streetAddress1,
+    metadataAddress?.streetAddress2 ?? sellerUser?.streetAddress2,
+    [
+      metadata?.city ?? sellerUser?.city,
+      metadata?.region ?? sellerUser?.region,
+      metadata?.postalCode ?? sellerUser?.postalCode,
+    ].filter(Boolean).join(", "),
+  ].filter(Boolean);
+  const sellerPhoneNumber = metadata?.contactPhone ?? sellerUser?.phoneNumber;
+  const locationLabel = isBuyerWithActiveEscrow ? sellerAddressLines.join(", ") : "";
   const pageDescription = listing
     ? metadata?.description ?? (isSeller ? "Your listing is missing complete metadata. Restore title and description before sharing it publicly." : "Listing details unavailable.")
     : "Loading listing details...";
@@ -999,6 +1019,41 @@ export default function ListingDetailPage() {
                 {listing ? <Badge variant="outline" className="border-amber-200/80 bg-white/95 text-slate-900">{statusLabel(listing.status)}</Badge> : null}
               </div>
               <p className="max-w-2xl text-[13px] leading-6 text-slate-700 sm:text-base">{pageDescription}</p>
+              {listing && (listing as any).cascadeAt && (listing as any).cascadeStage < 2 ? (
+                <div className="rounded-xl border border-amber-200/70 bg-amber-50/80 px-3 py-2 space-y-1">
+                  <div className="text-xs font-bold uppercase tracking-wide text-amber-700">
+                    Listing timeline
+                  </div>
+                  <div className="text-sm font-medium text-amber-900">
+                    {(listing as any).cascadeStage === 0
+                      ? listing.saleType === 0
+                        ? "This listing will automatically move to auction if unsold after 90 days."
+                        : listing.saleType === 1
+                          ? "This listing will automatically move to raffle if unsold after 90 days."
+                          : "This listing is in its final sale stage."
+                      : listing.saleType === 1
+                        ? "This listing escalated from fixed price to auction. It moves to raffle if still unsold in 90 days."
+                        : "This listing is in its final raffle stage."}
+                  </div>
+                  <div className="text-xs text-amber-700">
+                    Next change:{" "}
+                    {new Date((listing as any).cascadeAt).toLocaleDateString(
+                      "en-CA",
+                      { year: "numeric", month: "long", day: "numeric" }
+                    )}
+                  </div>
+                </div>
+              ) : null}
+              {listing && (listing as any).cascadeStage >= 2 ? (
+                <div className="rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2">
+                  <div className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                    Final stage
+                  </div>
+                  <div className="text-sm font-medium text-slate-700">
+                    This listing has reached its final sale stage — raffle. The seller set the final price.
+                  </div>
+                </div>
+              ) : null}
             </div>
             <div className="flex flex-wrap gap-2">
               {metadata?.category ? <div className="market-chip border-amber-200/80 bg-white/95 text-slate-900 shadow-sm">{metadata.subcategory ? `${metadata.category} / ${metadata.subcategory}` : metadata.category}</div> : null}
@@ -1106,6 +1161,42 @@ export default function ListingDetailPage() {
                         <div className="font-medium">{metadata.subcategory ? `${metadata.category} / ${metadata.subcategory}` : metadata.category}</div>
                       </div>
                     ) : null}
+                    <div className="text-sm sm:col-span-2">
+                      <div className="text-muted-foreground">Seller address</div>
+                      {isBuyerWithActiveEscrow ? (
+                        <div className="space-y-1 font-medium">
+                          {sellerAddressLines.length > 0 ? (
+                            sellerAddressLines.map((line, index) => (
+                              <div key={`${line}-${index}`} className="break-words">
+                                {line}
+                              </div>
+                            ))
+                          ) : (
+                            <div>Address details have not been provided.</div>
+                          )}
+                          {sellerPhoneNumber ? <div className="break-words">Phone: {sellerPhoneNumber}</div> : null}
+                        </div>
+                      ) : null}
+                      {!isBuyerWithActiveEscrow ? (
+                        <div className="rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-3 space-y-1">
+                          <div className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                            Seller address
+                          </div>
+                          <div className="text-sm font-medium text-slate-600">
+                            The seller&apos;s address is private. It will be visible to the confirmed buyer once an active escrow is in place.
+                          </div>
+                          {!address ? (
+                            <div className="text-xs text-slate-500">
+                              Connect a wallet and complete the purchase steps to unlock address details.
+                            </div>
+                          ) : settlementEscrow && settlementEscrow.buyer?.toLowerCase() !== address.toLowerCase() ? (
+                            <div className="text-xs text-slate-500">
+                              You are not the confirmed buyer for this listing.
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : null}
+                    </div>
                     {locationLabel ? (
                       <div className="text-sm">
                         <div className="text-muted-foreground">Location</div>
@@ -1143,10 +1234,10 @@ export default function ListingDetailPage() {
                         <div className="font-medium">{listing.buyer === zeroAddress ? "—" : shortenHex(listing.buyer)}</div>
                       </div>
                     ) : null}
-                    {metadata?.contactEmail || metadata?.contactPhone ? (
+                    {metadata?.contactEmail || (isBuyerWithActiveEscrow && sellerPhoneNumber) ? (
                       <div className="text-sm sm:col-span-2">
                         <div className="text-muted-foreground">{isJobPost ? "Application contact" : "Contact"}</div>
-                        <div className="font-medium">{[metadata.contactEmail, metadata.contactPhone].filter(Boolean).join(" • ")}</div>
+                        <div className="font-medium">{[metadata?.contactEmail, isBuyerWithActiveEscrow ? sellerPhoneNumber : null].filter(Boolean).join(" • ")}</div>
                       </div>
                     ) : null}
                   </div>

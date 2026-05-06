@@ -179,27 +179,76 @@ export async function fetchMetadataByUri(uri: string): Promise<MarketplaceMetada
   const pending = inflight.get(clean);
   if (pending) return pending;
 
-  const promise = fetchJson<MarketplaceMetadata>(`/metadata/lookup?uri=${encodeURIComponent(clean)}`, {
-    timeoutMs: 5_000,
-  })
-    .then((data) => {
-      const normalized = normalizeForRender(data);
-      clearMissing(clean, metadataId, normalized.id, normalized.uri);
-      cache.set(clean, normalized);
-      if (normalized.id) cache.set(String(normalized.id).toLowerCase(), normalized);
-      return normalized;
-    })
-    .catch((err: unknown) => {
+  const promise = (async () => {
+    try {
+      // For local metadata URIs — use backend lookup
+      if (clean.startsWith("metadata://sha256/")) {
+        const encoded = encodeURIComponent(clean);
+        const data = await fetchJson<MarketplaceMetadata>(
+          `/metadata/lookup?uri=${encoded}`,
+          { timeoutMs: 5_000 }
+        );
+        const normalized = normalizeForRender(data);
+        clearMissing(clean, metadataId, normalized.id, normalized.uri);
+        cache.set(clean, normalized);
+        if (normalized.id) cache.set(String(normalized.id).toLowerCase(), normalized);
+        return normalized;
+      }
+
+      // For IPFS URIs — fetch directly from gateway
+      if (clean.startsWith("ipfs://")) {
+        const cid = clean.replace("ipfs://", "");
+        const gatewayUrl = `https://ipfs.io/ipfs/${cid}`;
+        let res = await fetch(gatewayUrl, {
+          signal: AbortSignal.timeout(8_000),
+        });
+        if (!res.ok) {
+          // Try fallback gateway
+          const fallback = `https://cloudflare-ipfs.com/ipfs/${cid}`;
+          res = await fetch(fallback, {
+            signal: AbortSignal.timeout(8_000),
+          });
+          if (!res.ok) {
+            markMissing(clean, metadataId);
+            return null;
+          }
+        }
+        const data = await res.json() as MarketplaceMetadata;
+        const normalized = normalizeForRender(data);
+        clearMissing(clean, metadataId);
+        cache.set(clean, normalized);
+        return normalized;
+      }
+
+      // For HTTP/HTTPS URIs — fetch directly
+      if (clean.startsWith("https://") || clean.startsWith("http://")) {
+        const res = await fetch(clean, {
+          signal: AbortSignal.timeout(8_000),
+        });
+        if (!res.ok) {
+          markMissing(clean, metadataId);
+          return null;
+        }
+        const data = await res.json() as MarketplaceMetadata;
+        const normalized = normalizeForRender(data);
+        clearMissing(clean, metadataId);
+        cache.set(clean, normalized);
+        return normalized;
+      }
+
+      markMissing(clean, metadataId);
+      return null;
+    } catch (err: unknown) {
       const status = (err as ApiError | undefined)?.status;
       if (status === 404) {
         markMissing(clean, metadataId);
         return null;
       }
       throw err;
-    })
-    .finally(() => {
+    } finally {
       inflight.delete(clean);
-    });
+    }
+  })();
 
   inflight.set(clean, promise);
   return promise;

@@ -59,6 +59,7 @@ export type Env = {
   promotionHomepageDurationDays: number;
   promotionHomepagePriority: number;
   promotionHomepagePlacementSlot: string;
+  airdropFunderPrivateKey?: string;
 };
 
 function required(name: string): string {
@@ -399,6 +400,10 @@ export function getEnv(): Env {
   const promotionHomepageDurationDays = numberFromEnv("PROMOTION_HOMEPAGE_DURATION_DAYS", 7);
   const promotionHomepagePriority = numberFromEnv("PROMOTION_HOMEPAGE_PRIORITY", 180);
   const promotionHomepagePlacementSlot = optional("PROMOTION_HOMEPAGE_PLACEMENT_SLOT") ?? "homepage-paid-primary";
+  const airdropFunderPrivateKey = optional("AIRDROP_FUNDER_PRIVATE_KEY");
+  if (airdropFunderPrivateKey && !/^0x[0-9a-fA-F]{64}$/.test(airdropFunderPrivateKey)) {
+    throw new Error("Invalid AIRDROP_FUNDER_PRIVATE_KEY");
+  }
 
   if (!Number.isInteger(promotionHomepagePriceCents) || promotionHomepagePriceCents <= 0) {
     throw new Error("Invalid PROMOTION_HOMEPAGE_PRICE_CENTS");
@@ -449,5 +454,6 @@ export function getEnv(): Env {
     promotionHomepageDurationDays,
     promotionHomepagePriority,
     promotionHomepagePlacementSlot,
+    ...(airdropFunderPrivateKey ? { airdropFunderPrivateKey } : {}),
   };
 }

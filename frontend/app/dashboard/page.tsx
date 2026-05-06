@@ -1511,6 +1511,23 @@ export default function DashboardPage() {
                       >
                         Use BlockPages after the core account setup is done if you want stronger marketplace trust signals. This stays a later profile step, not a sign-up barrier.
                       </AccentCallout>
+                      {address ? (
+                        <Card className="border-emerald-200/60 bg-emerald-50/80">
+                          <CardContent className="flex items-center justify-between gap-4 p-4">
+                            <div className="space-y-0.5">
+                              <div className="text-sm font-bold text-emerald-900">
+                                Need test tokens to get started?
+                              </div>
+                              <div className="text-xs font-medium text-emerald-700">
+                                Zonycs will send a small amount of test tokens to your wallet automatically when you connect. No faucet needed.
+                              </div>
+                            </div>
+                            <div className="shrink-0 rounded-full bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white">
+                              ✓ Auto-funded
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ) : null}
                       {auth.user?.authMethod === "email" && !auth.user?.emailVerifiedAt ? (
                         <div ref={verificationSectionRef} className="scroll-mt-28">
                           <AccentCallout

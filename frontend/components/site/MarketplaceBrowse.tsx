@@ -62,6 +62,7 @@ export function MarketplaceBrowse() {
   const [savedSearchName, setSavedSearchName] = React.useState("");
   const [savedSearchEmail, setSavedSearchEmail] = React.useState("");
   const [isSavingSearch, setIsSavingSearch] = React.useState(false);
+  const [isDetectingLocation, setIsDetectingLocation] = React.useState(false);
   const limit = 24;
   const savedLocation = React.useMemo(() => getProfileLocationFilter(auth.user), [auth.user]);
   const savedLocationLabel = React.useMemo(() => formatLocationLabel(savedLocation), [savedLocation]);
@@ -187,6 +188,85 @@ export function MarketplaceBrowse() {
     }
   }
 
+  async function detectMyLocation() {
+    if (!navigator.geolocation) {
+      toast.error("Geolocation is not supported by your browser");
+      return;
+    }
+
+    setIsDetectingLocation(true);
+    try {
+      const position = await new Promise<GeolocationPosition>(
+        (resolve, reject) =>
+          navigator.geolocation.getCurrentPosition(resolve, reject, {
+            timeout: 10_000,
+            maximumAge: 60_000,
+          })
+      );
+
+      const { latitude, longitude } = position.coords;
+
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`,
+        {
+          headers: {
+            "Accept-Language": "en",
+            "User-Agent": "Zonycs Marketplace/1.0",
+          },
+        }
+      );
+
+      if (!res.ok) throw new Error("Reverse geocode failed");
+
+      const data = await res.json() as {
+        address?: {
+          city?: string;
+          town?: string;
+          village?: string;
+          state?: string;
+          country?: string;
+          postcode?: string;
+        };
+      };
+
+      const detectedCity =
+        data.address?.city ||
+        data.address?.town ||
+        data.address?.village ||
+        "";
+      const detectedRegion = data.address?.state || "";
+      const detectedPostal = data.address?.postcode || "";
+
+      setCity(detectedCity);
+      setRegion(detectedRegion);
+      setPostalCode(detectedPostal);
+      setOffset(0);
+      syncUrl({
+        q, category, subcategory,
+        city: detectedCity,
+        region: detectedRegion,
+        postalCode: detectedPostal,
+        minPrice, maxPrice, type, sort,
+        offset: 0,
+      });
+
+      toast.success(
+        detectedCity
+          ? `Location set to ${detectedCity}, ${detectedRegion}`
+          : `Location set to ${detectedRegion || "your area"}`
+      );
+    } catch (error: unknown) {
+      const message = error instanceof GeolocationPositionError
+        ? error.code === 1
+          ? "Location access denied. Enable location in browser settings."
+          : "Could not detect your location. Try entering it manually."
+        : "Could not detect your location.";
+      toast.error(message);
+    } finally {
+      setIsDetectingLocation(false);
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-2">
@@ -201,9 +281,18 @@ export function MarketplaceBrowse() {
             <CardDescription>Use your saved area to reopen nearby browsing without rebuilding filters each time.</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <AccentCallout label="Saved area" tone="blue" className="w-full sm:max-w-xl">
-              {savedLocationLabel ? `${savedLocationLabel} is ready for local browsing.` : "Your profile location is ready to shape nearby results."}
-            </AccentCallout>
+            <div className="flex flex-col gap-1 w-full sm:max-w-xl">
+              <AccentCallout label="Saved area" tone="blue">
+                {savedLocationLabel ? `Browsing near ${savedLocationLabel}.` : "Your profile location is ready to shape nearby results."}
+              </AccentCallout>
+              {savedLocation?.city ? (
+                <div className="flex flex-wrap gap-2 mt-1">
+                  <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-bold text-blue-800">
+                    📍 {savedLocation.city}{savedLocation.region ? `, ${savedLocation.region}` : ""}
+                  </span>
+                </div>
+              ) : null}
+            </div>
             <div className="flex flex-wrap gap-2">
               <Button
                 type="button"
@@ -348,7 +437,26 @@ export function MarketplaceBrowse() {
               </div>
             </div>
             <div className="space-y-2">
-              <Label>City</Label>
+              <div className="flex items-center justify-between">
+                <Label>City</Label>
+                <button
+                  type="button"
+                  onClick={() => void detectMyLocation()}
+                  disabled={isDetectingLocation}
+                  className="flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-700 hover:bg-blue-100 disabled:opacity-50 transition-colors"
+                >
+                  {isDetectingLocation ? (
+                    <>
+                      <span className="inline-block h-2.5 w-2.5 animate-spin rounded-full border-2 border-blue-300 border-t-blue-700" />
+                      Detecting...
+                    </>
+                  ) : (
+                    <>
+                      📍 Near me
+                    </>
+                  )}
+                </button>
+              </div>
               {region && CITY_MAP[region] ? (
                 <select
                   className="block w-full rounded-md border bg-white dark:bg-slate-700 px-3 py-2 text-slate-900 dark:text-slate-100"
@@ -363,20 +471,42 @@ export function MarketplaceBrowse() {
                   ))}
                 </select>
               ) : (
-                <Input value={city} onChange={(e) => setCity(e.target.value)} placeholder="e.g. Toronto" />
+                <Input value={city} onChange={(e) => setCity(e.target.value)} placeholder="e.g. Edmonton" />
               )}
             </div>
                 <div className="space-y-2">
-                  <Label>Region / Country</Label>
+                  <Label>Province / Region</Label>
                   <select
                     className="block w-full rounded-md border bg-white dark:bg-slate-700 px-3 py-2 text-slate-900 dark:text-slate-100"
                     value={region}
-                    onChange={(e) => setRegion(e.target.value)}
+                    onChange={(e) => {
+                      setRegion(e.target.value);
+                      setCity("");
+                    }}
                   >
-                    <option value="">All countries</option>
-                    {COUNTRY_LIST.map((c) => (
-                      <option key={c} value={c}>{c}</option>
-                    ))}
+                    <option value="">All regions</option>
+                    <optgroup label="Canadian Provinces & Territories">
+                      {[
+                        "Alberta", "British Columbia", "Manitoba",
+                        "New Brunswick", "Newfoundland and Labrador",
+                        "Northwest Territories", "Nova Scotia", "Nunavut",
+                        "Ontario", "Prince Edward Island", "Quebec",
+                        "Saskatchewan", "Yukon"
+                      ].map((p) => (
+                        <option key={p} value={p}>{p}</option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="Other Countries">
+                      {COUNTRY_LIST.filter((c) => ![
+                        "Alberta", "British Columbia", "Manitoba",
+                        "New Brunswick", "Newfoundland and Labrador",
+                        "Northwest Territories", "Nova Scotia", "Nunavut",
+                        "Ontario", "Prince Edward Island", "Quebec",
+                        "Saskatchewan", "Yukon"
+                      ].includes(c)).map((c) => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
+                    </optgroup>
                   </select>
                 </div>
             <div className="space-y-2">

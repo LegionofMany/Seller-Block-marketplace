@@ -20,6 +20,10 @@ export type ListingRow = {
   city?: string | null;
   region?: string | null;
   postalCode?: string | null;
+  cascadeStage?: number;
+  originalSaleType?: number | null;
+  listedAt?: number | null;
+  cascadeAt?: number | null;
 };
 
 export type ListingViewSummaryRow = ListingRow & {
@@ -346,6 +350,10 @@ function toListingRow(r: any): ListingRow {
     city: r.city ?? null,
     region: r.region ?? null,
     postalCode: r.postalCode ?? r.postalcode ?? r.postal_code ?? null,
+    cascadeStage: r.cascade_stage ?? r.cascadestage ?? 0,
+    originalSaleType: r.original_sale_type ?? r.originalsaletype ?? null,
+    listedAt: r.listed_at ?? r.listedat ?? null,
+    cascadeAt: r.cascade_at ?? r.cascadeat ?? null,
   };
 }
 

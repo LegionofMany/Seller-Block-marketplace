@@ -220,7 +220,17 @@ export async function getListingById(req: Request, res: Response) {
   const auction = await findAuction(db, id, listing.chainKey);
   const raffle = await findRaffle(db, id, listing.chainKey);
 
-  const body = { listing, auction, raffle };
+  const body = {
+    listing: {
+      ...listing,
+      cascadeStage: listing.cascadeStage ?? 0,
+      originalSaleType: listing.originalSaleType ?? listing.saleType,
+      listedAt: listing.listedAt ?? listing.createdAt,
+      cascadeAt: listing.cascadeAt ?? null,
+    },
+    auction,
+    raffle,
+  };
   cache.set(cacheKey, body);
   return res.json(body);
 }

@@ -44,6 +44,63 @@ export const COUNTRY_LIST = [
 export const CITY_MAP: Record<string, string[]> = {
   "United States": ["New York", "Los Angeles", "Chicago", "Houston", "Miami", "San Francisco", "Seattle", "Boston", "Dallas", "Atlanta"],
   Canada: ["Toronto", "Vancouver", "Montreal", "Calgary", "Ottawa"],
+  Alberta: [
+    "Calgary", "Edmonton", "Red Deer", "Lethbridge",
+    "St. Albert", "Medicine Hat", "Grande Prairie",
+    "Airdrie", "Spruce Grove", "Leduc", "Fort McMurray",
+    "Okotoks", "Cochrane", "Camrose", "Lloydminster"
+  ],
+  "British Columbia": [
+    "Vancouver", "Surrey", "Burnaby", "Richmond",
+    "Abbotsford", "Coquitlam", "Kelowna", "Langley",
+    "Saanich", "Delta", "Kamloops", "Nanaimo",
+    "Chilliwack", "Maple Ridge", "Victoria", "Prince George"
+  ],
+  Ontario: [
+    "Toronto", "Ottawa", "Mississauga", "Brampton",
+    "Hamilton", "London", "Markham", "Vaughan",
+    "Kitchener", "Windsor", "Burlington", "Oakville",
+    "Richmond Hill", "Oshawa", "Barrie", "Kingston",
+    "Guelph", "Thunder Bay", "Waterloo", "Cambridge"
+  ],
+  Quebec: [
+    "Montreal", "Quebec City", "Laval", "Gatineau",
+    "Longueuil", "Sherbrooke", "Saguenay", "Levis",
+    "Trois-Rivieres", "Terrebonne", "Saint-Jean-sur-Richelieu",
+    "Repentigny", "Brossard", "Drummondville", "Saint-Jerome"
+  ],
+  Manitoba: [
+    "Winnipeg", "Brandon", "Steinbach", "Thompson",
+    "Portage la Prairie", "Winkler", "Selkirk", "Morden"
+  ],
+  Saskatchewan: [
+    "Saskatoon", "Regina", "Prince Albert", "Moose Jaw",
+    "Swift Current", "Yorkton", "North Battleford", "Estevan"
+  ],
+  "Nova Scotia": [
+    "Halifax", "Dartmouth", "Sydney", "Truro",
+    "New Glasgow", "Glace Bay", "Bridgewater", "Amherst"
+  ],
+  "New Brunswick": [
+    "Moncton", "Saint John", "Fredericton", "Dieppe",
+    "Riverview", "Quispamsis", "Rothesay", "Miramichi"
+  ],
+  "Newfoundland and Labrador": [
+    "St. John's", "Corner Brook", "Gander",
+    "Grand Falls-Windsor", "Happy Valley-Goose Bay"
+  ],
+  "Prince Edward Island": [
+    "Charlottetown", "Summerside", "Stratford", "Cornwall"
+  ],
+  "Northwest Territories": [
+    "Yellowknife", "Hay River", "Inuvik", "Fort Smith"
+  ],
+  Nunavut: [
+    "Iqaluit", "Rankin Inlet", "Arviat", "Baker Lake"
+  ],
+  Yukon: [
+    "Whitehorse", "Dawson City", "Watson Lake", "Haines Junction"
+  ],
   "United Kingdom": ["London", "Manchester", "Birmingham", "Leeds", "Glasgow"],
   Australia: ["Sydney", "Melbourne", "Brisbane", "Perth", "Adelaide"],
   Germany: ["Berlin", "Munich", "Hamburg", "Frankfurt", "Cologne"],

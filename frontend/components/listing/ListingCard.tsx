@@ -48,7 +48,21 @@ export function ListingCard({ row }: { row: ListingSummary }) {
               ) : null}
             </div>
             <div className="flex flex-col items-end gap-2">
-              <Badge variant="outline">{isJobPost ? "Job post" : saleTypeLabel(row.saleType)}</Badge>
+              <Badge variant="outline">
+                {isJobPost
+                  ? "Job post"
+                  : row.saleType === 0
+                    ? "Fixed price"
+                    : row.saleType === 1
+                      ? (row as any).cascadeStage > 0
+                        ? "Auction ↑"
+                        : "Auction"
+                      : (row as any).cascadeStage > 1
+                        ? "Raffle ↑↑"
+                        : (row as any).cascadeStage > 0
+                          ? "Raffle ↑"
+                          : "Raffle"}
+              </Badge>
             </div>
           </div>
         </CardHeader>

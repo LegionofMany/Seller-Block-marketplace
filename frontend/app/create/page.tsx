@@ -1027,6 +1027,29 @@ export default function CreateListingPage() {
         </div>
       </section>
 
+      <Card className="border-blue-200/60 bg-blue-50/80">
+        <CardContent className="flex items-center justify-between gap-4 p-4">
+          <div className="space-y-0.5">
+            <div className="text-sm font-bold text-blue-900">
+              Looking for dealer or fleet listings?
+            </div>
+            <div className="text-xs font-medium text-blue-700">
+              Dealership and bulk listing tools are available through a separate application process.
+            </div>
+          </div>
+          <Button
+            asChild
+            size="sm"
+            variant="outline"
+            className="shrink-0 rounded-full border-blue-300 text-blue-800 hover:bg-blue-100"
+          >
+            <a href="mailto:dealers@zonycs.com">
+              Apply for dealer access
+            </a>
+          </Button>
+        </CardContent>
+      </Card>
+
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px] xl:gap-6">
         <Card className="market-panel market-panel-spotlight market-panel-spotlight-blue">
           <CardHeader>
@@ -1081,7 +1104,7 @@ export default function CreateListingPage() {
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
                     <div>
                       <Label>Sale type</Label>
-                      <div className="mt-1 text-sm text-muted-foreground">Fixed price stays primary. Auction and raffle remain available as advanced publishing modes.</div>
+                      <div className="mt-1 text-sm text-muted-foreground">Choose how you want to sell. You can start with a fixed price and adjust later.</div>
                     </div>
                     <div className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Current: {saleType === 0 ? "Fixed price" : saleType === 1 ? "Auction" : "Raffle"}</div>
                   </div>
@@ -1095,6 +1118,9 @@ export default function CreateListingPage() {
                     <Button type="button" size="lg" variant={saleType === 2 ? "default" : "outline"} onClick={() => setSaleType(2)} className="w-full sm:w-auto">
                       Raffle
                     </Button>
+                  </div>
+                  <div className="rounded-xl border border-blue-100 bg-blue-50/60 px-3 py-2 text-xs font-medium text-blue-800">
+                    💡 Listings start as fixed price by default. If your item does not sell in 90 days it automatically moves to auction, then to raffle after another 90 days. You can also choose to start as auction or raffle now.
                   </div>
                 </div>
               )}

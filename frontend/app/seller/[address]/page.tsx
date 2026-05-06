@@ -170,7 +170,7 @@ export default function SellerProfilePage() {
           <div className="space-y-3">
             <SellerTrustSummary profile={profile} variant="detail" />
             <div className="market-stat bg-white/85">
-              <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Seller address</div>
+              <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Wallet address</div>
               <div className="mt-2 break-all text-sm font-mono text-slate-950">{address}</div>
             </div>
           </div>
