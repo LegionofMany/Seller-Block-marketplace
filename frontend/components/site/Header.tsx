@@ -53,37 +53,52 @@ export function SiteHeader() {
     if (!open) return;
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    function onKey(e: KeyboardEvent) { if (e.key === "Escape") setOpen(false); }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpen(false);
+    }
     window.addEventListener("keydown", onKey);
-    return () => { document.body.style.overflow = prev; window.removeEventListener("keydown", onKey); };
+    return () => {
+      document.body.style.overflow = prev;
+      window.removeEventListener("keydown", onKey);
+    };
   }, [open]);
 
   return (
-    <header className="sticky top-0 z-40 border-b border-border/70 bg-background/80 backdrop-blur-xl">
-      {/* ── Main header bar ── */}
-      <div className="mx-auto flex w-full max-w-screen-xl items-center justify-between gap-2 px-3 py-2.5 sm:gap-4 sm:px-6 sm:py-3">
+    <>
+      {/* ─────────────────────────────────────────
+          HEADER BAR
+      ───────────────────────────────────────── */}
+      <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/95 backdrop-blur-xl shadow-sm">
+        <div className="mx-auto flex w-full max-w-screen-xl items-center justify-between gap-2 px-4 py-3 sm:gap-4 sm:px-6">
 
-        {/* Logo */}
-        <Link href="/" className="min-w-0 shrink-0">
-          <div className="text-[15px] font-bold tracking-tight text-slate-950 sm:text-base">
-            Zonycs
-          </div>
-          <div className="hidden text-[10px] uppercase tracking-[0.22em] text-muted-foreground sm:block">
-            Marketplace
-          </div>
-        </Link>
+          {/* Logo */}
+          <Link href="/" className="min-w-0 shrink-0 flex items-center gap-2">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600 text-white text-xs font-black">
+              Z
+            </div>
+            <div>
+              <div className="text-[15px] font-bold tracking-tight text-slate-900">
+                Zonycs
+              </div>
+              <div className="hidden text-[9px] uppercase tracking-[0.2em] text-slate-500 sm:block">
+                Marketplace
+              </div>
+            </div>
+          </Link>
 
-        {/* Desktop nav + wallet */}
-        <div className="hidden items-center gap-4 sm:flex">
-          <nav className="flex items-center gap-1">
-            <Button asChild variant="ghost" size="sm" className="text-sm font-medium text-slate-700 hover:text-slate-950">
+          {/* Desktop nav */}
+          <nav className="hidden items-center gap-1 sm:flex">
+            <Button asChild variant="ghost" size="sm"
+              className="text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100">
               <Link href="/marketplace">Listings</Link>
             </Button>
-            <Button asChild variant="ghost" size="sm" className="text-sm font-medium text-slate-700 hover:text-slate-950">
+            <Button asChild variant="ghost" size="sm"
+              className="text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100">
               <Link href="/create">Post ad</Link>
             </Button>
             {auth.isAuthenticated ? (
-              <Button asChild variant="ghost" size="sm" className="text-sm font-medium text-slate-700 hover:text-slate-950">
+              <Button asChild variant="ghost" size="sm"
+                className="text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100">
                 <Link href="/dashboard">
                   Dashboard
                   {unreadCount > 0 ? (
@@ -96,153 +111,172 @@ export function SiteHeader() {
             ) : null}
           </nav>
 
-          <div className="h-5 w-px bg-border/60" />
-
-          <div className="flex items-center gap-2">
+          {/* Desktop wallet + auth */}
+          <div className="hidden items-center gap-2 sm:flex">
             <ConnectButton showBalance={false} chainStatus="icon" />
+            <div className="h-5 w-px bg-slate-200" />
 
             {!address && !auth.isAuthenticated ? (
-              <Button asChild size="sm" className="rounded-full bg-blue-600 text-white hover:bg-blue-700 border-0">
+              <Button asChild size="sm"
+                className="rounded-full bg-blue-600 text-white hover:bg-blue-700 border-0 px-5">
                 <Link href="/sign-in">Sign in</Link>
               </Button>
             ) : null}
 
             {address && !auth.isAuthenticated ? (
-              <Button
-                type="button"
-                size="sm"
-                className="rounded-full bg-blue-600 text-white hover:bg-blue-700 border-0"
+              <Button type="button" size="sm"
+                className="rounded-full bg-blue-600 text-white hover:bg-blue-700 border-0 px-5"
                 disabled={auth.isLoading}
-                onClick={() => void auth.signIn()}
-              >
+                onClick={() => void auth.signIn()}>
                 {auth.isLoading ? "Signing in…" : "Sign in"}
               </Button>
             ) : null}
 
             {auth.isAuthenticated ? (
               <div className="flex items-center gap-2">
-                <div className="max-w-[120px] truncate text-xs font-medium text-slate-700">
+                <div className="max-w-[110px] truncate text-xs font-medium text-slate-600">
                   {formatIdentityLabel(
                     auth.address ?? address ?? null,
                     auth.user?.email,
                     auth.user?.displayName
                   )}
                 </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="rounded-full text-xs"
-                  onClick={auth.signOut}
-                >
+                <Button type="button" variant="outline" size="sm"
+                  className="rounded-full text-xs border-slate-300"
+                  onClick={auth.signOut}>
                   Sign out
                 </Button>
               </div>
             ) : null}
           </div>
+
+          {/* Mobile hamburger */}
+          <button
+            type="button"
+            aria-label="Open menu"
+            onClick={() => setOpen(true)}
+            className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-sm hover:bg-slate-50 sm:hidden"
+          >
+            <svg viewBox="0 0 24 24" className="h-5 w-5" aria-hidden="true">
+              <path d="M4 7h16M4 12h16M4 17h16" fill="none"
+                stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+            </svg>
+          </button>
         </div>
-
-        {/* Mobile hamburger */}
-        <button
-          type="button"
-          aria-label="Open menu"
-          onClick={() => setOpen(true)}
-          className="flex h-10 w-10 items-center justify-center rounded-xl text-slate-700 hover:bg-slate-100 sm:hidden"
-        >
-          <svg viewBox="0 0 24 24" className="h-5 w-5" aria-hidden="true">
-            <path d="M4 7h16M4 12h16M4 17h16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-          </svg>
-        </button>
-      </div>
+      </header>
 
 
-      {/* ── Mobile drawer overlay ── */}
+      {/* ─────────────────────────────────────────
+          MOBILE DRAWER — rendered as a sibling
+          of <header> so it escapes z-index context
+          and covers the full viewport correctly
+      ───────────────────────────────────────── */}
       {open ? (
-        <div className="fixed inset-0 z-50 sm:hidden" aria-hidden="false">
-          {/* Backdrop */}
+        <div
+          className="fixed inset-0 z-[9999]"
+          aria-modal="true"
+          role="dialog"
+          style={{ isolation: "isolate" }}
+        >
+          {/* Semi-transparent backdrop */}
           <div
-            className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm"
+            className="absolute inset-0 bg-slate-900/40 backdrop-blur-[2px]"
             onClick={() => setOpen(false)}
           />
 
-          {/* Drawer panel */}
-          <div
-            role="dialog"
-            aria-modal="true"
-            className="absolute inset-y-0 right-0 flex w-[85%] max-w-[22rem] flex-col border-l border-blue-500/40 bg-gradient-to-b from-blue-700 to-blue-800 shadow-2xl"
-          >
-            {/* Drawer header */}
-            <div className="flex shrink-0 items-center justify-between border-b border-blue-600/50 px-5 py-4">
-              <div>
-                <div className="text-base font-bold text-white">Zonycs</div>
-                <div className="text-[10px] uppercase tracking-[0.18em] text-blue-300">Marketplace</div>
+          {/* Drawer panel — light professional design */}
+          <div className="absolute inset-y-0 right-0 flex w-[82%] max-w-[20rem] flex-col bg-white shadow-2xl">
+
+            {/* Drawer top bar */}
+            <div className="flex shrink-0 items-center justify-between border-b border-slate-100 bg-blue-600 px-5 py-4">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/20 text-white text-xs font-black">
+                  Z
+                </div>
+                <div>
+                  <div className="text-sm font-bold text-white">Zonycs</div>
+                  <div className="text-[9px] uppercase tracking-[0.18em] text-blue-200">
+                    Marketplace
+                  </div>
+                </div>
               </div>
               <button
                 type="button"
                 aria-label="Close menu"
                 onClick={() => setOpen(false)}
-                className="flex h-9 w-9 items-center justify-center rounded-xl text-blue-200 transition-colors hover:bg-blue-600/50 hover:text-white"
+                className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/10 text-white hover:bg-white/20 transition-colors"
               >
-                <svg viewBox="0 0 24 24" className="h-5 w-5" aria-hidden="true">
-                  <path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden="true">
+                  <path d="M6 6l12 12M18 6L6 18" fill="none"
+                    stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
                 </svg>
               </button>
             </div>
 
-            {/* Scrollable body */}
-            <div className="flex flex-1 flex-col gap-1 overflow-y-auto px-4 py-4">
+            {/* Scrollable content */}
+            <div className="flex flex-1 flex-col overflow-y-auto">
 
-              {/* Nav links */}
-              <div className="space-y-1">
-                <div className="px-2 pb-2 text-[10px] font-bold uppercase tracking-[0.2em] text-blue-300">
-                  Navigate
+              {/* Nav section */}
+              <div className="px-4 pt-5 pb-3">
+                <div className="mb-2 px-2 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">
+                  Navigation
                 </div>
-                {[
-                  { href: "/marketplace", label: "Listings" },
-                  { href: "/create", label: "Post an ad" },
-                  { href: "/dashboard", label: "Dashboard" },
-                ].map((item) => (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    onClick={() => setOpen(false)}
-                    className="flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold text-white transition-colors hover:bg-blue-600/50"
-                  >
-                    {item.label}
-                  </Link>
-                ))}
-                {auth.isAuthenticated ? (
-                  <Link
-                    href="/dashboard#notifications"
-                    onClick={() => setOpen(false)}
-                    className="flex items-center justify-between gap-3 rounded-xl px-3 py-3 text-sm font-semibold text-white transition-colors hover:bg-blue-600/50"
-                  >
-                    <span>Alerts</span>
-                    {unreadCount > 0 ? (
-                      <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-bold text-blue-700">
-                        {unreadCount}
-                      </span>
-                    ) : null}
-                  </Link>
-                ) : null}
+                <nav className="space-y-0.5">
+                  {[
+                    { href: "/marketplace", label: "Listings", icon: "🏪" },
+                    { href: "/create", label: "Post an ad", icon: "✏️" },
+                    { href: "/dashboard", label: "Dashboard", icon: "📊" },
+                  ].map((item) => (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      onClick={() => setOpen(false)}
+                      className="flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold text-slate-800 transition-colors hover:bg-blue-50 hover:text-blue-700"
+                    >
+                      <span className="text-base">{item.icon}</span>
+                      {item.label}
+                    </Link>
+                  ))}
+                  {auth.isAuthenticated ? (
+                    <Link
+                      href="/dashboard#notifications"
+                      onClick={() => setOpen(false)}
+                      className="flex items-center justify-between gap-3 rounded-xl px-3 py-3 text-sm font-semibold text-slate-800 transition-colors hover:bg-blue-50 hover:text-blue-700"
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className="text-base">🔔</span>
+                        Alerts
+                      </div>
+                      {unreadCount > 0 ? (
+                        <span className="rounded-full bg-blue-600 px-2 py-0.5 text-[11px] font-bold text-white">
+                          {unreadCount}
+                        </span>
+                      ) : null}
+                    </Link>
+                  ) : null}
+                </nav>
               </div>
 
-              <div className="my-3 h-px bg-blue-600/40" />
+              <div className="mx-4 h-px bg-slate-100" />
 
 
-              {/* Wallet & Account */}
-              <div className="space-y-3">
-                <div className="px-2 pb-1 text-[10px] font-bold uppercase tracking-[0.2em] text-blue-300">
+              {/* Wallet & Account section */}
+              <div className="px-4 pt-4 pb-3">
+                <div className="mb-2 px-2 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">
                   Wallet & Account
                 </div>
 
-                <div className="space-y-3 rounded-2xl border border-blue-500/40 bg-blue-900/40 p-4">
-                  <div className="text-xs font-semibold text-blue-200">Connect your wallet</div>
-                  <ConnectButton showBalance={false} chainStatus="icon" />
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 space-y-3">
+                  <div className="text-xs font-semibold text-slate-600">
+                    Connect your wallet
+                  </div>
+                  <div className="flex justify-start">
+                    <ConnectButton showBalance={false} chainStatus="icon" />
+                  </div>
 
                   {injectedWalletChecked && !hasInjectedWallet ? (
-                    <div className="rounded-xl border border-blue-500/40 bg-blue-800/40 px-3 py-2 text-xs leading-5 text-blue-200">
-                      No browser wallet detected. Use WalletConnect to connect from mobile or install MetaMask on desktop.
+                    <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">
+                      No browser wallet found. Use WalletConnect on mobile or install MetaMask on desktop.
                     </div>
                   ) : null}
 
@@ -250,7 +284,7 @@ export function SiteHeader() {
                     <Link
                       href="/sign-in"
                       onClick={() => setOpen(false)}
-                      className="flex items-center justify-center rounded-xl bg-white px-4 py-2.5 text-sm font-bold text-blue-700 transition-colors hover:bg-blue-50"
+                      className="flex items-center justify-center rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-blue-700"
                     >
                       Sign in with email
                     </Link>
@@ -261,7 +295,7 @@ export function SiteHeader() {
                       type="button"
                       disabled={auth.isLoading}
                       onClick={() => void auth.signIn()}
-                      className="flex w-full items-center justify-center rounded-xl bg-white px-4 py-2.5 text-sm font-bold text-blue-700 transition-colors hover:bg-blue-50 disabled:opacity-60"
+                      className="flex w-full items-center justify-center rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-blue-700 disabled:opacity-60"
                     >
                       {auth.isLoading ? "Signing in…" : "Sign in with wallet"}
                     </button>
@@ -269,9 +303,11 @@ export function SiteHeader() {
 
                   {auth.isAuthenticated ? (
                     <div className="space-y-2">
-                      <div className="rounded-xl border border-blue-500/40 bg-blue-800/40 px-3 py-2">
-                        <div className="text-[10px] font-bold uppercase tracking-wide text-blue-300">Signed in as</div>
-                        <div className="mt-1 truncate text-xs font-semibold text-white">
+                      <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
+                        <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
+                          Signed in as
+                        </div>
+                        <div className="mt-1 truncate text-sm font-semibold text-slate-900">
                           {formatIdentityLabel(
                             auth.address ?? address ?? null,
                             auth.user?.email,
@@ -282,7 +318,7 @@ export function SiteHeader() {
                       <button
                         type="button"
                         onClick={() => { auth.signOut(); setOpen(false); }}
-                        className="flex w-full items-center justify-center rounded-xl border border-blue-500/40 px-4 py-2.5 text-sm font-semibold text-blue-100 transition-colors hover:bg-blue-600/50"
+                        className="flex w-full items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50"
                       >
                         Sign out
                       </button>
@@ -291,31 +327,33 @@ export function SiteHeader() {
                 </div>
               </div>
 
-              <div className="my-3 h-px bg-blue-600/40" />
+              <div className="mx-4 h-px bg-slate-100" />
 
               {/* Platform features */}
-              <div className="space-y-2 rounded-2xl border border-blue-500/30 bg-blue-900/30 px-4 py-3">
-                <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-blue-300">
-                  Platform features
+              <div className="px-4 pt-4 pb-6">
+                <div className="mb-3 px-2 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">
+                  Why Zonycs?
                 </div>
-                {[
-                  "Public listings & local discovery",
-                  "Blockchain escrow & wallet settlement",
-                  "Follow sellers & save searches",
-                  "Post free ads in minutes",
-                ].map((feature) => (
-                  <div key={feature} className="flex items-center gap-2 text-xs font-medium text-blue-100">
-                    <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-400" />
-                    {feature}
-                  </div>
-                ))}
+                <div className="space-y-2">
+                  {[
+                    { icon: "📍", text: "Local listings & discovery" },
+                    { icon: "🔒", text: "Blockchain escrow & safe payments" },
+                    { icon: "⭐", text: "Follow sellers & save searches" },
+                    { icon: "🆓", text: "Free to browse and post ads" },
+                  ].map((item) => (
+                    <div key={item.text}
+                      className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-700 bg-slate-50">
+                      <span className="text-base shrink-0">{item.icon}</span>
+                      {item.text}
+                    </div>
+                  ))}
+                </div>
               </div>
 
             </div>
           </div>
         </div>
       ) : null}
-
-    </header>
+    </>
   );
 }
