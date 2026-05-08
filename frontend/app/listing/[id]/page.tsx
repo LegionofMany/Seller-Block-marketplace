@@ -1243,79 +1243,162 @@ export default function ListingDetailPage() {
                   </div>
 
                   {!isJobPost && (conditionSummary || inspectionNotes || transferTerms || titleStatus || ownershipConfirmed || publicSaleTermsAccepted || serviceLicenseConfirmed) ? (
-                    <div className="rounded-2xl border bg-slate-50/80 p-4 space-y-4 sm:p-5">
-                      <div>
-                        <div className="text-sm font-semibold text-slate-950">Sale terms and disclosures</div>
-                        <div className="mt-1 text-xs text-muted-foreground">
-                          Public-sale details carried forward from the seller&apos;s publish form.
+                    <div className="rounded-2xl border border-slate-200 bg-white p-5 space-y-5 shadow-sm">
+
+                      {/* Section header */}
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">
+                            Listing details
+                          </div>
+                          <div className="mt-1 text-base font-bold text-slate-950">
+                            Sale terms & disclosures
+                          </div>
+                          <div className="mt-1 text-sm text-slate-500">
+                            Information provided by the seller at the time of listing. Review carefully before completing a purchase.
+                          </div>
+                        </div>
+                        <div className="shrink-0 rounded-full bg-blue-50 px-3 py-1 text-[11px] font-bold text-blue-700 border border-blue-200">
+                          Seller declared
                         </div>
                       </div>
-                      <div className="grid gap-3 sm:grid-cols-2">
+
+                      {/* Detail fields */}
+                      <div className="grid gap-4 sm:grid-cols-2">
                         {conditionSummary ? (
-                          <div className="text-sm sm:col-span-2">
-                            <div className="text-muted-foreground">Condition</div>
-                            <div className="font-medium whitespace-pre-wrap">{conditionSummary}</div>
+                          <div className="sm:col-span-2 rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
+                            <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400 mb-1">
+                              Condition
+                            </div>
+                            <div className="text-sm font-semibold text-slate-900 whitespace-pre-wrap leading-6">
+                              {conditionSummary}
+                            </div>
                           </div>
                         ) : null}
                         {inspectionNotes ? (
-                          <div className="text-sm sm:col-span-2">
-                            <div className="text-muted-foreground">Inspection and pickup</div>
-                            <div className="font-medium whitespace-pre-wrap">{inspectionNotes}</div>
+                          <div className="sm:col-span-2 rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
+                            <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400 mb-1">
+                              Inspection & pickup
+                            </div>
+                            <div className="text-sm font-semibold text-slate-900 whitespace-pre-wrap leading-6">
+                              {inspectionNotes}
+                            </div>
                           </div>
                         ) : null}
                         {transferTerms ? (
-                          <div className="text-sm">
-                            <div className="text-muted-foreground">Transfer terms</div>
-                            <div className="font-medium whitespace-pre-wrap">{transferTerms}</div>
-                          </div>
-                        ) : null}
-                        {vin ? (
-                          <div className="text-sm">
-                            <div className="text-muted-foreground">VIN</div>
-                            <div className="font-medium break-words">{vin}</div>
-                          </div>
-                        ) : null}
-                        {mileage ? (
-                          <div className="text-sm">
-                            <div className="text-muted-foreground">Mileage</div>
-                            <div className="font-medium">{mileage}</div>
-                          </div>
-                        ) : null}
-                        {provenance ? (
-                          <div className="text-sm sm:col-span-2">
-                            <div className="text-muted-foreground">Provenance</div>
-                            <div className="font-medium whitespace-pre-wrap">{provenance}</div>
-                          </div>
-                        ) : null}
-                        {bedrooms ? (
-                          <div className="text-sm">
-                            <div className="text-muted-foreground">Bedrooms</div>
-                            <div className="font-medium">{bedrooms}</div>
-                          </div>
-                        ) : null}
-                        {bathrooms ? (
-                          <div className="text-sm">
-                            <div className="text-muted-foreground">Bathrooms</div>
-                            <div className="font-medium">{bathrooms}</div>
-                          </div>
-                        ) : null}
-                        {squareFeet ? (
-                          <div className="text-sm">
-                            <div className="text-muted-foreground">Square feet</div>
-                            <div className="font-medium">{squareFeet}</div>
+                          <div className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
+                            <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400 mb-1">
+                              Transfer terms
+                            </div>
+                            <div className="text-sm font-semibold text-slate-900 whitespace-pre-wrap leading-6">
+                              {transferTerms}
+                            </div>
                           </div>
                         ) : null}
                         {titleStatus ? (
-                          <div className="text-sm">
-                            <div className="text-muted-foreground">Title / documents</div>
-                            <div className="font-medium whitespace-pre-wrap">{titleStatus}</div>
+                          <div className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
+                            <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400 mb-1">
+                              Title & documents
+                            </div>
+                            <div className="text-sm font-semibold text-slate-900 whitespace-pre-wrap leading-6">
+                              {titleStatus}
+                            </div>
+                          </div>
+                        ) : null}
+                        {vin ? (
+                          <div className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
+                            <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400 mb-1">
+                              VIN
+                            </div>
+                            <div className="text-sm font-semibold text-slate-900 font-mono break-all">
+                              {vin}
+                            </div>
+                          </div>
+                        ) : null}
+                        {mileage ? (
+                          <div className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
+                            <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400 mb-1">
+                              Mileage
+                            </div>
+                            <div className="text-sm font-semibold text-slate-900">
+                              {mileage}
+                            </div>
+                          </div>
+                        ) : null}
+                        {provenance ? (
+                          <div className="sm:col-span-2 rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
+                            <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400 mb-1">
+                              Provenance
+                            </div>
+                            <div className="text-sm font-semibold text-slate-900 whitespace-pre-wrap leading-6">
+                              {provenance}
+                            </div>
+                          </div>
+                        ) : null}
+                        {bedrooms ? (
+                          <div className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
+                            <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400 mb-1">
+                              Bedrooms
+                            </div>
+                            <div className="text-sm font-semibold text-slate-900">
+                              {bedrooms}
+                            </div>
+                          </div>
+                        ) : null}
+                        {bathrooms ? (
+                          <div className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
+                            <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400 mb-1">
+                              Bathrooms
+                            </div>
+                            <div className="text-sm font-semibold text-slate-900">
+                              {bathrooms}
+                            </div>
+                          </div>
+                        ) : null}
+                        {squareFeet ? (
+                          <div className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
+                            <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400 mb-1">
+                              Square footage
+                            </div>
+                            <div className="text-sm font-semibold text-slate-900">
+                              {squareFeet}
+                            </div>
                           </div>
                         ) : null}
                       </div>
-                      <div className="flex flex-wrap gap-2 text-xs">
-                        {ownershipConfirmed ? <Badge variant="outline" className="bg-white/90">Seller confirmed right to sell</Badge> : null}
-                        {publicSaleTermsAccepted ? <Badge variant="outline" className="bg-white/90">As-is / where-is public sale</Badge> : null}
-                        {serviceLicenseConfirmed ? <Badge variant="outline" className="bg-white/90">Service license confirmed</Badge> : null}
+
+                      {/* Seller confirmations badges */}
+                      {(ownershipConfirmed || publicSaleTermsAccepted || serviceLicenseConfirmed) ? (
+                        <div className="space-y-2">
+                          <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">
+                            Seller confirmations
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            {ownershipConfirmed ? (
+                              <div className="flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-800">
+                                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                                Seller confirmed right to sell
+                              </div>
+                            ) : null}
+                            {publicSaleTermsAccepted ? (
+                              <div className="flex items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-bold text-blue-800">
+                                <span className="h-1.5 w-1.5 rounded-full bg-blue-500" />
+                                As-is / where-is public sale
+                              </div>
+                            ) : null}
+                            {serviceLicenseConfirmed ? (
+                              <div className="flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-bold text-amber-800">
+                                <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                                Service license confirmed
+                              </div>
+                            ) : null}
+                          </div>
+                        </div>
+                      ) : null}
+
+                      {/* Buyer advisory */}
+                      <div className="rounded-xl border border-amber-200/80 bg-amber-50/80 px-4 py-3 text-xs font-medium text-amber-900 leading-5">
+                        ⚠️ These disclosures are self-reported by the seller. Always inspect items in person before completing payment, and verify any title or ownership documents independently.
                       </div>
                     </div>
                   ) : null}
@@ -1329,16 +1412,35 @@ export default function ListingDetailPage() {
                       <div className="text-xs text-muted-foreground">{comments.length} comment{comments.length === 1 ? "" : "s"}</div>
                     </div>
 
-                    <div className="rounded-2xl border p-3 space-y-3 sm:p-4">
+                    <div className="rounded-2xl border border-slate-200 bg-white p-4 space-y-4 shadow-sm sm:p-5">
                   {!auth.isAuthenticated ? (
-                    <AccentCallout label="Join the conversation" tone="blue">
-                      Sign in to join the conversation. Use email or connect a wallet from your profile.
-                      <div className="mt-3">
-                        <Button asChild size="sm" variant="outline" className="rounded-full">
-                          <Link href="/sign-in">Sign in</Link>
-                        </Button>
+                    <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-4 space-y-3">
+                      <div className="space-y-1">
+                        <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-blue-500">
+                          Public discussion
+                        </div>
+                        <div className="text-sm font-bold text-blue-900">
+                          Join the conversation
+                        </div>
+                        <div className="text-sm text-blue-700 leading-5">
+                          Ask the seller a question or share details about this listing. Comments are visible to everyone.
+                        </div>
                       </div>
-                    </AccentCallout>
+                      <div className="flex flex-wrap gap-2">
+                        <Link
+                          href="/sign-in"
+                          className="inline-flex items-center justify-center rounded-full bg-blue-600 px-5 py-2 text-sm font-bold text-white shadow-sm hover:bg-blue-700 transition-colors"
+                        >
+                          Sign in to comment
+                        </Link>
+                        <Link
+                          href="/sign-in?mode=register"
+                          className="inline-flex items-center justify-center rounded-full border border-blue-300 bg-white px-5 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-50 transition-colors"
+                        >
+                          Create account
+                        </Link>
+                      </div>
+                    </div>
                   ) : null}
                   <Textarea
                     value={commentDraft}
@@ -1355,8 +1457,13 @@ export default function ListingDetailPage() {
                         : "Sign in to your account to leave a comment."}
                     </div>
                     <div className="flex gap-2">
-                      <Button type="button" onClick={() => void submitComment()} disabled={!commentDraft.trim() || isSubmittingComment || !auth.isAuthenticated}>
-                        Post comment
+                      <Button
+                        type="button"
+                        onClick={() => void submitComment()}
+                        disabled={!commentDraft.trim() || isSubmittingComment || !auth.isAuthenticated}
+                        className="rounded-full bg-blue-600 text-white hover:bg-blue-700 border-0 px-6 disabled:opacity-40"
+                      >
+                        {isSubmittingComment ? "Posting…" : "Post comment"}
                       </Button>
                     </div>
                   </div>
@@ -1368,17 +1475,31 @@ export default function ListingDetailPage() {
                   ) : commentsError ? (
                     <div className="text-sm text-destructive">{commentsError}</div>
                   ) : comments.length === 0 ? (
-                    <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
-                      No public comments yet.
+                    <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/60 p-5 text-center">
+                      <div className="text-sm font-semibold text-slate-700">
+                        No comments yet
+                      </div>
+                      <div className="mt-1 text-xs text-slate-500">
+                        Be the first to ask the seller a question.
+                      </div>
                     </div>
                   ) : (
                     comments.map((item) => (
-                      <div key={item.id} className="rounded-2xl border p-3 space-y-2 sm:p-4">
-                        <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
-                          <div className="font-medium">{item.authorDisplayName?.trim() || shortenHex(item.authorAddress)}</div>
-                          <div className="text-xs text-muted-foreground">{new Date(item.createdAt).toLocaleString()}</div>
+                      <div key={item.id} className="rounded-2xl border border-slate-200 bg-white p-4 space-y-2 shadow-sm">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <div className="flex h-7 w-7 items-center justify-center rounded-full bg-blue-100 text-[11px] font-bold text-blue-700">
+                              {(item.authorDisplayName?.trim() || item.authorAddress).slice(0, 1).toUpperCase()}
+                            </div>
+                            <div className="text-sm font-bold text-slate-900">
+                              {item.authorDisplayName?.trim() || shortenHex(item.authorAddress)}
+                            </div>
+                          </div>
+                          <div className="text-xs font-medium text-slate-400">
+                            {new Date(item.createdAt).toLocaleDateString("en-CA", { year: "numeric", month: "short", day: "numeric" })}
+                          </div>
                         </div>
-                        <div className="text-sm whitespace-pre-wrap break-words">{item.body}</div>
+                        <div className="text-sm text-slate-700 leading-6 whitespace-pre-wrap break-words">{item.body}</div>
                       </div>
                     ))
                   )}
