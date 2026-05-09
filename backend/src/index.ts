@@ -1,4 +1,5 @@
 import express from "express";
+import compression from "compression";
 import cors from "cors";
 import dotenv from "dotenv";
 import helmet from "helmet";
@@ -80,6 +81,7 @@ async function main() {
   app.set("trust proxy", 1);
   app.disable("x-powered-by");
 
+  app.use(compression());
   app.use(pinoHttp({ logger }));
   app.use(helmet());
 

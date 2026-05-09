@@ -16,6 +16,7 @@
   "license": "ISC",
   "dependencies": {
     "@types/multer": "^2.1.0",
+    "compression": "^1.7.5",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
     "ethers": "^6.16.0",
@@ -32,6 +33,7 @@
     "zod": "^4.3.5"
   },
   "devDependencies": {
+    "@types/compression": "^1.7.5",
     "@types/cors": "^2.8.12",
     "@types/express": "^5.0.6",
     "@types/jsonwebtoken": "^9.0.10",

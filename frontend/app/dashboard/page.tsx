@@ -428,7 +428,10 @@ export default function DashboardPage() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  const [accountTab, setAccountTab] = React.useState<AccountTab>("profile");
+  const [accountTab, setAccountTab] = React.useState<AccountTab>(() => {
+    const tab = searchParams.get("tab");
+    return tab === "watch" || tab === "my-listings" ? tab : "profile";
+  });
   const [fullName, setFullName] = React.useState("");
   const [displayName, setDisplayName] = React.useState("");
   const [bio, setBio] = React.useState("");
