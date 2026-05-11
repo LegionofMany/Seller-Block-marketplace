@@ -120,6 +120,7 @@
   h4 {
     letter-spacing: -0.03em;
   }
+}
 
 @layer components {
   .market-shell {
@@ -421,6 +422,7 @@
     transition: none !important;
   }
 
+  @media (max-width: 639px) {
     .market-chip {
       padding: 0.35rem 0.65rem;
       font-size: 0.72rem;

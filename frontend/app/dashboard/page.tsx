@@ -1506,7 +1506,7 @@ export default function DashboardPage() {
                         tone="blue"
                         actions={
                           <Button asChild type="button" variant="outline" size="sm">
-                            <a href={blockPagesUrl} target="_blank" rel="noreferrer">
+                            <a href={blockPagesUrl} target="_blank" rel="noopener noreferrer">
                               Open BlockPages
                             </a>
                           </Button>

@@ -140,10 +140,10 @@ export default function RootLayout({
                     <div>Zonycs</div>
                     <div>Classifieds-first discovery, public threads, wallet-connected settlement.</div>
                     <div className="flex flex-wrap items-center gap-3">
-                      <a href={githubRepoUrl} target="_blank" rel="noreferrer" className="hover:text-foreground">
+                      <a href={githubRepoUrl} target="_blank" rel="noopener noreferrer" className="hover:text-foreground">
                         GitHub
                       </a>
-                      <a href={githubWikiUrl} target="_blank" rel="noreferrer" className="hover:text-foreground">
+                      <a href={githubWikiUrl} target="_blank" rel="noopener noreferrer" className="hover:text-foreground">
                         Wiki
                       </a>
                     </div>

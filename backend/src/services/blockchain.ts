@@ -1,4 +1,4 @@
-import { AbstractProvider, Contract, Interface, JsonRpcProvider, getAddress, isHexString } from "ethers";
+import { AbstractProvider, Contract, FallbackProvider, Interface, JsonRpcProvider, getAddress, isHexString } from "ethers";
 
 export type ProtocolAddresses = {
   escrowVault: string;
@@ -40,10 +40,23 @@ export function getProvider(rpcUrl: string | Array<string | undefined>) {
   const cached = providerCache.get(cacheKey);
   if (cached) return cached;
 
-  // Prefer a single provider instance here. ethers v6 FallbackProvider has been
-  // producing opaque INVALID_ARGUMENT errors when an underlying RPC times out,
-  // which breaks indexer recovery and obscures the real timeout cause.
-  const provider = new JsonRpcProvider(urls[0]);
+  // With a single URL use a plain JsonRpcProvider.
+  // With multiple URLs use FallbackProvider (quorum=1, stallTimeout=4 s):
+  //   - requests go to the highest-priority (primary) provider first
+  //   - if the primary stalls past stallTimeout the fallback fires in parallel
+  //   - whichever responds first wins — no INVALID_ARGUMENT from silent timeouts
+  const provider: AbstractProvider =
+    urls.length === 1
+      ? new JsonRpcProvider(urls[0])
+      : new FallbackProvider(
+          urls.map((url, i) => ({
+            provider: new JsonRpcProvider(url),
+            priority: i + 1,   // 1 = highest (primary), 2 = fallback
+            stallTimeout: 4_000, // ms before fallback is also tried
+            weight: 1,
+          })),
+          /* quorum= */ 1      // accept first successful response
+        );
   providerCache.set(cacheKey, provider);
   return provider;
 }

@@ -68,7 +68,7 @@ export function ListingCard({ row }: { row: ListingSummary }) {
         </CardHeader>
         <CardContent>
           <div className="mb-3 overflow-hidden rounded-md border bg-muted">
-            <div className="relative h-40 w-full">
+            <div className="relative aspect-[4/3] w-full">
               <Image
                 src={imageUrl}
                 alt={title}

@@ -459,7 +459,7 @@ export function MarketplaceBrowse() {
               </div>
               {region && CITY_MAP[region] ? (
                 <select
-                  className="block w-full rounded-md border bg-white dark:bg-slate-700 px-3 py-2 text-slate-900 dark:text-slate-100"
+                  className="h-9 block w-full rounded-md border border-input bg-white dark:bg-slate-800 px-3 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1"
                   value={city}
                   onChange={(e) => setCity(e.target.value)}
                 >
@@ -477,11 +477,14 @@ export function MarketplaceBrowse() {
                 <div className="space-y-2">
                   <Label>Province / Region</Label>
                   <select
-                    className="block w-full rounded-md border bg-white dark:bg-slate-700 px-3 py-2 text-slate-900 dark:text-slate-100"
+                    className="h-9 block w-full rounded-md border border-input bg-white dark:bg-slate-800 px-3 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1"
                     value={region}
                     onChange={(e) => {
-                      setRegion(e.target.value);
+                      const nextRegion = e.target.value;
+                      setRegion(nextRegion);
                       setCity("");
+                      setOffset(0);
+                      syncUrl({ q, category, subcategory, city: "", region: nextRegion, postalCode, minPrice, maxPrice, type, sort, offset: 0 });
                     }}
                   >
                     <option value="">All regions</option>
@@ -514,11 +517,11 @@ export function MarketplaceBrowse() {
               <Input value={postalCode} onChange={(e) => setPostalCode(e.target.value)} placeholder="e.g. M5V" />
             </div>
             <div className="space-y-2">
-              <Label>Min price (wei/raw)</Label>
+              <Label>Min price ({env.defaultChain.nativeCurrencySymbol})</Label>
               <Input value={minPrice} onChange={(e) => setMinPrice(e.target.value)} placeholder="0" />
             </div>
             <div className="space-y-2">
-              <Label>Max price (wei/raw)</Label>
+              <Label>Max price ({env.defaultChain.nativeCurrencySymbol})</Label>
               <Input value={maxPrice} onChange={(e) => setMaxPrice(e.target.value)} placeholder="" />
             </div>
             <div className="flex items-end gap-2 sm:col-span-2 lg:col-span-3">

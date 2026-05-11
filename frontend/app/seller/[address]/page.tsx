@@ -107,6 +107,14 @@ export default function SellerProfilePage() {
   const avatarUrl = user?.avatarCid ? `https://ipfs.io/ipfs/${user.avatarCid}` : null;
   const locationLabel = [user?.city, user?.region].filter(Boolean).join(", ");
 
+  React.useEffect(() => {
+    const name = user?.displayName?.trim() || user?.fullName?.trim();
+    document.title = name ? `${name} — Seller on Zonycs` : `Seller ${shortenHex(address)} — Zonycs`;
+    return () => {
+      document.title = "Zonycs — Buy & Sell Locally";
+    };
+  }, [address, user?.displayName, user?.fullName]);
+
   return (
     <div className="space-y-8">
       {/* Profile Header */}

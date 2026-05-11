@@ -270,8 +270,10 @@ export function SiteHeader() {
                   <div className="text-xs font-semibold text-slate-600">
                     Connect your wallet
                   </div>
-                  <div className="flex justify-start">
-                    <ConnectButton showBalance={false} chainStatus="icon" />
+                  <div className="flex justify-start max-w-full overflow-hidden">
+                    <div className="max-w-full [&>div]:max-w-full [&_button]:max-w-full [&_button]:truncate">
+                      <ConnectButton showBalance={false} chainStatus="icon" />
+                    </div>
                   </div>
 
                   {injectedWalletChecked && !hasInjectedWallet ? (
