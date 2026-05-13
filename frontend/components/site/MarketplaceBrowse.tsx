@@ -5,8 +5,15 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useAccount } from "wagmi";
 import { toast } from "sonner";
 
+import dynamic from "next/dynamic";
 import { ListingCard } from "@/components/listing/ListingCard";
 import { useAuth } from "@/components/providers/AuthProvider";
+import type { MapListing } from "@/components/map/MarketplaceMapView";
+
+const MarketplaceMapView = dynamic(
+  () => import("@/components/map/MarketplaceMapView").then((m) => m.MarketplaceMapView),
+  { ssr: false, loading: () => <div className="h-[520px] animate-pulse rounded-xl bg-muted" /> }
+);
 import { AccentCallout } from "@/components/ui/accent-callout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -30,8 +37,8 @@ function parseSort(value: string | null): "newest" | "price_asc" | "price_desc" 
   return value === "price_asc" || value === "price_desc" ? value : "newest";
 }
 
-function parseSaleType(value: string | null): "" | "fixed" | "auction" | "raffle" {
-  return value === "fixed" || value === "auction" || value === "raffle" ? value : "";
+function parseSaleType(value: string | null): undefined | "fixed" | "auction" | "raffle" {
+  return value === "fixed" || value === "auction" || value === "raffle" ? value : undefined;
 }
 
 export function MarketplaceBrowse() {
@@ -50,7 +57,7 @@ export function MarketplaceBrowse() {
   const [postalCode, setPostalCode] = React.useState(() => normalizeSearchValue(searchParams.get("postalCode")));
   const [minPrice, setMinPrice] = React.useState(() => normalizeSearchValue(searchParams.get("minPrice")));
   const [maxPrice, setMaxPrice] = React.useState(() => normalizeSearchValue(searchParams.get("maxPrice")));
-  const [type, setType] = React.useState<"" | "fixed" | "auction" | "raffle">(() => parseSaleType(searchParams.get("type")));
+  const [type, setType] = React.useState<undefined | "fixed" | "auction" | "raffle">(() => parseSaleType(searchParams.get("type")));
   const [sort, setSort] = React.useState<"newest" | "price_asc" | "price_desc">(() => parseSort(searchParams.get("sort")));
 
   
@@ -63,24 +70,11 @@ export function MarketplaceBrowse() {
   const [savedSearchEmail, setSavedSearchEmail] = React.useState("");
   const [isSavingSearch, setIsSavingSearch] = React.useState(false);
   const [isDetectingLocation, setIsDetectingLocation] = React.useState(false);
+  const [viewMode, setViewMode] = React.useState<"grid" | "map">("grid");
+  const [mapListings, setMapListings] = React.useState<MapListing[]>([]);
+  const [userCoords, setUserCoords] = React.useState<{ lat: number; lng: number } | null>(null);
+  const [regionCoords, setRegionCoords] = React.useState<{ lat: number; lng: number; zoom: number } | null>(null);
   const limit = 24;
-  const savedLocation = React.useMemo(() => getProfileLocationFilter(auth.user), [auth.user]);
-  const savedLocationLabel = React.useMemo(() => formatLocationLabel(savedLocation), [savedLocation]);
-
-  React.useEffect(() => {
-    setQ(normalizeSearchValue(searchParams.get("q")));
-    setCategory(normalizeSearchValue(searchParams.get("category")));
-    setSubcategory(normalizeSearchValue(searchParams.get("subcategory")));
-    setCity(normalizeSearchValue(searchParams.get("city")));
-    setRegion(normalizeSearchValue(searchParams.get("region")));
-    setPostalCode(normalizeSearchValue(searchParams.get("postalCode")));
-    setMinPrice(normalizeSearchValue(searchParams.get("minPrice")));
-    setMaxPrice(normalizeSearchValue(searchParams.get("maxPrice")));
-    setType(parseSaleType(searchParams.get("type")));
-    setSort(parseSort(searchParams.get("sort")));
-    const nextOffset = Number.parseInt(searchParams.get("offset") ?? "0", 10);
-    setOffset(Number.isFinite(nextOffset) && nextOffset > 0 ? nextOffset : 0);
-  }, [searchParams]);
 
   const syncUrl = React.useCallback((next: {
     q?: string;
@@ -91,7 +85,7 @@ export function MarketplaceBrowse() {
     postalCode?: string;
     minPrice?: string;
     maxPrice?: string;
-    type?: "" | "fixed" | "auction" | "raffle";
+    type?: undefined | "fixed" | "auction" | "raffle";
     sort?: "newest" | "price_asc" | "price_desc";
     offset?: number;
   }) => {
@@ -111,6 +105,89 @@ export function MarketplaceBrowse() {
     router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
   }, [pathname, router]);
 
+  // ── Debounced keyword search (300 ms) ────────────────────────────────
+  const syncUrlRef = React.useRef(syncUrl); // keep stable ref
+  React.useEffect(() => { syncUrlRef.current = syncUrl; });
+
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      syncUrlRef.current({ q, category, subcategory, city, region, postalCode, minPrice, maxPrice, type, sort, offset: 0 });
+      setOffset(0);
+    }, 300);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [q]);
+
+  // ── "Clear all filters" visibility ──────────────────────────────────
+  const hasActiveFilters = Boolean(
+    q.trim() || category || subcategory || city || region || postalCode ||
+    minPrice || maxPrice || type || sort !== "newest"
+  );
+
+  // ── Accumulated "load more" listings ────────────────────────────────
+  const isLoadMoreRef = React.useRef(false);
+  const [allAccumulated, setAllAccumulated] = React.useState<typeof listings>([]);
+
+  const savedLocation = React.useMemo(() => getProfileLocationFilter(auth.user), [auth.user]);
+  const savedLocationLabel = React.useMemo(() => formatLocationLabel(savedLocation), [savedLocation]);
+
+  React.useEffect(() => {
+    setQ(normalizeSearchValue(searchParams.get("q")));
+    setCategory(normalizeSearchValue(searchParams.get("category")));
+    setSubcategory(normalizeSearchValue(searchParams.get("subcategory")));
+    setCity(normalizeSearchValue(searchParams.get("city")));
+    setRegion(normalizeSearchValue(searchParams.get("region")));
+    setPostalCode(normalizeSearchValue(searchParams.get("postalCode")));
+    setMinPrice(normalizeSearchValue(searchParams.get("minPrice")));
+    setMaxPrice(normalizeSearchValue(searchParams.get("maxPrice")));
+    setType(parseSaleType(searchParams.get("type")));
+    setSort(parseSort(searchParams.get("sort")));
+    const nextOffset = Number.parseInt(searchParams.get("offset") ?? "0", 10);
+    setOffset(Number.isFinite(nextOffset) && nextOffset > 0 ? nextOffset : 0);
+  }, [searchParams]);
+
+  // Build geocoded MapListing array whenever visible listings or view mode changes
+  const { listings: rawListings } = useListings({
+    q, category, subcategory, city, region, postalCode, minPrice, maxPrice,
+    type, sort, limit: 200, offset: 0,
+  });
+
+  React.useEffect(() => {
+    if (viewMode !== "map") return;
+    let cancelled = false;
+    async function buildMapListings() {
+      const { geocodeLocation } = await import("@/lib/hooks/useGeocoder");
+      const { getRenderableListingImage, fetchMetadataByUri } = await import("@/lib/metadata");
+      const built: MapListing[] = [];
+      for (const row of (rawListings ?? [])) {
+        const meta = row.metadataURI ? await fetchMetadataByUri(row.metadataURI).catch(() => null) : null;
+        let lat = meta?.lat;
+        let lng = meta?.lng;
+        if ((!lat || !lng) && (meta?.city || meta?.region)) {
+          const loc = [meta?.city, meta?.region].filter(Boolean).join(", ");
+          const pt = await geocodeLocation(loc);
+          if (pt) { lat = pt.lat; lng = pt.lng; }
+        }
+        if (!lat || !lng) continue;
+        built.push({
+          id: row.id,
+          chainKey: row.chainKey,
+          title: meta?.title?.trim() || "Listing",
+          price: row.price,
+          token: row.token,
+          lat, lng,
+          imageUrl: meta ? getRenderableListingImage(meta.image) : undefined,
+          city: meta?.city,
+          region: meta?.region,
+        });
+        if (cancelled) return;
+      }
+      if (!cancelled) setMapListings(built);
+    }
+    void buildMapListings();
+    return () => { cancelled = true; };
+  }, [viewMode, rawListings]);
+
   const params = {
     ...(q.trim() ? { q: q.trim() } : {}),
     ...(category.trim() ? { category: category.trim() } : {}),
@@ -128,15 +205,30 @@ export function MarketplaceBrowse() {
 
   const { listings, isLoading, error } = useListings(params);
 
+  // Merge newly loaded page into the accumulated list
+  React.useEffect(() => {
+    if (isLoading || !listings) return;
+    if (isLoadMoreRef.current) {
+      setAllAccumulated((prev) => {
+        const existingIds = new Set(prev.map((l) => `${l.chainKey}:${l.id}`));
+        const fresh = listings.filter((l) => !existingIds.has(`${l.chainKey}:${l.id}`));
+        return [...prev, ...fresh];
+      });
+      isLoadMoreRef.current = false;
+    } else {
+      setAllAccumulated(listings);
+    }
+  }, [listings, isLoading]);
+
   const [blockedSellers, setBlockedSellers] = React.useState<string[]>([]);
   React.useEffect(() => {
     setBlockedSellers(getBlockedSellers(address ?? null));
   }, [address]);
 
   const visibleListings = React.useMemo(() => {
-    if (!blockedSellers.length) return listings;
-    return listings.filter((listing) => !blockedSellers.includes(String(listing.seller).toLowerCase()));
-  }, [listings, blockedSellers]);
+    if (!blockedSellers.length) return allAccumulated;
+    return allAccumulated.filter((listing) => !blockedSellers.includes(String(listing.seller).toLowerCase()));
+  }, [allAccumulated, blockedSellers]);
 
   function applyFilters(e: React.FormEvent) {
     e.preventDefault();
@@ -205,6 +297,10 @@ export function MarketplaceBrowse() {
       );
 
       const { latitude, longitude } = position.coords;
+
+      // Store raw coords and switch to map view so the map centers on the user
+      setUserCoords({ lat: latitude, lng: longitude });
+      setViewMode("map");
 
       const res = await fetch(
         `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`,
@@ -422,7 +518,7 @@ export function MarketplaceBrowse() {
             <div className="space-y-2">
               <Label>Sale type</Label>
               <div className="flex flex-wrap gap-2">
-                <Button type="button" size="sm" variant={!type ? "default" : "outline"} onClick={() => setType("")}>All</Button>
+                <Button type="button" size="sm" variant={!type ? "default" : "outline"} onClick={() => setType(undefined)}>All</Button>
                 <Button type="button" size="sm" variant={type === "fixed" ? "default" : "outline"} onClick={() => setType("fixed")}>Fixed</Button>
                 <Button type="button" size="sm" variant={type === "auction" ? "default" : "outline"} onClick={() => setType("auction")}>Auction</Button>
                 <Button type="button" size="sm" variant={type === "raffle" ? "default" : "outline"} onClick={() => setType("raffle")}>Raffle</Button>
@@ -479,12 +575,32 @@ export function MarketplaceBrowse() {
                   <select
                     className="h-9 block w-full rounded-md border border-input bg-white dark:bg-slate-800 px-3 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1"
                     value={region}
-                    onChange={(e) => {
+                    onChange={async (e) => {
                       const nextRegion = e.target.value;
                       setRegion(nextRegion);
                       setCity("");
                       setOffset(0);
+                      setUserCoords(null);
                       syncUrl({ q, category, subcategory, city: "", region: nextRegion, postalCode, minPrice, maxPrice, type, sort, offset: 0 });
+                      if (nextRegion) {
+                        // Geocode the region/country name with smart zoom:
+                        // country→5, state/province→7, city→11, fallback→8
+                        const { geocodeQuery } = await import("@/lib/hooks/useGeocoder");
+                        const results = await geocodeQuery(nextRegion);
+                        if (results.length) {
+                          const top = results[0];
+                          const lat = parseFloat(top.lat);
+                          const lng = parseFloat(top.lon);
+                          let zoom = 8;
+                          if (top.type === "country") zoom = 5;
+                          else if (top.type === "administrative") zoom = 7;
+                          else if (top.type === "city" || top.type === "town") zoom = 11;
+                          setRegionCoords({ lat, lng, zoom });
+                          setViewMode("map");
+                        }
+                      } else {
+                        setRegionCoords(null);
+                      }
                     }}
                   >
                     <option value="">All regions</option>
@@ -539,10 +655,12 @@ export function MarketplaceBrowse() {
                   setPostalCode("");
                   setMinPrice("");
                   setMaxPrice("");
-                  setType("");
+                  setType(undefined);
                   setSort("newest");
                   setOffset(0);
-                  syncUrl({ q: "", category: "", subcategory: "", city: "", region: "", postalCode: "", minPrice: "", maxPrice: "", type: "", sort: "newest", offset: 0 });
+                  setUserCoords(null);
+                  setRegionCoords(null);
+                  syncUrl({ q: "", category: "", subcategory: "", city: "", region: "", postalCode: "", minPrice: "", maxPrice: "", type: undefined, sort: "newest", offset: 0 });
                 }}
               >
                 Reset
@@ -595,7 +713,74 @@ export function MarketplaceBrowse() {
         </Card>
       ) : null}
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      {/* ── View mode toggle ─────────────────────────────── */}
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2 flex-wrap">
+          <p className="text-sm text-muted-foreground">
+            {isLoading ? "Loading…" : `${visibleListings.length} listing${visibleListings.length !== 1 ? "s" : ""}`}
+          </p>
+          {hasActiveFilters && (
+            <button
+              type="button"
+              onClick={() => {
+                isLoadMoreRef.current = false;
+                setQ(""); setCategory(""); setSubcategory(""); setCity("");
+                setRegion(""); setPostalCode(""); setMinPrice(""); setMaxPrice("");
+                setType(undefined); setSort("newest"); setOffset(0);
+                setUserCoords(null); setRegionCoords(null);
+                setAllAccumulated([]);
+                syncUrl({ q: "", category: "", subcategory: "", city: "", region: "", postalCode: "", minPrice: "", maxPrice: "", type: undefined, sort: "newest", offset: 0 });
+              }}
+              className="flex items-center gap-1 rounded-full border border-border bg-muted px-2.5 py-0.5 text-xs font-semibold text-muted-foreground hover:text-foreground hover:border-foreground transition-colors"
+            >
+              <svg viewBox="0 0 24 24" className="h-3 w-3 fill-current" aria-hidden><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+              Clear all filters
+            </button>
+          )}
+        </div>
+        <div className="flex items-center gap-1 rounded-full border border-border bg-muted p-1">
+          <button
+            type="button"
+            onClick={() => setViewMode("grid")}
+            className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
+              viewMode === "grid"
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-current" aria-hidden>
+              <path d="M3 3h8v8H3zm0 10h8v8H3zm10-10h8v8h-8zm0 10h8v8h-8z" />
+            </svg>
+            Grid
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode("map")}
+            className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
+              viewMode === "map"
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-current" aria-hidden>
+              <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" />
+            </svg>
+            Map
+          </button>
+        </div>
+      </div>
+
+      {/* ── Map view ─────────────────────────────────────── */}
+      {viewMode === "map" && (
+        <MarketplaceMapView
+          listings={mapListings}
+          userCoords={userCoords}
+          regionCoords={regionCoords}
+        />
+      )}
+
+      {/* ── Grid view ────────────────────────────────────── */}
+      <div className={viewMode === "map" ? "hidden" : "grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4"}>
         {isLoading
           ? Array.from({ length: 6 }).map((_, index) => (
               <Card key={index}>
@@ -612,33 +797,34 @@ export function MarketplaceBrowse() {
           : visibleListings.map((listing) => <ListingCard key={listing.id} row={listing} />)}
       </div>
 
-      <div className="flex items-center justify-between">
-        <Button
-          type="button"
-          variant="outline"
-          disabled={offset === 0 || isLoading}
-          onClick={() => {
-            const nextOffset = Math.max(0, offset - limit);
-            setOffset(nextOffset);
-            syncUrl({ q, category, subcategory, city, region, postalCode, minPrice, maxPrice, type, sort, offset: nextOffset });
-          }}
-        >
-          Previous
-        </Button>
-        <div className="text-xs text-muted-foreground">Showing {offset + 1}–{offset + visibleListings.length}</div>
-        <Button
-          type="button"
-          variant="outline"
-          disabled={visibleListings.length < limit || isLoading}
-          onClick={() => {
-            const nextOffset = offset + limit;
-            setOffset(nextOffset);
-            syncUrl({ q, category, subcategory, city, region, postalCode, minPrice, maxPrice, type, sort, offset: nextOffset });
-          }}
-        >
-          Next
-        </Button>
-      </div>
+      {/* ── Load more ──────────────────────────────────────────────────── */}
+      {(listings?.length ?? 0) >= limit && (
+        <div className="flex flex-col items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="lg"
+            disabled={isLoading}
+            className="rounded-2xl px-10 font-semibold"
+            onClick={() => {
+              isLoadMoreRef.current = true;
+              const nextOffset = offset + limit;
+              setOffset(nextOffset);
+              syncUrl({ q, category, subcategory, city, region, postalCode, minPrice, maxPrice, type, sort, offset: nextOffset });
+            }}
+          >
+            {isLoading ? (
+              <span className="flex items-center gap-2">
+                <span className="h-4 w-4 animate-spin rounded-full border-2 border-muted-foreground border-t-foreground" />
+                Loading…
+              </span>
+            ) : (
+              "Load more listings"
+            )}
+          </Button>
+          <p className="text-xs text-muted-foreground">{visibleListings.length} shown</p>
+        </div>
+      )}
     </div>
   );
 }

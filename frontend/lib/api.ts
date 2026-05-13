@@ -1,5 +1,6 @@
 import { getEnv } from "./env";
 import { getStoredAuthToken } from "./auth";
+import { toast } from "sonner";
 
 export type ApiError = {
   message: string;
@@ -10,6 +11,9 @@ function baseUrl() {
   const env = getEnv();
   return (env.backendUrl ?? "http://localhost:4000").replace(/\/$/, "");
 }
+
+/** Tracks whether a 429 toast is already showing so we don't spam it. */
+let rateLimitToastActive = false;
 
 export async function fetchJson<T>(path: string, init?: RequestInit & { timeoutMs?: number }): Promise<T> {
   const url = `${baseUrl()}${path.startsWith("/") ? path : `/${path}`}`;
@@ -32,6 +36,24 @@ export async function fetchJson<T>(path: string, init?: RequestInit & { timeoutM
       headers,
       signal: controller.signal,
     });
+
+    // ── 429 Rate-limit feedback ──────────────────────────────────────────
+    if (res.status === 429 && !rateLimitToastActive) {
+      rateLimitToastActive = true;
+      const retryAfter = res.headers.get("Retry-After");
+      const seconds = retryAfter ? Number(retryAfter) : null;
+      toast.warning(
+        seconds
+          ? `Too many requests — please wait ${seconds}s before trying again.`
+          : "Too many requests — please wait a moment before trying again.",
+        {
+          id: "rate-limit",
+          duration: 5_000,
+          onDismiss: () => { rateLimitToastActive = false; },
+          onAutoClose: () => { rateLimitToastActive = false; },
+        }
+      );
+    }
 
     const text = await res.text();
     const data = text ? JSON.parse(text) : null;

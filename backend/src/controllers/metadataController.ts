@@ -53,6 +53,9 @@ export async function uploadMetadata(req: Request, res: Response) {
       : [];
   const primaryImage = (parsed.data.image ?? images[0] ?? "").trim();
 
+  const rawLat = (parsed.data as any).lat;
+  const rawLng = (parsed.data as any).lng;
+
   await upsertMetadata(db, {
     id,
     uri: metadataURI,
@@ -65,6 +68,9 @@ export async function uploadMetadata(req: Request, res: Response) {
     city: (parsed.data as any).city ?? null,
     region: (parsed.data as any).region ?? null,
     postalCode: (parsed.data as any).postalCode ?? null,
+    country: (parsed.data as any).country ?? null,
+    lat: rawLat != null ? Number(rawLat) : null,
+    lng: rawLng != null ? Number(rawLng) : null,
     contactEmail: (parsed.data as any).contactEmail ?? null,
     contactPhone: (parsed.data as any).contactPhone ?? null,
     attributesJson: JSON.stringify(parsed.data.attributes ?? []),
@@ -114,6 +120,9 @@ export async function getMetadataById(req: Request, res: Response) {
     city: row.city ?? undefined,
     region: row.region ?? undefined,
     postalCode: row.postalCode ?? undefined,
+    country: row.country ?? undefined,
+    lat: row.lat ?? undefined,
+    lng: row.lng ?? undefined,
     contactEmail: row.contactEmail ?? undefined,
     contactPhone: row.contactPhone ?? undefined,
     attributes,
@@ -161,6 +170,9 @@ export async function getMetadataByUriHandler(req: Request, res: Response) {
     city: row.city ?? undefined,
     region: row.region ?? undefined,
     postalCode: row.postalCode ?? undefined,
+    country: row.country ?? undefined,
+    lat: row.lat ?? undefined,
+    lng: row.lng ?? undefined,
     contactEmail: row.contactEmail ?? undefined,
     contactPhone: row.contactPhone ?? undefined,
     attributes,
@@ -186,6 +198,11 @@ export async function uploadMetadataIpfs(req: Request, res: Response) {
   // Compute a stable id using the existing sha256 scheme.
   const { id } = buildFakeMetadataUri(parsed.data);
 
+  const rawLatIpfs = (parsed.data as any).lat;
+  const rawLngIpfs = (parsed.data as any).lng;
+  const latIpfs = rawLatIpfs != null ? Number(rawLatIpfs) : undefined;
+  const lngIpfs = rawLngIpfs != null ? Number(rawLngIpfs) : undefined;
+
   const metadataJson = {
     id,
     title: parsed.data.title,
@@ -197,6 +214,9 @@ export async function uploadMetadataIpfs(req: Request, res: Response) {
     city: (parsed.data as any).city,
     region: (parsed.data as any).region,
     postalCode: (parsed.data as any).postalCode,
+    country: (parsed.data as any).country,
+    lat: latIpfs,
+    lng: lngIpfs,
     contactEmail: (parsed.data as any).contactEmail,
     contactPhone: (parsed.data as any).contactPhone,
     attributes: parsed.data.attributes ?? [],
@@ -218,6 +238,9 @@ export async function uploadMetadataIpfs(req: Request, res: Response) {
     city: (parsed.data as any).city ?? null,
     region: (parsed.data as any).region ?? null,
     postalCode: (parsed.data as any).postalCode ?? null,
+    country: (parsed.data as any).country ?? null,
+    lat: latIpfs ?? null,
+    lng: lngIpfs ?? null,
     contactEmail: (parsed.data as any).contactEmail ?? null,
     contactPhone: (parsed.data as any).contactPhone ?? null,
     attributesJson: JSON.stringify(parsed.data.attributes ?? []),

@@ -64,18 +64,14 @@ services:
         sync: false
       - key: STRIPE_SECRET_KEY
         sync: false
-      - key: PROMOTION_BUMP_PRICE_CENTS
-        value: 500
-      - key: PROMOTION_TOP_PRICE_CENTS
-        value: 1500
-      - key: PROMOTION_FEATURED_PRICE_CENTS
-        value: 3000
-      - key: PROMOTION_BUMP_DURATION_HOURS
-        value: 24
-      - key: PROMOTION_TOP_DURATION_HOURS
-        value: 72
-      - key: PROMOTION_FEATURED_DURATION_HOURS
-        value: 168
+      - key: PROMOTION_HOMEPAGE_PRICE_CENTS
+        value: 4900
+      - key: PROMOTION_HOMEPAGE_DURATION_DAYS
+        value: 7
+      - key: PROMOTION_HOMEPAGE_PRIORITY
+        value: 180
+      - key: PROMOTION_HOMEPAGE_PLACEMENT_SLOT
+        value: homepage-paid-primary
       - key: PINATA_JWT
         sync: false
       - key: PINATA_GATEWAY_BASE_URL

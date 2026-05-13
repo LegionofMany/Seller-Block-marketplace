@@ -472,6 +472,7 @@ export default function DashboardPage() {
   const [creditAmount, setCreditAmount] = React.useState<bigint | null>(null);
   const [myListingIds, setMyListingIds] = React.useState<Hex[] | null>(null);
   const [myListings, setMyListings] = React.useState<DashboardListingRow[] | null>(null);
+  const [myListingsSummaries, setMyListingsSummaries] = React.useState<ListingSummary[] | null>(null);
   const [adminListings, setAdminListings] = React.useState<DashboardListingRow[]>([]);
   const [isLoadingAdminListings, setIsLoadingAdminListings] = React.useState(false);
   const [adminListingsError, setAdminListingsError] = React.useState<string | null>(null);
@@ -1244,6 +1245,7 @@ export default function DashboardPage() {
       if (!auth.isAuthenticated) {
         setMyListingIds([]);
         setMyListings([]);
+        setMyListingsSummaries([]);
         return;
       }
 
@@ -1255,12 +1257,14 @@ export default function DashboardPage() {
       if (!sellerAddress) {
         setMyListingIds([]);
         setMyListings([]);
+        setMyListingsSummaries([]);
         return;
       }
 
       try {
         setMyListingIds(null);
         setMyListings(null);
+        setMyListingsSummaries(null);
 
         const resp = await fetchJson<{
           items: BackendListingRow[];
@@ -1288,11 +1292,13 @@ export default function DashboardPage() {
               buyer: zeroAddress,
             }))
           );
+          setMyListingsSummaries(items.map(toListingSummary));
         }
       } catch (error: unknown) {
         if (!cancelled) {
           setMyListingIds([]);
           setMyListings([]);
+          setMyListingsSummaries([]);
           toast.error(
             getErrorMessage(error, "Failed to load your listings")
           );
@@ -1320,15 +1326,29 @@ export default function DashboardPage() {
     <div className="space-y-6">
       <section className="market-hero px-4 py-5 sm:px-8 sm:py-8">
         <div className="grid gap-6 lg:grid-cols-[1.5fr_1fr] lg:items-end">
-          <div className="space-y-4">
+          <div className="space-y-3">
             <div className="market-section-title">Your account</div>
-            <div className="space-y-2">
-              <h1 className="text-2xl font-semibold tracking-tight text-slate-950 sm:text-4xl">Run your account with a cleaner market rhythm.</h1>
-              <p className="max-w-2xl text-[13px] leading-6 text-slate-600 sm:text-base">Profile, watch activity, and live inventory sit inside one account shell — follows, saved ads, alerts, and listings in one continuous flow.</p>
+            <div className="space-y-1.5">
+              <h1 className="text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl">
+                {auth.isAuthenticated && (auth.user?.displayName || auth.user?.fullName)
+                  ? `Welcome back, ${auth.user?.displayName || auth.user?.fullName?.split(" ")[0]}.`
+                  : "Your marketplace dashboard."}
+              </h1>
+              <p className="max-w-2xl text-sm leading-6 text-slate-600">
+                Profile, watch activity, and live inventory — all in one place.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button asChild size="sm" className="rounded-full">
+                <Link href="/create">Post a listing</Link>
+              </Button>
+              <Button asChild size="sm" variant="outline" className="rounded-full">
+                <Link href="/marketplace">Browse marketplace</Link>
+              </Button>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-3">
+          <div className="grid grid-cols-2 gap-2 sm:gap-3">
             <div className="market-stat">
               <div className="text-xs uppercase tracking-[0.18em] text-slate-500 font-semibold">Follows</div>
               <div className="mt-2 text-2xl font-bold text-slate-900">{followedSellers.length}</div>
@@ -1344,7 +1364,6 @@ export default function DashboardPage() {
             <div className="market-stat">
               <div className="text-xs uppercase tracking-[0.18em] text-slate-500 font-semibold">My listings</div>
               <div className="mt-2 text-2xl font-bold text-slate-900">{Array.isArray(myListingIds) ? myListingIds.length : "—"}</div>
-              <div className="mt-1 text-xs text-slate-500">Your active and past listings.</div>
             </div>
           </div>
         </div>
@@ -1470,6 +1489,51 @@ export default function DashboardPage() {
                     </AccentCallout>
                   ) : (
                     <div className="grid gap-4">
+                      {/* Profile identity card */}
+                      <div className="flex flex-col gap-4 rounded-2xl border border-slate-200/80 bg-gradient-to-br from-slate-50 to-white p-4 shadow-sm sm:flex-row sm:items-center sm:p-5">
+                        <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary to-primary/80 text-2xl font-bold text-white">
+                          {((auth.user?.displayName || auth.user?.fullName || "?")[0] ?? "?").toUpperCase()}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-lg font-bold text-slate-950">
+                            {auth.user?.displayName || auth.user?.fullName || "Complete your profile"}
+                          </div>
+                          <div className="truncate text-sm text-slate-500">
+                            {auth.user?.email?.trim() ||
+                              (auth.user?.linkedWalletAddress
+                                ? shortenHex(auth.user.linkedWalletAddress as Hex)
+                                : address
+                                  ? shortenHex(address)
+                                  : "No wallet linked")}
+                          </div>
+                          <div className="mt-2 flex flex-wrap gap-1.5">
+                            {auth.user?.sellerVerifiedAt ? (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-bold text-emerald-800">
+                                <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 20 20" aria-hidden>
+                                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                </svg>
+                                Verified seller
+                              </span>
+                            ) : null}
+                            {auth.user?.city?.trim() || auth.user?.region?.trim() ? (
+                              <span className="rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-medium text-blue-700">
+                                {[auth.user.city, auth.user.region].filter(Boolean).join(", ")}
+                              </span>
+                            ) : null}
+                            {auth.user?.authMethod === "email" && auth.user?.emailVerifiedAt ? (
+                              <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600">Email verified</span>
+                            ) : null}
+                          </div>
+                        </div>
+                        {auth.user?.linkedWalletAddress || address ? (
+                          <Link
+                            href={`/seller/${auth.user?.linkedWalletAddress ?? address}`}
+                            className="shrink-0 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition-colors hover:bg-slate-50"
+                          >
+                            View public profile
+                          </Link>
+                        ) : null}
+                      </div>
                       <div className="flex flex-wrap gap-2 text-xs">
                         {auth.user?.email?.trim() ? <span className="market-chip">Email account</span> : null}
                         {auth.user?.authMethod === "email" ? <span className="market-chip">{auth.user?.emailVerifiedAt ? "Email verified" : "Email not verified"}</span> : null}
@@ -2912,11 +2976,12 @@ export default function DashboardPage() {
                   </div>
                 ) : null}
 
-                {myListingIds === null || myListings === null ? (
-                  <div className="space-y-2">
-                    <Skeleton className="h-4 w-64" />
-                    <Skeleton className="h-4 w-56" />
-                    <Skeleton className="h-4 w-72" />
+                {myListingIds === null || myListings === null || myListingsSummaries === null ? (
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <Skeleton className="h-52 w-full rounded-2xl" />
+                    <Skeleton className="h-52 w-full rounded-2xl" />
+                    <Skeleton className="h-52 w-full rounded-2xl" />
+                    <Skeleton className="h-52 w-full rounded-2xl" />
                   </div>
                 ) : myListingIds.length === 0 ? (
                   <AccentCallout
@@ -2931,35 +2996,51 @@ export default function DashboardPage() {
                     Your seller inventory is still empty. Publish the first listing and this space becomes your live storefront.
                   </AccentCallout>
                 ) : (
-                  <div className="space-y-2">
-                    {(myListings ?? []).map((row) => (
-                      <div key={row.id} className="rounded-2xl border bg-white/80 px-3 py-3 text-sm shadow-sm sm:px-4">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0 flex-1">
-                            <div className="break-all font-medium text-slate-950">{row.id}</div>
-                            <div className="mt-1 text-xs text-muted-foreground">{statusLabel(row.status)}</div>
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    {myListingsSummaries.map((summary) => {
+                      const row = (myListings ?? []).find(
+                        (r) => r.id === summary.id && r.chainKey === summary.chainKey
+                      );
+                      const listingKey = `${summary.chainKey}:${summary.id}`;
+                      return (
+                        <div key={listingKey} className="flex flex-col gap-2">
+                          <div className="overflow-hidden rounded-2xl border border-slate-200/80 shadow-sm">
+                            <ListingCard row={summary} />
                           </div>
-                          <div className="flex shrink-0 flex-col gap-2 sm:flex-row">
-                            <Button asChild variant="outline" size="sm" className="w-full sm:w-auto">
-                              <Link href={buildListingHref(String(row.id), row.chainKey)}>Open</Link>
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="destructive"
-                              size="sm"
-                              className="w-full sm:w-auto"
-                              disabled={deletingListingId === `${row.chainKey}:${row.id}`}
-                              onClick={() => setPendingDeleteListing(row)}
-                            >
-                              {deletingListingId === `${row.chainKey}:${row.id}` ? "Deleting..." : "Delete listing"}
-                            </Button>
+                          <div className="flex items-center gap-2 px-1">
+                            <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold ${
+                              summary.status === 1
+                                ? "bg-emerald-100 text-emerald-800"
+                                : "bg-slate-100 text-slate-600"
+                            }`}>
+                              {statusLabel(summary.status)}
+                            </span>
+                            <span className="rounded-full bg-blue-50 px-2.5 py-0.5 text-[11px] font-bold text-blue-700">
+                              {summary.chainKey}
+                            </span>
+                            {row?.buyer && row.buyer !== zeroAddress ? (
+                              <span className="rounded-full bg-amber-50 px-2.5 py-0.5 text-[11px] font-bold text-amber-700">
+                                Buyer: {shortenHex(row.buyer)}
+                              </span>
+                            ) : null}
+                            <div className="ml-auto flex gap-2">
+                              <Button asChild variant="outline" size="sm">
+                                <Link href={buildListingHref(String(summary.id), summary.chainKey)}>Open</Link>
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="destructive"
+                                size="sm"
+                                disabled={deletingListingId === listingKey}
+                                onClick={() => row && setPendingDeleteListing(row)}
+                              >
+                                {deletingListingId === listingKey ? "Deleting..." : "Delete"}
+                              </Button>
+                            </div>
                           </div>
                         </div>
-                        {row.buyer && row.buyer !== zeroAddress ? (
-                          <div className="mt-1 text-xs text-muted-foreground">Buyer: {shortenHex(row.buyer)}</div>
-                        ) : null}
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </CardContent>

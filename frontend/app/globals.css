@@ -114,6 +114,13 @@
     color: hsl(var(--foreground));
   }
 
+  .dark body {
+    background:
+      radial-gradient(circle at top left, hsla(220, 70%, 30%, 0.18), transparent 30%),
+      radial-gradient(circle at top right, hsla(210, 65%, 25%, 0.14), transparent 26%),
+      linear-gradient(180deg, hsl(var(--background)), hsl(240 10% 5%));
+  }
+
   h1,
   h2,
   h3,
@@ -452,4 +459,132 @@
       margin-top: -0.25rem;
     }
   }
+
+  /* ── Dark-mode overrides for market-* component classes ──────────────── */
+
+  .dark .market-shell::before {
+    background-image:
+      linear-gradient(hsla(214, 70%, 65%, 0.04) 1px, transparent 1px),
+      linear-gradient(90deg, hsla(214, 70%, 65%, 0.04) 1px, transparent 1px);
+  }
+
+  .dark .market-hero {
+    background: linear-gradient(135deg, rgba(20, 25, 40, 0.97), rgba(15, 22, 38, 0.94));
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4);
+  }
+
+  .dark .market-hero::after {
+    background: radial-gradient(circle, hsla(213, 70%, 45%, 0.18), transparent 70%);
+  }
+
+  .dark .market-panel {
+    background: rgba(15, 20, 35, 0.88);
+    box-shadow: 0 14px 40px rgba(0, 0, 0, 0.35);
+  }
+
+  .dark .market-stat {
+    background: rgba(20, 27, 45, 0.75);
+  }
+
+  .dark .market-chip {
+    background: rgba(20, 27, 45, 0.8);
+  }
+
+  .dark .market-note {
+    background: rgba(18, 28, 50, 0.82);
+  }
+
+  /* Dark callout variants */
+  .dark .market-callout-mint {
+    --market-callout-label: #34d399;
+    --market-callout-copy: #a7f3d0;
+    background: linear-gradient(135deg, rgba(6, 40, 28, 0.95), rgba(5, 35, 24, 0.9));
+    border-color: rgba(52, 211, 153, 0.22);
+  }
+
+  .dark .market-callout-blue {
+    --market-callout-label: #60a5fa;
+    --market-callout-copy: #bfdbfe;
+    background: linear-gradient(135deg, rgba(10, 28, 58, 0.96), rgba(8, 22, 48, 0.92));
+    border-color: rgba(96, 165, 250, 0.2);
+  }
+
+  .dark .market-callout-amber {
+    --market-callout-label: #fbbf24;
+    --market-callout-copy: #fde68a;
+    background: linear-gradient(135deg, rgba(45, 28, 5, 0.96), rgba(38, 22, 4, 0.92));
+    border-color: rgba(251, 191, 36, 0.22);
+  }
+
+  /* Dark tab buttons */
+  .dark .market-tab-button {
+    background: rgba(18, 24, 40, 0.75);
+    border-color: hsl(var(--border));
+  }
+
+  .dark .market-tab-button:hover {
+    background: rgba(25, 35, 60, 0.95);
+    border-color: hsl(var(--ring));
+    box-shadow: 0 10px 22px rgba(0, 0, 0, 0.3);
+  }
+
+  .dark .market-tab-button-active {
+    background: linear-gradient(180deg, rgba(5, 40, 20, 0.98), rgba(4, 28, 14, 0.94));
+    border-color: rgba(52, 211, 153, 0.4);
+    box-shadow: 0 18px 36px rgba(0, 0, 0, 0.35);
+  }
+
+  .dark .market-tab-button-active-mint {
+    background: linear-gradient(180deg, rgba(5, 40, 20, 0.98), rgba(3, 28, 14, 0.93));
+    border-color: rgba(52, 211, 153, 0.3);
+    box-shadow: 0 14px 28px rgba(0, 0, 0, 0.3);
+  }
+
+  .dark .market-tab-button-active-blue {
+    background: linear-gradient(180deg, rgba(10, 28, 60, 0.98), rgba(8, 20, 48, 0.93));
+    border-color: rgba(96, 165, 250, 0.28);
+    box-shadow: 0 14px 28px rgba(0, 0, 0, 0.3);
+  }
+
+  .dark .market-tab-button-active-amber {
+    background: linear-gradient(180deg, rgba(45, 28, 5, 0.98), rgba(35, 20, 3, 0.93));
+    border-color: rgba(251, 191, 36, 0.3);
+    box-shadow: 0 14px 28px rgba(0, 0, 0, 0.3);
+  }
+
+  /* ── Smooth theme transition (only for background/color, skips layout) ── */
+  html {
+    transition: background-color 200ms ease, color 200ms ease;
+  }
+
+  /* ── Global dark-mode colour corrections ────────────────────────────────
+     These catch hardcoded slate/white classes that appear across multiple
+     page files so we don't need to touch each file individually.
+     Specificity is low — component-level dark: overrides still win.
+  ─────────────────────────────────────────────────────────────────────── */
+
+  /* slate-950 / slate-900 headings & body text → near-white in dark */
+  .dark .text-slate-950 { color: hsl(0 0% 97%) !important; }
+  .dark .text-slate-900 { color: hsl(0 0% 93%) !important; }
+  .dark .text-slate-800 { color: hsl(0 0% 88%) !important; }
+  .dark .text-slate-700 { color: hsl(0 0% 80%) !important; }
+
+  /* White/slate card backgrounds → dark surface */
+  .dark .bg-white\/70  { background-color: rgba(18, 25, 42, 0.70) !important; }
+  .dark .bg-white\/80  { background-color: rgba(18, 25, 42, 0.80) !important; }
+  .dark .bg-white\/85  { background-color: rgba(18, 25, 42, 0.85) !important; }
+  .dark .bg-white\/88  { background-color: rgba(18, 25, 42, 0.88) !important; }
+  .dark .bg-white\/90  { background-color: rgba(18, 25, 42, 0.90) !important; }
+  .dark .bg-white\/95  { background-color: rgba(15, 20, 36, 0.95) !important; }
+  .dark .bg-white\/97  { background-color: rgba(15, 20, 36, 0.97) !important; }
+  .dark .bg-white { background-color: hsl(240 10% 8%) !important; }
+
+  /* Slate utility backgrounds */
+  .dark .bg-slate-50  { background-color: hsl(240 10% 9%) !important; }
+  .dark .bg-slate-100 { background-color: hsl(240 10% 12%) !important; }
+
+  /* Borders */
+  .dark .border-slate-200   { border-color: hsl(240 8% 20%) !important; }
+  .dark .border-slate-200\/80 { border-color: hsla(240, 8%, 20%, 0.80) !important; }
+  .dark .border-slate-300   { border-color: hsl(240 8% 25%) !important; }
 }

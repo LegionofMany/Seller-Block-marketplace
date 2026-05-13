@@ -6,6 +6,7 @@ import { ThemeProvider } from "@/components/providers/ThemeProvider";
 import { Web3Providers } from "@/components/providers/Web3Providers";
 import { AuthProvider } from "@/components/providers/AuthProvider";
 import { SiteHeader } from "@/components/site/Header";
+import { PWAInstallBanner } from "@/components/site/PWAInstallBanner";
 import { Toaster } from "sonner";
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim() || "http://localhost:3000";
@@ -131,10 +132,11 @@ export default function RootLayout({
         <ThemeProvider>
           <Web3Providers>
             <AuthProvider>
-              <Toaster richColors theme="dark" />
+              <Toaster richColors theme="system" />
               <div className="min-h-screen">
                 <SiteHeader />
                 <main className="mx-auto w-full max-w-screen-xl px-4 py-6 sm:py-8">{children}</main>
+                <PWAInstallBanner />
                 <footer className="border-t border-border/70 bg-background/70 backdrop-blur">
                   <div className="mx-auto flex w-full max-w-screen-xl flex-col gap-2 px-4 py-6 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
                     <div>Zonycs</div>

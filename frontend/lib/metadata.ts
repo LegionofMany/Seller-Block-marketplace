@@ -19,6 +19,11 @@ export type MarketplaceMetadata = {
   city?: string;
   region?: string;
   postalCode?: string;
+  country?: string;
+  /** Latitude captured at listing creation time via geocoding (neighbourhood-level) */
+  lat?: number;
+  /** Longitude captured at listing creation time via geocoding (neighbourhood-level) */
+  lng?: number;
   contactEmail?: string;
   contactPhone?: string;
   attributes?: unknown;

@@ -1,8 +1,14 @@
 "use client";
 
 import * as React from "react";
+import dynamic from "next/dynamic";
 import Image from "next/image";
 import Link from "next/link";
+
+const ListingLocationMap = dynamic(
+  () => import("@/components/map/ListingLocationMap").then((m) => m.ListingLocationMap),
+  { ssr: false, loading: () => <div className="h-[260px] animate-pulse rounded-xl bg-muted" /> }
+);
 import { useParams, useSearchParams } from "next/navigation";
 import { type Address, type Hex, parseEther, zeroAddress } from "viem";
 import { useAccount, useReadContract, useWaitForTransactionReceipt, useWalletClient, useWriteContract } from "wagmi";
@@ -143,6 +149,38 @@ function settlementEscrowStatusLabel(status: number) {
     default:
       return "Not funded";
   }
+}
+
+/** Geocode on-the-fly if lat/lng not stored; renders the map only when coords are available */
+import { geocodeLocation } from "@/lib/hooks/useGeocoder";
+
+function ListingLocationMapSection({ metadata }: { metadata: MarketplaceMetadata | null }) {
+  const [coords, setCoords] = React.useState<{ lat: number; lng: number } | null>(null);
+
+  React.useEffect(() => {
+    if (!metadata) return;
+    if (metadata.lat && metadata.lng) {
+      setCoords({ lat: metadata.lat, lng: metadata.lng });
+      return;
+    }
+    const parts = [metadata.city, metadata.region, metadata.country ?? ""].filter(Boolean).join(", ");
+    if (!parts) return;
+    let cancelled = false;
+    geocodeLocation(parts).then((pt) => {
+      if (!cancelled && pt) setCoords({ lat: pt.lat, lng: pt.lng });
+    });
+    return () => { cancelled = true; };
+  }, [metadata]);
+
+  if (!coords) return null;
+
+  const label = [metadata?.city, metadata?.region].filter(Boolean).join(", ");
+
+  return (
+    <div className="mt-2">
+      <ListingLocationMap lat={coords.lat} lng={coords.lng} label={label} fuzzy />
+    </div>
+  );
 }
 
 export default function ListingDetailPage() {
@@ -1019,13 +1057,13 @@ export default function ListingDetailPage() {
                 {listing ? <Badge variant="outline" className="border-amber-200/80 bg-white/95 text-slate-900">{statusLabel(listing.status)}</Badge> : null}
               </div>
               <p className="max-w-2xl text-[13px] leading-6 text-slate-700 sm:text-base">{pageDescription}</p>
-              {listing && (listing as any).cascadeAt && (listing as any).cascadeStage < 2 ? (
+              {listing && (listing as { cascadeAt?: number; cascadeStage?: number }).cascadeAt && (listing as { cascadeStage?: number }).cascadeStage !== undefined && ((listing as { cascadeStage?: number }).cascadeStage ?? 0) < 2 ? (
                 <div className="rounded-xl border border-amber-200/70 bg-amber-50/80 px-3 py-2 space-y-1">
                   <div className="text-xs font-bold uppercase tracking-wide text-amber-700">
                     Listing timeline
                   </div>
                   <div className="text-sm font-medium text-amber-900">
-                    {(listing as any).cascadeStage === 0
+                    {((listing as { cascadeStage?: number }).cascadeStage ?? 0) === 0
                       ? listing.saleType === 0
                         ? "This listing will automatically move to auction if unsold after 90 days."
                         : listing.saleType === 1
@@ -1037,14 +1075,14 @@ export default function ListingDetailPage() {
                   </div>
                   <div className="text-xs text-amber-700">
                     Next change:{" "}
-                    {new Date((listing as any).cascadeAt).toLocaleDateString(
+                    {new Date((listing as { cascadeAt?: number }).cascadeAt ?? 0).toLocaleDateString(
                       "en-CA",
                       { year: "numeric", month: "long", day: "numeric" }
                     )}
                   </div>
                 </div>
               ) : null}
-              {listing && (listing as any).cascadeStage >= 2 ? (
+              {listing && (listing as { cascadeStage?: number }).cascadeStage !== undefined && ((listing as { cascadeStage?: number }).cascadeStage ?? 0) >= 2 ? (
                 <div className="rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2">
                   <div className="text-xs font-bold uppercase tracking-wide text-slate-500">
                     Final stage
@@ -1203,6 +1241,8 @@ export default function ListingDetailPage() {
                         <div className="font-medium">{locationLabel}</div>
                       </div>
                     ) : null}
+                    {/* ── Location map ── */}
+                    <ListingLocationMapSection metadata={metadata} />
                     {isJobPost && companyName ? (
                       <div className="text-sm">
                         <div className="text-muted-foreground">Company</div>

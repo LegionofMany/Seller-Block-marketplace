@@ -62,15 +62,66 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isAdmin, setIsAdmin] = React.useState(false);
   const [isLoading, setIsLoading] = React.useState(true);
 
+  /** Decode a JWT's `exp` field (seconds) without a library. */
+  function getJwtExpiry(jwt: string): number | null {
+    try {
+      const payload = jwt.split(".")[1];
+      if (!payload) return null;
+      const decoded = JSON.parse(atob(payload.replace(/-/g, "+").replace(/_/g, "/")));
+      return typeof decoded.exp === "number" ? decoded.exp : null;
+    } catch {
+      return null;
+    }
+  }
+
+  // Ref to clear any scheduled refresh timer on sign-out / re-login
+  const refreshTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const scheduleRefresh = React.useCallback((jwt: string) => {
+    if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
+    const exp = getJwtExpiry(jwt);
+    if (!exp) return;
+    const msUntilExpiry = exp * 1000 - Date.now();
+    const msUntilRefresh = msUntilExpiry - 5 * 60 * 1000; // 5 min before expiry
+    if (msUntilRefresh <= 0) return; // already too close or expired
+    refreshTimerRef.current = setTimeout(() => {
+      // Re-validate the stored token; if the server rejects it, sign out gracefully
+      void (async () => {
+        try {
+          const res = await fetchJson<{ address: string; user: UserProfile | null; isAdmin?: boolean }>("/auth/me", {
+            timeoutMs: 8_000,
+          });
+          const stored = getStoredAuthToken();
+          if (stored) {
+            setAddress(res.address);
+            setUser(res.user);
+            setIsAdmin(Boolean(res.isAdmin));
+            scheduleRefresh(stored);
+          }
+        } catch {
+          // Token expired or server rejected — sign out cleanly
+          clearStoredAuthToken();
+          setToken(null);
+          setAddress(null);
+          setUser(null);
+          setIsAdmin(false);
+          toast.warning("Your session expired. Please sign in again.");
+        }
+      })();
+    }, msUntilRefresh);
+  }, []);
+
   const applySession = React.useCallback((session: { token: string; address: string; user: UserProfile | null; isAdmin?: boolean }) => {
     setStoredAuthToken(session.token);
     setToken(session.token);
     setAddress(session.address);
     setUser(session.user);
     setIsAdmin(Boolean(session.isAdmin));
-  }, []);
+    scheduleRefresh(session.token);
+  }, [scheduleRefresh]);
 
   const signOut = React.useCallback(() => {
+    if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
     clearStoredAuthToken();
     setToken(null);
     setAddress(null);
@@ -78,7 +129,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsAdmin(false);
   }, []);
 
-  const refresh = React.useCallback(async () => {
+  const refresh = React.useCallback(async () => { // eslint-disable-line react-hooks/exhaustive-deps
     const stored = getStoredAuthToken();
     if (!stored) {
       setToken(null);
@@ -97,6 +148,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setAddress(res.address);
       setUser(res.user);
       setIsAdmin(Boolean(res.isAdmin));
+      scheduleRefresh(stored);
     } catch {
       clearStoredAuthToken();
       setToken(null);

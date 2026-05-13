@@ -57,6 +57,9 @@ export type MetadataRow = {
   city?: string | null;
   region?: string | null;
   postalCode?: string | null;
+  country?: string | null;
+  lat?: number | null;
+  lng?: number | null;
   contactEmail?: string | null;
   contactPhone?: string | null;
   attributesJson: string;
@@ -435,6 +438,9 @@ function toMetadataRow(r: any): MetadataRow {
     city: r.city ?? null,
     region: r.region ?? null,
     postalCode: r.postalCode ?? r.postalcode ?? r.postal_code ?? null,
+    country: r.country ?? null,
+    lat: r.lat != null ? Number(r.lat) : null,
+    lng: r.lng != null ? Number(r.lng) : null,
     contactEmail: r.contactEmail ?? r.contactemail ?? r.contact_email ?? null,
     contactPhone: r.contactPhone ?? r.contactphone ?? r.contact_phone ?? null,
     attributesJson: String(r.attributesJson ?? r.attributesjson ?? r.attributes_json),
@@ -639,8 +645,8 @@ export async function findRaffle(_db: Pool | any, listingId: string, chainKey?: 
 export async function upsertMetadata(_db: Pool | any, row: MetadataRow) {
   const p = ensurePool(_db);
   await p.query(
-    `INSERT INTO metadata(id, uri, title, description, image, imagesJson, category, subcategory, city, region, postalCode, contactEmail, contactPhone, attributesJson, createdAt)
-     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+    `INSERT INTO metadata(id, uri, title, description, image, imagesJson, category, subcategory, city, region, postalCode, country, lat, lng, contactEmail, contactPhone, attributesJson, createdAt)
+     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
      ON CONFLICT (id) DO UPDATE SET
        uri = EXCLUDED.uri,
        title = EXCLUDED.title,
@@ -652,6 +658,9 @@ export async function upsertMetadata(_db: Pool | any, row: MetadataRow) {
        city = EXCLUDED.city,
        region = EXCLUDED.region,
        postalCode = EXCLUDED.postalCode,
+       country = EXCLUDED.country,
+       lat = EXCLUDED.lat,
+       lng = EXCLUDED.lng,
        contactEmail = EXCLUDED.contactEmail,
        contactPhone = EXCLUDED.contactPhone,
        attributesJson = EXCLUDED.attributesJson,
@@ -668,6 +677,9 @@ export async function upsertMetadata(_db: Pool | any, row: MetadataRow) {
       row.city ?? null,
       row.region ?? null,
       row.postalCode ?? null,
+      row.country ?? null,
+      row.lat ?? null,
+      row.lng ?? null,
       row.contactEmail ?? null,
       row.contactPhone ?? null,
       row.attributesJson,
@@ -679,7 +691,7 @@ export async function upsertMetadata(_db: Pool | any, row: MetadataRow) {
 export async function findMetadata(_db: Pool | any, id: string): Promise<MetadataRow | null> {
   const p = ensurePool(_db);
   const res = await p.query(
-    'SELECT id, uri, title, description, image, imagesjson AS "imagesJson", category, subcategory, city, region, postalcode AS "postalCode", contactemail AS "contactEmail", contactphone AS "contactPhone", attributesjson AS "attributesJson", createdat AS "createdAt" FROM metadata WHERE id = $1',
+    'SELECT id, uri, title, description, image, imagesjson AS "imagesJson", category, subcategory, city, region, postalcode AS "postalCode", country, lat, lng, contactemail AS "contactEmail", contactphone AS "contactPhone", attributesjson AS "attributesJson", createdat AS "createdAt" FROM metadata WHERE id = $1',
     [id]
   );
   return res.rows[0] ? toMetadataRow(res.rows[0]) : null;
@@ -690,7 +702,7 @@ export async function findMetadataByUri(_db: Pool | any, uri: string): Promise<M
   const clean = String(uri ?? "").trim();
   if (!clean) return null;
   const res = await p.query(
-    'SELECT id, uri, title, description, image, imagesjson AS "imagesJson", category, subcategory, city, region, postalcode AS "postalCode", contactemail AS "contactEmail", contactphone AS "contactPhone", attributesjson AS "attributesJson", createdat AS "createdAt" FROM metadata WHERE uri = $1',
+    'SELECT id, uri, title, description, image, imagesjson AS "imagesJson", category, subcategory, city, region, postalcode AS "postalCode", country, lat, lng, contactemail AS "contactEmail", contactphone AS "contactPhone", attributesjson AS "attributesJson", createdat AS "createdAt" FROM metadata WHERE uri = $1',
     [clean]
   );
   return res.rows[0] ? toMetadataRow(res.rows[0]) : null;

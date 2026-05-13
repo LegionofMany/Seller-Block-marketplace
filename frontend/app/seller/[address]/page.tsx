@@ -36,6 +36,20 @@ export default function SellerProfilePage() {
   const [isFollowLoading, setIsFollowLoading] = React.useState(false);
   const [followError, setFollowError] = React.useState<string | null>(null);
 
+  const user = profile?.user;
+  const displayName = user?.displayName?.trim() || user?.fullName?.trim() || shortenHex(address ?? "0x0");
+  const avatarUrl = user?.avatarCid ? `https://ipfs.io/ipfs/${user.avatarCid}` : null;
+  const locationLabel = [user?.city, user?.region].filter(Boolean).join(", ");
+
+  React.useEffect(() => {
+    if (!address) return;
+    const name = user?.displayName?.trim() || user?.fullName?.trim();
+    document.title = name ? `${name} — Seller on Zonycs` : `Seller ${shortenHex(address)} — Zonycs`;
+    return () => {
+      document.title = "Zonycs — Buy & Sell Locally";
+    };
+  }, [address, user?.displayName, user?.fullName]);
+
   React.useEffect(() => {
     let cancelled = false;
 
@@ -101,19 +115,6 @@ export default function SellerProfilePage() {
       </Card>
     );
   }
-
-  const user = profile?.user;
-  const displayName = user?.displayName?.trim() || user?.fullName?.trim() || shortenHex(address);
-  const avatarUrl = user?.avatarCid ? `https://ipfs.io/ipfs/${user.avatarCid}` : null;
-  const locationLabel = [user?.city, user?.region].filter(Boolean).join(", ");
-
-  React.useEffect(() => {
-    const name = user?.displayName?.trim() || user?.fullName?.trim();
-    document.title = name ? `${name} — Seller on Zonycs` : `Seller ${shortenHex(address)} — Zonycs`;
-    return () => {
-      document.title = "Zonycs — Buy & Sell Locally";
-    };
-  }, [address, user?.displayName, user?.fullName]);
 
   return (
     <div className="space-y-8">

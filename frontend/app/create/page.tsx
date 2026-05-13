@@ -26,7 +26,18 @@ import { describeToken, getDefaultSettlementToken, getPublicNetworkLabel, getTok
 import { getChainConfigById, getEnv } from "@/lib/env";
 import { buildListingHref } from "@/lib/listings";
 import { CATEGORY_TREE, subcategoriesFor } from "@/lib/categories";
-import { COUNTRY_LIST, CITY_MAP } from "@/lib/locations";
+import dynamic from "next/dynamic";
+import type { PickedLocation } from "@/components/map/ListingLocationPicker";
+
+const ListingLocationPicker = dynamic(
+  () => import("@/components/map/ListingLocationPicker").then((m) => m.ListingLocationPicker),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="h-[340px] animate-pulse rounded-xl bg-muted" />
+    ),
+  }
+);
 
 const createListingAbi = [
   {
@@ -135,6 +146,10 @@ type CreateListingDraft = {
   bedrooms?: string;
   bathrooms?: string;
   squareFeet?: string;
+  // Geocoded location
+  lat?: number;
+  lng?: number;
+  country?: string;
 };
 
 type UploadResponse = {
@@ -183,15 +198,78 @@ function parseBytes32(value: string): Hex {
   return value as Hex;
 }
 
+/**
+ * Compress a single image file using the Canvas API.
+ * - Resizes to at most MAX_PX on the longest side.
+ * - Iteratively reduces JPEG quality until the blob is ≤ MAX_BYTES.
+ * - GIF / SVG / non-raster types are returned unchanged.
+ */
+const MAX_PX = 1200;
+const MAX_BYTES = 500 * 1024; // 500 KB
+
+async function compressImage(file: File): Promise<File> {
+  // Skip types that can't be canvas-compressed meaningfully
+  if (!file.type.startsWith("image/") || file.type === "image/gif" || file.type === "image/svg+xml") {
+    return file;
+  }
+  // If already small enough, skip
+  if (file.size <= MAX_BYTES) return file;
+
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(file);
+    const img = document.createElement('img');
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+
+      // Compute target dimensions
+      const { naturalWidth: w, naturalHeight: h } = img;
+      const scale = Math.min(1, MAX_PX / Math.max(w, h));
+      const cw = Math.round(w * scale);
+      const ch = Math.round(h * scale);
+
+      const canvas = document.createElement("canvas");
+      canvas.width = cw;
+      canvas.height = ch;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) { resolve(file); return; }
+      ctx.drawImage(img, 0, 0, cw, ch);
+
+      // Iteratively reduce quality until under MAX_BYTES
+      let quality = 0.85;
+      const tryEncode = () => {
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) { resolve(file); return; }
+            if (blob.size <= MAX_BYTES || quality <= 0.3) {
+              resolve(new File([blob], file.name, { type: "image/jpeg", lastModified: file.lastModified }));
+            } else {
+              quality = Math.max(0.3, quality - 0.1);
+              tryEncode();
+            }
+          },
+          "image/jpeg",
+          quality
+        );
+      };
+      tryEncode();
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(file); };
+    img.src = url;
+  });
+}
+
 async function uploadImagesWithProgress(
   backendUrl: string,
   files: File[],
   onProgress: (percent: number) => void
 ): Promise<UploadResponse> {
+  // Compress all images before upload
+  const compressed = await Promise.all(files.slice(0, 12).map(compressImage));
+
   const request = new XMLHttpRequest();
   return new Promise((resolve, reject) => {
     const form = new FormData();
-    for (const file of files.slice(0, 12)) form.append("files", file);
+    for (const file of compressed) form.append("files", file);
 
     request.open("POST", `${backendUrl.replace(/\/$/, "")}/uploads/images`);
     request.responseType = "json";
@@ -314,6 +392,10 @@ export default function CreateListingPage() {
   const [dealerCost, setDealerCost] = React.useState("");
   const [dealerMsrp, setDealerMsrp] = React.useState("");
   const [salePrice, setSalePrice] = React.useState("");
+  // Geocoded coordinates
+  const [lat, setLat] = React.useState(0);
+  const [lng, setLng] = React.useState(0);
+  const [country, setCountry] = React.useState("");
   // Antique-specific
   const [provenance, setProvenance] = React.useState("");
   // Real-estate-specific
@@ -475,6 +557,9 @@ export default function CreateListingPage() {
       if (typeof draft.bedrooms === "string") setBedrooms(draft.bedrooms);
       if (typeof draft.bathrooms === "string") setBathrooms(draft.bathrooms);
       if (typeof draft.squareFeet === "string") setSquareFeet(draft.squareFeet);
+      if (typeof draft.lat === "number") setLat(draft.lat);
+      if (typeof draft.lng === "number") setLng(draft.lng);
+      if (typeof draft.country === "string") setCountry(draft.country);
       if (typeof draft.ownershipConfirmed === "boolean") setOwnershipConfirmed(draft.ownershipConfirmed);
       if (typeof draft.publicSaleTermsAccepted === "boolean") setPublicSaleTermsAccepted(draft.publicSaleTermsAccepted);
       if (typeof draft.fixedPrice === "string") setFixedPrice(draft.fixedPrice);
@@ -570,6 +655,9 @@ export default function CreateListingPage() {
       bedrooms,
       bathrooms,
       squareFeet,
+      lat,
+      lng,
+      country,
     }),
     [
       saleType,
@@ -615,6 +703,9 @@ export default function CreateListingPage() {
       bedrooms,
       bathrooms,
       squareFeet,
+      lat,
+      lng,
+      country,
     ]
   );
 
@@ -677,7 +768,10 @@ export default function CreateListingPage() {
       subcategory: subcategory.trim() || undefined,
       city: city.trim() || undefined,
       region: region.trim() || undefined,
+      country: country.trim() || undefined,
       postalCode: postalCode.trim() || undefined,
+      lat: lat !== 0 ? lat : undefined,
+      lng: lng !== 0 ? lng : undefined,
       contactEmail: contactEmail.trim() || undefined,
       contactPhone: contactPhone.trim() || undefined,
       attributes: isJobListing
@@ -1297,46 +1391,38 @@ export default function CreateListingPage() {
                   </div>
                 ) : null}
 
-                <div className="space-y-2">
-                  <Label>City</Label>
-                  {region && CITY_MAP[region] ? (
-                    <select
-                      className="block w-full rounded-md border bg-white dark:bg-slate-700 px-3 py-2 text-slate-900 dark:text-slate-100"
-                      value={city}
-                      onChange={(e) => setCity(e.target.value)}
-                    >
-                      <option value="">All cities</option>
-                      {CITY_MAP[region].map((c) => (
-                        <option key={c} value={c}>
-                          {c}
-                        </option>
-                      ))}
-                    </select>
-                  ) : (
-                    <Input value={city} onChange={(e) => setCity(e.target.value)} placeholder="e.g. Toronto" />
-                  )}
-                </div>
-                <div className="space-y-2">
-                  <Label>Region / Country</Label>
-                  <select
-                    className="block w-full rounded-md border bg-white dark:bg-slate-700 px-3 py-2 text-slate-900 dark:text-slate-100"
-                    value={region}
-                    onChange={(e) => {
-                      setRegion(e.target.value);
-                      setCity("");
+                {/* ── Location picker (autocomplete + interactive map) ── */}
+                <div className="sm:col-span-2 space-y-2">
+                  <Label>Location</Label>
+                  <ListingLocationPicker
+                    initialValue={[city, region, country].filter(Boolean).join(", ")}
+                    onChange={(loc: PickedLocation) => {
+                      setCity(loc.city);
+                      setRegion(loc.region);
+                      setCountry(loc.country);
+                      if (loc.postalCode) setPostalCode(loc.postalCode);
+                      setLat(loc.lat);
+                      setLng(loc.lng);
                     }}
-                  >
-                    <option value="">Select a country</option>
-                    {COUNTRY_LIST.map((c) => (
-                      <option key={c} value={c}>
-                        {c}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Postal code</Label>
-                  <Input value={postalCode} onChange={(e) => setPostalCode(e.target.value)} placeholder="e.g. M5V" />
+                    height={280}
+                  />
+                  {/* Postal code refinement — hidden until location is picked */}
+                  {lat !== 0 && (
+                    <div className="grid grid-cols-3 gap-2 pt-1">
+                      <div className="space-y-1">
+                        <Label className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">City</Label>
+                        <Input value={city} onChange={(e) => setCity(e.target.value)} placeholder="e.g. Toronto" className="h-8 text-sm" />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">Province / State</Label>
+                        <Input value={region} onChange={(e) => setRegion(e.target.value)} placeholder="e.g. Ontario" className="h-8 text-sm" />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">Postal code</Label>
+                        <Input value={postalCode} onChange={(e) => setPostalCode(e.target.value)} placeholder="e.g. M5V" className="h-8 text-sm" />
+                      </div>
+                    </div>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <Label>Contact email {isJobListing ? "(recommended)" : "(optional)"}</Label>

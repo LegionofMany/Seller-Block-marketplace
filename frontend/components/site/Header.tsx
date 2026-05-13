@@ -6,10 +6,12 @@ import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { useAccount } from "wagmi";
 
 import { Button } from "@/components/ui/button";
+import { ThemeToggle } from "@/components/site/ThemeToggle";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { fetchJson } from "@/lib/api";
 import { shortenHex } from "@/lib/format";
 import { useInjectedWalletAvailability } from "@/lib/injectedWallet";
+import { useFocusTrap } from "@/lib/useFocusTrap";
 
 function formatIdentityLabel(
   address: string | null,
@@ -27,6 +29,8 @@ function formatIdentityLabel(
 export function SiteHeader() {
   const [open, setOpen] = React.useState(false);
   const [unreadCount, setUnreadCount] = React.useState(0);
+  const drawerRef = React.useRef<HTMLDivElement>(null);
+  useFocusTrap(drawerRef, open);
   const { address } = useAccount();
   const auth = useAuth();
   const { checked: injectedWalletChecked, hasInjectedWallet } =
@@ -68,7 +72,7 @@ export function SiteHeader() {
       {/* ─────────────────────────────────────────
           HEADER BAR
       ───────────────────────────────────────── */}
-      <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/95 backdrop-blur-xl shadow-sm">
+      <header className="sticky top-0 z-40 border-b border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-950/95 backdrop-blur-xl shadow-sm dark:shadow-slate-900/50">
         <div className="mx-auto flex w-full max-w-screen-xl items-center justify-between gap-2 px-4 py-3 sm:gap-4 sm:px-6">
 
           {/* Logo */}
@@ -77,10 +81,10 @@ export function SiteHeader() {
               Z
             </div>
             <div>
-              <div className="text-[15px] font-bold tracking-tight text-slate-900">
+              <div className="text-[15px] font-bold tracking-tight text-slate-900 dark:text-white">
                 Zonycs
               </div>
-              <div className="hidden text-[9px] uppercase tracking-[0.2em] text-slate-500 sm:block">
+              <div className="hidden text-[9px] uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 sm:block">
                 Marketplace
               </div>
             </div>
@@ -89,16 +93,16 @@ export function SiteHeader() {
           {/* Desktop nav */}
           <nav className="hidden items-center gap-1 sm:flex">
             <Button asChild variant="ghost" size="sm"
-              className="text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100">
+              className="text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800">
               <Link href="/marketplace">Listings</Link>
             </Button>
             <Button asChild variant="ghost" size="sm"
-              className="text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100">
+              className="text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800">
               <Link href="/create">Post ad</Link>
             </Button>
             {auth.isAuthenticated ? (
               <Button asChild variant="ghost" size="sm"
-                className="text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100">
+                className="text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800">
                 <Link href="/dashboard">
                   Dashboard
                   {unreadCount > 0 ? (
@@ -109,12 +113,20 @@ export function SiteHeader() {
                 </Link>
               </Button>
             ) : null}
+            {auth.isAdmin ? (
+              <Button asChild variant="ghost" size="sm"
+                className="text-sm font-medium text-amber-600 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-200 hover:bg-amber-50 dark:hover:bg-amber-900/20">
+                <Link href="/admin">Admin</Link>
+              </Button>
+            ) : null}
           </nav>
 
-          {/* Desktop wallet + auth */}
+          {/* Desktop wallet + auth + theme toggle */}
           <div className="hidden items-center gap-2 sm:flex">
+            <ThemeToggle />
+            <div className="h-5 w-px bg-slate-200 dark:bg-slate-700" />
             <ConnectButton showBalance={false} chainStatus="icon" />
-            <div className="h-5 w-px bg-slate-200" />
+            <div className="h-5 w-px bg-slate-200 dark:bg-slate-700" />
 
             {!address && !auth.isAuthenticated ? (
               <Button asChild size="sm"
@@ -134,7 +146,7 @@ export function SiteHeader() {
 
             {auth.isAuthenticated ? (
               <div className="flex items-center gap-2">
-                <div className="max-w-[110px] truncate text-xs font-medium text-slate-600">
+                <div className="max-w-[110px] truncate text-xs font-medium text-slate-600 dark:text-slate-300">
                   {formatIdentityLabel(
                     auth.address ?? address ?? null,
                     auth.user?.email,
@@ -142,7 +154,7 @@ export function SiteHeader() {
                   )}
                 </div>
                 <Button type="button" variant="outline" size="sm"
-                  className="rounded-full text-xs border-slate-300"
+                  className="rounded-full text-xs border-slate-300 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800"
                   onClick={auth.signOut}>
                   Sign out
                 </Button>
@@ -150,26 +162,27 @@ export function SiteHeader() {
             ) : null}
           </div>
 
-          {/* Mobile hamburger */}
-          <button
-            type="button"
-            aria-label="Open menu"
-            onClick={() => setOpen(true)}
-            className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-sm hover:bg-slate-50 sm:hidden"
-          >
-            <svg viewBox="0 0 24 24" className="h-5 w-5" aria-hidden="true">
-              <path d="M4 7h16M4 12h16M4 17h16" fill="none"
-                stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-            </svg>
-          </button>
+          {/* Mobile: theme toggle + hamburger */}
+          <div className="flex items-center gap-2 sm:hidden">
+            <ThemeToggle />
+            <button
+              type="button"
+              aria-label="Open menu"
+              onClick={() => setOpen(true)}
+              className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 shadow-sm hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+            >
+              <svg viewBox="0 0 24 24" className="h-5 w-5" aria-hidden="true">
+                <path d="M4 7h16M4 12h16M4 17h16" fill="none"
+                  stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+              </svg>
+            </button>
+          </div>
         </div>
       </header>
 
 
       {/* ─────────────────────────────────────────
-          MOBILE DRAWER — rendered as a sibling
-          of <header> so it escapes z-index context
-          and covers the full viewport correctly
+          MOBILE DRAWER
       ───────────────────────────────────────── */}
       {open ? (
         <div
@@ -178,17 +191,17 @@ export function SiteHeader() {
           role="dialog"
           style={{ isolation: "isolate" }}
         >
-          {/* Semi-transparent backdrop */}
+          {/* Backdrop */}
           <div
-            className="absolute inset-0 bg-slate-900/40 backdrop-blur-[2px]"
+            className="absolute inset-0 bg-slate-900/50 dark:bg-black/60 backdrop-blur-[2px]"
             onClick={() => setOpen(false)}
           />
 
-          {/* Drawer panel — light professional design */}
-          <div className="absolute inset-y-0 right-0 flex w-[82%] max-w-[20rem] flex-col bg-white shadow-2xl">
+          {/* Drawer panel */}
+          <div ref={drawerRef} className="absolute inset-y-0 right-0 flex w-[82%] max-w-[20rem] flex-col bg-white dark:bg-slate-950 shadow-2xl dark:shadow-black/60">
 
             {/* Drawer top bar */}
-            <div className="flex shrink-0 items-center justify-between border-b border-slate-100 bg-blue-600 px-5 py-4">
+            <div className="flex shrink-0 items-center justify-between border-b border-slate-100 dark:border-slate-800 bg-blue-600 dark:bg-blue-700 px-5 py-4">
               <div className="flex items-center gap-2.5">
                 <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/20 text-white text-xs font-black">
                   Z
@@ -218,7 +231,7 @@ export function SiteHeader() {
 
               {/* Nav section */}
               <div className="px-4 pt-5 pb-3">
-                <div className="mb-2 px-2 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">
+                <div className="mb-2 px-2 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500">
                   Navigation
                 </div>
                 <nav className="space-y-0.5">
@@ -231,7 +244,7 @@ export function SiteHeader() {
                       key={item.href}
                       href={item.href}
                       onClick={() => setOpen(false)}
-                      className="flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold text-slate-800 transition-colors hover:bg-blue-50 hover:text-blue-700"
+                      className="flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold text-slate-800 dark:text-slate-100 transition-colors hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:text-blue-700 dark:hover:text-blue-300"
                     >
                       <span className="text-base">{item.icon}</span>
                       {item.label}
@@ -241,7 +254,7 @@ export function SiteHeader() {
                     <Link
                       href="/dashboard#notifications"
                       onClick={() => setOpen(false)}
-                      className="flex items-center justify-between gap-3 rounded-xl px-3 py-3 text-sm font-semibold text-slate-800 transition-colors hover:bg-blue-50 hover:text-blue-700"
+                      className="flex items-center justify-between gap-3 rounded-xl px-3 py-3 text-sm font-semibold text-slate-800 dark:text-slate-100 transition-colors hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:text-blue-700 dark:hover:text-blue-300"
                     >
                       <div className="flex items-center gap-3">
                         <span className="text-base">🔔</span>
@@ -254,20 +267,29 @@ export function SiteHeader() {
                       ) : null}
                     </Link>
                   ) : null}
+                  {auth.isAdmin ? (
+                    <Link
+                      href="/admin"
+                      onClick={() => setOpen(false)}
+                      className="flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold text-amber-700 dark:text-amber-400 transition-colors hover:bg-amber-50 dark:hover:bg-amber-900/20"
+                    >
+                      <span className="text-base">🛡</span>
+                      Admin
+                    </Link>
+                  ) : null}
                 </nav>
               </div>
 
-              <div className="mx-4 h-px bg-slate-100" />
-
+              <div className="mx-4 h-px bg-slate-100 dark:bg-slate-800" />
 
               {/* Wallet & Account section */}
               <div className="px-4 pt-4 pb-3">
-                <div className="mb-2 px-2 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">
+                <div className="mb-2 px-2 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500">
                   Wallet & Account
                 </div>
 
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 space-y-3">
-                  <div className="text-xs font-semibold text-slate-600">
+                <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 p-4 space-y-3">
+                  <div className="text-xs font-semibold text-slate-600 dark:text-slate-400">
                     Connect your wallet
                   </div>
                   <div className="flex justify-start max-w-full overflow-hidden">
@@ -277,7 +299,7 @@ export function SiteHeader() {
                   </div>
 
                   {injectedWalletChecked && !hasInjectedWallet ? (
-                    <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">
+                    <div className="rounded-xl border border-amber-200 dark:border-amber-700/60 bg-amber-50 dark:bg-amber-900/20 px-3 py-2 text-xs leading-5 text-amber-800 dark:text-amber-300">
                       No browser wallet found. Use WalletConnect on mobile or install MetaMask on desktop.
                     </div>
                   ) : null}
@@ -305,11 +327,11 @@ export function SiteHeader() {
 
                   {auth.isAuthenticated ? (
                     <div className="space-y-2">
-                      <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
-                        <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
+                      <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2.5">
+                        <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500">
                           Signed in as
                         </div>
-                        <div className="mt-1 truncate text-sm font-semibold text-slate-900">
+                        <div className="mt-1 truncate text-sm font-semibold text-slate-900 dark:text-white">
                           {formatIdentityLabel(
                             auth.address ?? address ?? null,
                             auth.user?.email,
@@ -320,7 +342,7 @@ export function SiteHeader() {
                       <button
                         type="button"
                         onClick={() => { auth.signOut(); setOpen(false); }}
-                        className="flex w-full items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50"
+                        className="flex w-full items-center justify-center rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 py-2.5 text-sm font-semibold text-slate-700 dark:text-slate-200 transition-colors hover:bg-slate-50 dark:hover:bg-slate-700"
                       >
                         Sign out
                       </button>
@@ -329,11 +351,11 @@ export function SiteHeader() {
                 </div>
               </div>
 
-              <div className="mx-4 h-px bg-slate-100" />
+              <div className="mx-4 h-px bg-slate-100 dark:bg-slate-800" />
 
               {/* Platform features */}
-              <div className="px-4 pt-4 pb-6">
-                <div className="mb-3 px-2 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">
+              <div className="px-4 pt-4 pb-3">
+                <div className="mb-3 px-2 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500">
                   Why Zonycs?
                 </div>
                 <div className="space-y-2">
@@ -344,12 +366,22 @@ export function SiteHeader() {
                     { icon: "🆓", text: "Free to browse and post ads" },
                   ].map((item) => (
                     <div key={item.text}
-                      className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-700 bg-slate-50">
+                      className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-900/60">
                       <span className="text-base shrink-0">{item.icon}</span>
                       {item.text}
                     </div>
                   ))}
                 </div>
+              </div>
+
+              <div className="mx-4 h-px bg-slate-100 dark:bg-slate-800" />
+
+              {/* Appearance row */}
+              <div className="px-4 py-4 flex items-center justify-between">
+                <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500">
+                  Appearance
+                </div>
+                <ThemeToggle />
               </div>
 
             </div>
