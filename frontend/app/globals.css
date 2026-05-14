@@ -568,9 +568,13 @@
   .dark .text-slate-900 { color: hsl(0 0% 93%) !important; }
   .dark .text-slate-800 { color: hsl(0 0% 88%) !important; }
   .dark .text-slate-700 { color: hsl(0 0% 80%) !important; }
+  .dark .text-slate-600 { color: hsl(0 0% 70%) !important; }
+  .dark .text-slate-500 { color: hsl(0 0% 60%) !important; }
 
   /* White/slate card backgrounds → dark surface */
   .dark .bg-white\/70  { background-color: rgba(18, 25, 42, 0.70) !important; }
+  .dark .bg-white\/75  { background-color: rgba(18, 25, 42, 0.75) !important; }
+  .dark .bg-white\/78  { background-color: rgba(18, 25, 42, 0.78) !important; }
   .dark .bg-white\/80  { background-color: rgba(18, 25, 42, 0.80) !important; }
   .dark .bg-white\/85  { background-color: rgba(18, 25, 42, 0.85) !important; }
   .dark .bg-white\/88  { background-color: rgba(18, 25, 42, 0.88) !important; }
@@ -587,4 +591,7 @@
   .dark .border-slate-200   { border-color: hsl(240 8% 20%) !important; }
   .dark .border-slate-200\/80 { border-color: hsla(240, 8%, 20%, 0.80) !important; }
   .dark .border-slate-300   { border-color: hsl(240 8% 25%) !important; }
+
+  /* Sign-in card custom gradient → dark surface */
+  .dark [style*="rgba(252,248,239"] { background: rgba(18, 24, 40, 0.95) !important; }
 }

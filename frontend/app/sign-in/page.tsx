@@ -239,14 +239,20 @@ export default function SignInPage() {
             <Label htmlFor="confirmPassword">Confirm password</Label>
             <Input id="confirmPassword" type="password" autoComplete="new-password" enterKeyHint="go" placeholder="Confirm your password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} disabled={emailDisabled} />
           </div>
-          <div className="rounded-2xl border border-slate-200/80 bg-white/70 px-4 py-3 text-sm text-slate-700">
+          <div className={`rounded-xl border px-4 py-3 text-sm ${
+            passwordMismatch
+              ? "border-red-200 bg-red-50/80 text-red-700 dark:border-red-800/50 dark:bg-red-950/40 dark:text-red-300"
+              : accountStepReady
+                ? "border-emerald-200 bg-emerald-50/80 text-emerald-700 dark:border-emerald-800/50 dark:bg-emerald-950/40 dark:text-emerald-300"
+                : "border-slate-200/80 bg-white/70 text-slate-600 dark:border-slate-700/50 dark:bg-slate-800/50 dark:text-slate-400"
+          }`}>
             {passwordMismatch
               ? "Passwords do not match yet."
               : accountStepMissingFields.length > 0
-                ? `Complete these fields before continuing: ${accountStepMissingFields.join(", ")}.`
+                ? `Complete these fields to continue: ${accountStepMissingFields.join(", ")}.`
                 : password.trim().length < 8
                   ? "Choose a password with at least 8 characters."
-                  : "Your account basics are ready. Continue to contact details."}
+                  : "Account basics are ready — continue to contact details."}
           </div>
         </>
       );
@@ -284,10 +290,14 @@ export default function SignInPage() {
               <Input id="postalCode" autoComplete="postal-code" inputMode="numeric" enterKeyHint="go" value={postalCode} onChange={(e) => setPostalCode(e.target.value)} placeholder="100001" disabled={emailDisabled} />
             </div>
           </div>
-          <div className="rounded-2xl border border-slate-200/80 bg-white/70 px-4 py-3 text-sm text-slate-700">
+          <div className={`rounded-xl border px-4 py-3 text-sm ${
+            contactStepReady
+              ? "border-emerald-200 bg-emerald-50/80 text-emerald-700 dark:border-emerald-800/50 dark:bg-emerald-950/40 dark:text-emerald-300"
+              : "border-slate-200/80 bg-white/70 text-slate-600 dark:border-slate-700/50 dark:bg-slate-800/50 dark:text-slate-400"
+          }`}>
             {contactStepMissingFields.length > 0
-              ? `Complete these fields before creating the account: ${contactStepMissingFields.join(", ")}.`
-              : "Your contact details are ready. Seller Block can create the account and send verification next."}
+              ? `Complete these fields to continue: ${contactStepMissingFields.join(", ")}.`
+              : "Contact details are ready — Zonycs will create the account and send verification next."}
           </div>
           <div className="flex flex-wrap gap-3">
             <Button type="button" variant="outline" onClick={() => setRegisterStep("account")} disabled={emailDisabled}>
@@ -305,21 +315,24 @@ export default function SignInPage() {
             A verification email has been sent to {email.trim() || "your email address"}. Open it and click the link to confirm your account before continuing.
           </AccentCallout>
 
-          <div className="rounded-2xl border border-slate-200/80 bg-white/70 px-4 py-3 space-y-3">
-            <div className="text-sm font-semibold text-slate-950">
+          <div className="rounded-xl border border-slate-200/80 dark:border-slate-700/50 bg-white/70 dark:bg-slate-800/50 px-4 py-4 space-y-3">
+            <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">
               What to do next
             </div>
-            <div className="text-sm text-slate-700 space-y-2">
-              <div>
-                1. Check your inbox for an email from Zonycs.
-              </div>
-              <div>
-                2. Click the verification link inside the email.
-              </div>
-              <div>
-                3. Once verified, return here and sign in to complete your profile.
-              </div>
-            </div>
+            <ol className="space-y-2 text-sm text-slate-600 dark:text-slate-400">
+              <li className="flex items-start gap-2">
+                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-100 dark:bg-blue-900/40 text-xs font-bold text-blue-700 dark:text-blue-300">1</span>
+                Check your inbox for an email from Zonycs.
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-100 dark:bg-blue-900/40 text-xs font-bold text-blue-700 dark:text-blue-300">2</span>
+                Click the verification link inside the email.
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-100 dark:bg-blue-900/40 text-xs font-bold text-blue-700 dark:text-blue-300">3</span>
+                Return here and sign in to complete your profile.
+              </li>
+            </ol>
           </div>
 
           <AccentCallout label="No email received?" tone="amber">
@@ -355,21 +368,24 @@ export default function SignInPage() {
             Your account is verified. Sign in and head to your dashboard to finish setting up your public seller profile — add a bio, avatar, and connect a wallet if you plan to list items for sale.
           </AccentCallout>
 
-          <div className="rounded-2xl border border-slate-200/80 bg-white/70 px-4 py-3 space-y-3">
-            <div className="text-sm font-semibold text-slate-950">
+          <div className="rounded-xl border border-slate-200/80 dark:border-slate-700/50 bg-white/70 dark:bg-slate-800/50 px-4 py-4 space-y-3">
+            <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">
               Complete your profile
             </div>
-            <div className="text-sm text-slate-700 space-y-2">
-              <div>
-                ✓ Add a profile photo and bio so buyers can trust your listings.
-              </div>
-              <div>
-                ✓ Connect a wallet from your dashboard if you want to post blockchain-backed listings.
-              </div>
-              <div>
-                ✓ Set up your saved searches and notification preferences.
-              </div>
-            </div>
+            <ul className="space-y-2 text-sm text-slate-600 dark:text-slate-400">
+              <li className="flex items-start gap-2">
+                <span className="mt-0.5 text-emerald-500 dark:text-emerald-400 shrink-0">✓</span>
+                Add a profile photo and bio so buyers can trust your listings.
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="mt-0.5 text-emerald-500 dark:text-emerald-400 shrink-0">✓</span>
+                Connect a wallet from your dashboard to post blockchain-backed listings.
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="mt-0.5 text-emerald-500 dark:text-emerald-400 shrink-0">✓</span>
+                Set up saved searches and notification preferences.
+              </li>
+            </ul>
           </div>
 
           <div className="flex flex-wrap gap-3">
@@ -485,19 +501,25 @@ export default function SignInPage() {
         </CardContent>
       </Card>
 
-      <Card className="market-panel market-panel-spotlight market-panel-spotlight-amber order-1 xl:order-2 border-slate-300/80 bg-[linear-gradient(180deg,rgba(252,248,239,0.92),rgba(255,255,255,0.98))]">
-        <CardHeader>
-          <div className="market-section-title">Account access</div>
-          <CardTitle>{mode === "login" ? "Sign in to your account" : mode === "register" ? "Create your marketplace account" : "Reset your password"}</CardTitle>
-          <CardDescription>
+      <Card className="market-panel market-panel-spotlight market-panel-spotlight-amber order-1 xl:order-2 border-amber-200/60 dark:border-slate-700/50 bg-gradient-to-b from-amber-50/80 to-white/95 dark:from-slate-900/90 dark:to-slate-900/95">
+        <CardHeader className="pb-4">
+          {/* Branded identity bar */}
+          <div className="mb-3 flex items-center gap-2.5">
+            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-blue-600 text-sm font-black text-white shadow-sm">Z</div>
+            <span className="text-xs font-bold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-400">Zonycs Account</span>
+          </div>
+          <CardTitle className="text-xl font-bold leading-tight">
+            {mode === "login" ? "Welcome back" : mode === "register" ? "Create your account" : "Reset your password"}
+          </CardTitle>
+          <CardDescription className="mt-1 text-sm leading-relaxed">
             {mode === "login"
-              ? "Use the same marketplace account on phone, tablet, or desktop without relying on a wallet browser."
+              ? "Sign in to access your listings, saved ads, and activity across all devices."
               : mode === "register"
-                ? "Create the account in clear steps: account basics, contact info, verification, and then profile completion in the dashboard."
-                : "Recover access to your marketplace account with a one-time reset link, then continue with the same identity, favorites, follows, and alerts."}
+                ? "Set up your marketplace account in a few quick steps — no wallet required to start."
+                : "Recover access using a one-time reset link. Your favourites, follows, and history stay intact."}
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-5">
           {emailToken ? (
             <AccentCallout label="Email link status" tone="blue">
               {emailIntent === "reset"
@@ -509,22 +531,60 @@ export default function SignInPage() {
                     : "This email link has been processed."}
             </AccentCallout>
           ) : null}
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-            <Button type="button" variant={mode === "login" ? "default" : "outline"} onClick={() => setModeWithQuery("login")} disabled={emailDisabled} className="h-auto min-h-11 w-full whitespace-normal px-3 py-2 text-center leading-5">
+
+          {/* Mode switcher — segmented pill tabs */}
+          <div className="flex rounded-xl border border-slate-200/80 dark:border-slate-700/60 bg-slate-100/70 dark:bg-slate-800/50 p-1 gap-0.5">
+            <button
+              type="button"
+              onClick={() => setModeWithQuery("login")}
+              disabled={emailDisabled}
+              className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-sm font-semibold transition-all duration-150 ${
+                mode === "login"
+                  ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm"
+                  : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+              }`}
+            >
+              <svg className="h-3.5 w-3.5 shrink-0" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                <path d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm-5 6s-1 0-1-1 1-4 6-4 6 3 6 4-1 1-1 1H3Z"/>
+              </svg>
               Sign in
-            </Button>
-            <Button type="button" variant={mode === "register" ? "default" : "outline"} onClick={() => setModeWithQuery("register")} disabled={emailDisabled} className="h-auto min-h-11 w-full whitespace-normal px-3 py-2 text-center leading-5">
-              Create account
-            </Button>
-            <Button type="button" variant={mode === "reset" ? "default" : "outline"} onClick={() => setModeWithQuery("reset")} disabled={emailDisabled} className="h-auto min-h-11 w-full whitespace-normal px-3 py-2 text-center leading-5">
-              Reset password
-            </Button>
+            </button>
+            <button
+              type="button"
+              onClick={() => setModeWithQuery("register")}
+              disabled={emailDisabled}
+              className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-sm font-semibold transition-all duration-150 ${
+                mode === "register"
+                  ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm"
+                  : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+              }`}
+            >
+              <svg className="h-3.5 w-3.5 shrink-0" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                <path d="M1 14s-1 0-1-1 1-4 6-4 6 3 6 4-1 1-1 1zm5-6a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm6.146-2.854a.5.5 0 0 1 .708 0L14 6.293l1.146-1.147a.5.5 0 0 1 .708.708L14.707 7l1.147 1.146a.5.5 0 0 1-.708.708L14 7.707l-1.146 1.147a.5.5 0 0 1-.708-.708L13.293 7l-1.147-1.146a.5.5 0 0 1 0-.708z"/>
+              </svg>
+              Register
+            </button>
+            <button
+              type="button"
+              onClick={() => setModeWithQuery("reset")}
+              disabled={emailDisabled}
+              className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-sm font-semibold transition-all duration-150 ${
+                mode === "reset"
+                  ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm"
+                  : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+              }`}
+            >
+              <svg className="h-3.5 w-3.5 shrink-0" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                <path d="M8 1a2 2 0 0 1 2 2v4H6V3a2 2 0 0 1 2-2Zm3 6V3a3 3 0 0 0-6 0v4a2 2 0 0 0-2 2v5a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2Z"/>
+              </svg>
+              Reset
+            </button>
           </div>
           {mode === "reset" ? (
             <AccentCallout label="Password reset" tone="amber">
               {emailToken
-                ? "Set a new password for this account. After a successful reset, the session will be signed in automatically."
-                : "Enter your account email and Seller Block will send a one-time password reset link if the account exists."}
+                ? "Set a new password below. After a successful reset you will be signed in automatically."
+                : "Enter your email and we will send a one-time reset link if the account exists."}
             </AccentCallout>
           ) : null}
           {mode === "register" ? (
@@ -534,9 +594,20 @@ export default function SignInPage() {
                   const isActive = registerStep === step.key;
                   const isDone = registerStepIndex > index;
                   return (
-                    <div key={step.key} className={`rounded-2xl border px-3 py-3 text-center ${isActive ? "border-amber-300 bg-amber-50/80" : isDone ? "border-emerald-300 bg-emerald-50/75" : "border-slate-200/80 bg-white/75"}`}>
-                      <div className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Step {index + 1}</div>
-                      <div className="mt-1 text-sm font-semibold text-slate-950">{step.label}</div>
+                    <div key={step.key} className={`relative rounded-xl border px-3 py-3 text-center transition-colors ${
+                      isActive
+                        ? "border-amber-300 bg-amber-50/90 dark:border-amber-700/50 dark:bg-amber-950/30"
+                        : isDone
+                          ? "border-emerald-300 bg-emerald-50/75 dark:border-emerald-700/40 dark:bg-emerald-950/20"
+                          : "border-slate-200/80 bg-white/60 dark:border-slate-700/50 dark:bg-slate-800/30"
+                    }`}>
+                      {isDone ? (
+                        <div className="absolute right-2 top-2 flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500 text-white">
+                          <svg className="h-2.5 w-2.5" viewBox="0 0 10 10" fill="currentColor"><path d="M8.5 2.5 4 7 1.5 4.5"/></svg>
+                        </div>
+                      ) : null}
+                      <div className="text-xs uppercase tracking-[0.16em] text-muted-foreground">{isDone ? "Done" : `Step ${index + 1}`}</div>
+                      <div className="mt-1 text-sm font-semibold text-slate-950 dark:text-slate-100">{step.label}</div>
                     </div>
                   );
                 })}
@@ -577,12 +648,18 @@ export default function SignInPage() {
                 </>
               ) : null}
               {mode === "reset" && emailToken ? (
-                <div className="rounded-2xl border border-slate-200/80 bg-white/70 px-4 py-3 text-sm text-slate-700">
+                <div className={`rounded-xl border px-4 py-3 text-sm ${
+                  resetPasswordMismatch
+                    ? "border-red-200 bg-red-50/80 text-red-700 dark:border-red-800/50 dark:bg-red-950/40 dark:text-red-300"
+                    : resetPassword.trim().length >= 8 && !resetPasswordMismatch
+                      ? "border-emerald-200 bg-emerald-50/80 text-emerald-700 dark:border-emerald-800/50 dark:bg-emerald-950/40 dark:text-emerald-300"
+                      : "border-slate-200/80 bg-white/70 text-slate-600 dark:border-slate-700/50 dark:bg-slate-800/50 dark:text-slate-400"
+                }`}>
                   {resetPasswordMismatch
                     ? "Passwords do not match yet."
                     : resetPassword.trim().length < 8
                       ? "Your new password must be at least 8 characters."
-                      : "This password is ready to be applied to the account."}
+                      : "Password looks good — ready to apply."}
                 </div>
               ) : null}
               <Button
@@ -609,30 +686,50 @@ export default function SignInPage() {
             </form>
           )}
 
-          <div className="space-y-2 text-sm text-slate-700">
-            <div>Marketplace accounts keep favorites, followed sellers, alerts, and saved activity tied to one identity across devices.</div>
-            <div>Magic-link access is available for passwordless sign-in on phone, tablet, or desktop when email delivery is configured.</div>
-            <div>Seller wallets are now a later account step inside Profile, only when you need listing or settlement actions.</div>
-            <div>Profile editing and local discovery now use one consistent account model instead of a separate onboarding placeholder.</div>
+          {/* Compact feature callout */}
+          <div className="rounded-xl border border-slate-200/70 dark:border-slate-700/50 bg-white/60 dark:bg-slate-800/40 px-4 py-3 space-y-1.5">
+            <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">What you get</div>
+            <ul className="space-y-1 text-sm text-slate-600 dark:text-slate-400">
+              <li className="flex items-start gap-2">
+                <span className="mt-0.5 text-emerald-500 dark:text-emerald-400 shrink-0">✓</span>
+                Favourites, follows, and alerts synced across all your devices
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="mt-0.5 text-emerald-500 dark:text-emerald-400 shrink-0">✓</span>
+                Magic-link sign-in — no password needed when email is configured
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="mt-0.5 text-emerald-500 dark:text-emerald-400 shrink-0">✓</span>
+                Connect a seller wallet later in Profile — only needed for listings
+              </li>
+            </ul>
           </div>
 
           {auth.isAuthenticated ? (
-            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-slate-700">
-              Signed in as {auth.user?.displayName?.trim() || auth.user?.email?.trim() || auth.address}.
+            <div className="flex items-center gap-3 rounded-xl border border-emerald-200 dark:border-emerald-800/40 bg-emerald-50 dark:bg-emerald-950/30 px-4 py-3">
+              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-500 text-white">
+                <svg className="h-4 w-4" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z"/></svg>
+              </div>
+              <div className="min-w-0">
+                <div className="text-sm font-semibold text-emerald-800 dark:text-emerald-300">Signed in</div>
+                <div className="truncate text-xs text-emerald-700 dark:text-emerald-400">
+                  {auth.user?.displayName?.trim() || auth.user?.email?.trim() || auth.address}
+                </div>
+              </div>
             </div>
           ) : null}
 
-          <div className="flex flex-wrap gap-3">
+          <div className="flex flex-wrap gap-2.5">
             {auth.isAuthenticated ? (
               <Button asChild>
-                <Link href="/dashboard?tab=watch">Continue to watch</Link>
+                <Link href="/dashboard?tab=watch">Go to dashboard</Link>
               </Button>
             ) : null}
             <Button asChild variant="outline">
-              <Link href="/marketplace">Back to marketplace</Link>
+              <Link href="/marketplace">Browse marketplace</Link>
             </Button>
             <Button asChild variant="ghost">
-              <Link href="/">Back to landing page</Link>
+              <Link href="/">Back to home</Link>
             </Button>
           </div>
         </CardContent>
