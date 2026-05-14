@@ -129,7 +129,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsAdmin(false);
   }, []);
 
-  const refresh = React.useCallback(async () => { // eslint-disable-line react-hooks/exhaustive-deps
+  const refresh = React.useCallback(async () => {
     const stored = getStoredAuthToken();
     if (!stored) {
       setToken(null);
@@ -158,7 +158,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [scheduleRefresh]);
 
   React.useEffect(() => {
     void refresh();

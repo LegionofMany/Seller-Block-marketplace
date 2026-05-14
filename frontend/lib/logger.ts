@@ -28,11 +28,9 @@ function _emit(level: Level, context: string, message: string, meta?: unknown) {
 
   if (IS_DEV) {
     const colour = COLOURS[level] ?? "";
-    // eslint-disable-next-line no-console
     console[level === "debug" ? "log" : level](`${colour}${line}${RESET}`);
   } else {
     // In production, plain text so Render can ingest / grep cleanly
-    // eslint-disable-next-line no-console
     console[level === "debug" ? "log" : level](line);
   }
 }

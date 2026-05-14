@@ -948,6 +948,7 @@ export default function CreateListingPage() {
 
       clearDraft();
       clearPublishRecovery();
+      toast.success("Your listing is live!", { description: "Share it or wait for buyers to find it.", duration: 6000 });
       router.push(buildListingHref(listingId, currentChain.key));
     } catch (error: unknown) {
       const message = getErrorMessage(error, "Transaction failed");
@@ -966,7 +967,38 @@ export default function CreateListingPage() {
     }
   }
 
+  function validateDraft(): boolean {
+    const errs: string[] = [];
+    if (!title.trim()) errs.push("Title is required.");
+    if (title.trim().length < 5) errs.push("Title must be at least 5 characters.");
+    if (title.trim().length > 200) errs.push("Title must be under 200 characters.");
+    if (!description.trim()) errs.push("Description is required.");
+    if (description.trim().length < 20) errs.push("Description must be at least 20 characters.");
+    if (!category) errs.push("Category is required.");
+    if (saleType === 0) {
+      const priceNum = parseFloat(fixedPrice);
+      if (fixedPrice.trim() && (isNaN(priceNum) || priceNum < 0)) errs.push("Fixed price must be a valid number.");
+    }
+    if (saleType === 1) {
+      if (!auctionStart) errs.push("Auction start time is required.");
+      if (!auctionEnd) errs.push("Auction end time is required.");
+      if (auctionStart && auctionEnd && new Date(auctionEnd) <= new Date(auctionStart)) errs.push("Auction end must be after start.");
+    }
+    if (saleType === 2) {
+      if (!raffleStart) errs.push("Raffle start time is required.");
+      if (!raffleEnd) errs.push("Raffle end time is required.");
+      if (raffleStart && raffleEnd && new Date(raffleEnd) <= new Date(raffleStart)) errs.push("Raffle end must be after start.");
+    }
+    if (errs.length > 0) {
+      toast.error(errs[0], { description: errs.length > 1 ? `${errs.length - 1} more issue${errs.length > 2 ? "s" : ""} found` : undefined });
+      return false;
+    }
+    return true;
+  }
+
   async function submitListing() {
+    if (!validateDraft()) return;
+
     const currentChain = activeChain;
     if (!currentChain) {
       toast.error("Missing chain configuration");

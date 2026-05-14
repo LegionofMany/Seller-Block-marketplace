@@ -2358,17 +2358,16 @@ export async function countUnreadNotifications(_db: Pool | any, userAddress: str
 
 export async function createNotification(_db: Pool | any, input: { userAddress: string; type: string; title: string; body: string; dedupeKey?: string | null; payload: Record<string, unknown>; createdAt: number }): Promise<NotificationRow | null> {
   const p = ensurePool(_db);
-  if (input.dedupeKey) {
-    const existing = await p.query('SELECT id, useraddress AS "userAddress", type, title, body, dedupekey AS "dedupeKey", payloadjson AS "payloadJson", readat AS "readAt", createdat AS "createdAt" FROM notifications WHERE dedupekey = $1 LIMIT 1', [input.dedupeKey]);
-    if (existing.rows[0]) return null;
-  }
+  // Use ON CONFLICT to atomically handle deduplication — eliminates the SELECT→INSERT race window.
+  // The partial unique index on dedupekey (WHERE dedupekey IS NOT NULL) makes this safe.
   const res = await p.query(
     `INSERT INTO notifications(useraddress, type, title, body, dedupekey, payloadjson, createdat)
      VALUES($1,$2,$3,$4,$5,$6,$7)
+     ON CONFLICT (dedupekey) WHERE dedupekey IS NOT NULL DO NOTHING
      RETURNING id, useraddress AS "userAddress", type, title, body, dedupekey AS "dedupeKey", payloadjson AS "payloadJson", readat AS "readAt", createdat AS "createdAt"`,
     [input.userAddress, input.type, input.title, input.body, input.dedupeKey ?? null, JSON.stringify(input.payload), input.createdAt]
   );
-  return toNotificationRow(res.rows[0]);
+  return res.rows[0] ? toNotificationRow(res.rows[0]) : null;
 }
 
 export async function markNotificationRead(_db: Pool | any, id: number, userAddress: string, readAt: number): Promise<boolean> {

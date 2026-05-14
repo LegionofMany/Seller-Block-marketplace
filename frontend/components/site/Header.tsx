@@ -7,8 +7,8 @@ import { useAccount } from "wagmi";
 
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/site/ThemeToggle";
+import { NotificationBell } from "@/components/site/NotificationBell";
 import { useAuth } from "@/components/providers/AuthProvider";
-import { fetchJson } from "@/lib/api";
 import { shortenHex } from "@/lib/format";
 import { useInjectedWalletAvailability } from "@/lib/injectedWallet";
 import { useFocusTrap } from "@/lib/useFocusTrap";
@@ -28,30 +28,12 @@ function formatIdentityLabel(
 
 export function SiteHeader() {
   const [open, setOpen] = React.useState(false);
-  const [unreadCount, setUnreadCount] = React.useState(0);
   const drawerRef = React.useRef<HTMLDivElement>(null);
   useFocusTrap(drawerRef, open);
   const { address } = useAccount();
   const auth = useAuth();
   const { checked: injectedWalletChecked, hasInjectedWallet } =
     useInjectedWalletAvailability();
-
-  React.useEffect(() => {
-    let cancelled = false;
-    async function run() {
-      if (!auth.isAuthenticated) { setUnreadCount(0); return; }
-      try {
-        const res = await fetchJson<{ unreadCount: number }>(
-          "/notifications?limit=1", { timeoutMs: 4_000 }
-        );
-        if (!cancelled) setUnreadCount(res.unreadCount ?? 0);
-      } catch {
-        if (!cancelled) setUnreadCount(0);
-      }
-    }
-    void run();
-    return () => { cancelled = true; };
-  }, [auth.isAuthenticated]);
 
   React.useEffect(() => {
     if (!open) return;
@@ -103,14 +85,7 @@ export function SiteHeader() {
             {auth.isAuthenticated ? (
               <Button asChild variant="ghost" size="sm"
                 className="text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800">
-                <Link href="/dashboard">
-                  Dashboard
-                  {unreadCount > 0 ? (
-                    <span className="ml-1.5 rounded-full bg-blue-600 px-1.5 py-0.5 text-[10px] font-bold text-white">
-                      {unreadCount}
-                    </span>
-                  ) : null}
-                </Link>
+                <Link href="/dashboard">Dashboard</Link>
               </Button>
             ) : null}
             {auth.isAdmin ? (
@@ -124,6 +99,7 @@ export function SiteHeader() {
           {/* Desktop wallet + auth + theme toggle */}
           <div className="hidden items-center gap-2 sm:flex">
             <ThemeToggle />
+            <NotificationBell />
             <div className="h-5 w-px bg-slate-200 dark:bg-slate-700" />
             <ConnectButton showBalance={false} chainStatus="icon" />
             <div className="h-5 w-px bg-slate-200 dark:bg-slate-700" />
@@ -162,9 +138,10 @@ export function SiteHeader() {
             ) : null}
           </div>
 
-          {/* Mobile: theme toggle + hamburger */}
+          {/* Mobile: theme toggle + bell + hamburger */}
           <div className="flex items-center gap-2 sm:hidden">
             <ThemeToggle />
+            <NotificationBell />
             <button
               type="button"
               aria-label="Open menu"
@@ -254,17 +231,10 @@ export function SiteHeader() {
                     <Link
                       href="/dashboard#notifications"
                       onClick={() => setOpen(false)}
-                      className="flex items-center justify-between gap-3 rounded-xl px-3 py-3 text-sm font-semibold text-slate-800 dark:text-slate-100 transition-colors hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:text-blue-700 dark:hover:text-blue-300"
+                      className="flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold text-slate-800 dark:text-slate-100 transition-colors hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:text-blue-700 dark:hover:text-blue-300"
                     >
-                      <div className="flex items-center gap-3">
-                        <span className="text-base">🔔</span>
-                        Alerts
-                      </div>
-                      {unreadCount > 0 ? (
-                        <span className="rounded-full bg-blue-600 px-2 py-0.5 text-[11px] font-bold text-white">
-                          {unreadCount}
-                        </span>
-                      ) : null}
+                      <span className="text-base">🔔</span>
+                      Notifications
                     </Link>
                   ) : null}
                   {auth.isAdmin ? (

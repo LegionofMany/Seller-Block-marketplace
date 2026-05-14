@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { WagmiProvider, createConfig, fallback, http } from "wagmi";
-import { injected, walletConnect, coinbaseWallet } from "wagmi/connectors";
+import { injected, coinbaseWallet } from "wagmi/connectors";
 import { defineChain, type Chain } from "viem";
 import { base, baseSepolia, mainnet, sepolia } from "viem/chains";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";

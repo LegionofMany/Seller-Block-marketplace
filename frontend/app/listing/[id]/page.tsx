@@ -242,13 +242,13 @@ export default function ListingDetailPage() {
   });
 
   const [metadata, setMetadata] = React.useState<MarketplaceMetadata | null>(null);
-  const [isReuploadingMetadata, setIsReuploadingMetadata] = React.useState(false);
   const [comments, setComments] = React.useState<ListingComment[]>([]);
   const [commentsError, setCommentsError] = React.useState<string | null>(null);
   const [isLoadingComments, setIsLoadingComments] = React.useState(false);
   const [isSubmittingComment, setIsSubmittingComment] = React.useState(false);
   const [isFavorite, setIsFavorite] = React.useState(false);
   const [isFavoriteLoading, setIsFavoriteLoading] = React.useState(false);
+  const [adShareCopied, setAdShareCopied] = React.useState(false);
   const [commentDraft, setCommentDraft] = React.useState("");
   const [isReportModalOpen, setIsReportModalOpen] = React.useState(false);
   const [reportReason, setReportReason] = React.useState("spam");
@@ -268,6 +268,7 @@ export default function ListingDetailPage() {
   const [isPublishingSellerOrder, setIsPublishingSellerOrder] = React.useState(false);
   const [isRelayingSettlementAction, setIsRelayingSettlementAction] = React.useState(false);
   const recordedViewKeysRef = React.useRef<Set<string>>(new Set());
+  const commentTextareaRef = React.useRef<HTMLTextAreaElement>(null);
 
   const settlementToken = React.useMemo(
     () => (listing && envState.env ? describeToken(envState.env, activeChainId, listing.token as Address) : null),
@@ -593,11 +594,13 @@ export default function ListingDetailPage() {
       return;
     }
 
+    const prev = isFavorite;
+    setIsFavorite(!prev);
+
     try {
       setIsFavoriteLoading(true);
-      if (isFavorite) {
+      if (prev) {
         await fetchJson(`/favorites/listings/${listingId}?chain=${encodeURIComponent(activeChainKey)}`, { method: "DELETE" });
-        setIsFavorite(false);
         toast.success("Removed from favorites");
       } else {
         await fetchJson("/favorites/listings", {
@@ -605,13 +608,34 @@ export default function ListingDetailPage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ listingId, chainKey: activeChainKey }),
         });
-        setIsFavorite(true);
         toast.success("Saved to favorites");
       }
     } catch (error: unknown) {
+      setIsFavorite(prev);
       toast.error(getErrorMessage(error, "Failed to update favorites"));
     } finally {
       setIsFavoriteLoading(false);
+    }
+  }
+
+  async function shareAd() {
+    const url = typeof window !== "undefined" ? window.location.href : "";
+    const adTitle = metadata?.title?.trim() || "Listing on Zonycs";
+    const shareData = {
+      title: `${adTitle} — Zonycs`,
+      text: `Check out this listing on Zonycs: ${adTitle}`,
+      url,
+    };
+    try {
+      if (navigator.share && navigator.canShare?.(shareData)) {
+        await navigator.share(shareData);
+      } else {
+        await navigator.clipboard.writeText(url);
+        setAdShareCopied(true);
+        setTimeout(() => setAdShareCopied(false), 2500);
+      }
+    } catch {
+      // User cancelled or clipboard unavailable — silently ignore
     }
   }
 
@@ -901,6 +925,8 @@ export default function ListingDetailPage() {
 
   const raffleApproved = !native && typeof raffleAllowance === "bigint" && typeof raffleQuote === "bigint" ? raffleAllowance >= raffleQuote : false;
 
+  const [auctionCountdown, setAuctionCountdown] = React.useState<string>("");
+  const [contactRevealed, setContactRevealed] = React.useState(false);
   const [pendingHash, setPendingHash] = React.useState<`0x${string}` | undefined>();
   const toastTx = useToastTx(pendingHash, "Transaction pending");
   const receipt = useWaitForTransactionReceipt({ chainId: activeChainId, hash: pendingHash, query: { enabled: Boolean(pendingHash) } });
@@ -916,6 +942,24 @@ export default function ListingDetailPage() {
       setPendingHash(undefined);
     }
   }, [receipt.isSuccess, receipt.isError, receipt.error, refreshSellerOrder, toastTx]);
+
+  React.useEffect(() => {
+    const endTime = listing?.endTime ? Number(listing.endTime) * 1000 : null;
+    if (!endTime || endTime <= Date.now()) { setAuctionCountdown(""); return; }
+    const endTimeValue = endTime; // Capture in const to preserve type narrowing
+    function tick() {
+      const diff = endTimeValue - Date.now();
+      if (diff <= 0) { setAuctionCountdown("Ended"); return; }
+      const d = Math.floor(diff / 86_400_000);
+      const h = Math.floor((diff % 86_400_000) / 3_600_000);
+      const m = Math.floor((diff % 3_600_000) / 60_000);
+      const s = Math.floor((diff % 60_000) / 1_000);
+      setAuctionCountdown(d > 0 ? `${d}d ${h}h ${m}m` : `${h}h ${m}m ${s}s`);
+    }
+    tick();
+    const timer = setInterval(tick, 1_000);
+    return () => clearInterval(timer);
+  }, [listing?.endTime]);
 
   async function send(tx: Promise<`0x${string}`>) {
     try {
@@ -1136,10 +1180,9 @@ export default function ListingDetailPage() {
                       variant="outline"
                       size="lg"
                       className="w-full sm:w-auto"
-                      disabled={isReuploadingMetadata}
                       onClick={reuploadMissingMetadata}
                     >
-                      {isReuploadingMetadata ? "Uploading…" : "Re-upload metadata"}
+                      Re-upload metadata
                     </Button>
                   }
                 >
@@ -1267,6 +1310,41 @@ export default function ListingDetailPage() {
                         </Link>
                         <SellerTrustSummary profile={sellerProfile} variant="detail" />
                       </div>
+                      {/* Contact seller */}
+                      {!isSeller && (metadata?.contactEmail || metadata?.contactPhone) && (
+                        <div className="mt-3">
+                          {!contactRevealed ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (!auth.isAuthenticated) { toast.error("Sign in to view contact details"); return; }
+                                setContactRevealed(true);
+                              }}
+                              className="inline-flex items-center gap-2 rounded-full border border-blue-300 dark:border-blue-600 bg-blue-50 dark:bg-blue-900/20 px-4 py-2 text-sm font-semibold text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors"
+                            >
+                              <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                                <path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.9 19.79 19.79 0 01.14 1.28 2 2 0 012.11 0h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.09 7.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/>
+                              </svg>
+                              Contact seller
+                            </button>
+                          ) : (
+                            <div className="space-y-1.5 rounded-xl border border-border bg-card p-3">
+                              {metadata?.contactEmail && (
+                                <a href={`mailto:${metadata.contactEmail}`} className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 hover:underline">
+                                  <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 01-2.06 0L2 7"/></svg>
+                                  {metadata.contactEmail}
+                                </a>
+                              )}
+                              {metadata?.contactPhone && (
+                                <a href={`tel:${metadata.contactPhone}`} className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 hover:underline">
+                                  <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.9 19.79 19.79 0 01.14 1.28 2 2 0 012.11 0h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.09 7.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg>
+                                  {metadata.contactPhone}
+                                </a>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                     {!isJobPost ? (
                       <div className="text-sm">
@@ -1483,6 +1561,7 @@ export default function ListingDetailPage() {
                     </div>
                   ) : null}
                   <Textarea
+                    ref={commentTextareaRef}
                     value={commentDraft}
                     onChange={(e) => setCommentDraft(e.target.value)}
                     placeholder={auth.isAuthenticated ? "Ask a public question about this listing" : "Sign in to leave a comment"}
@@ -1535,8 +1614,21 @@ export default function ListingDetailPage() {
                               {item.authorDisplayName?.trim() || shortenHex(item.authorAddress)}
                             </div>
                           </div>
-                          <div className="text-xs font-medium text-slate-400">
-                            {new Date(item.createdAt).toLocaleDateString("en-CA", { year: "numeric", month: "short", day: "numeric" })}
+                          <div className="flex items-center gap-3">
+                            <div className="text-xs font-medium text-slate-400">
+                              {new Date(item.createdAt).toLocaleDateString("en-CA", { year: "numeric", month: "short", day: "numeric" })}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const mention = `@${item.authorDisplayName?.trim() || shortenHex(item.authorAddress)} `;
+                                setCommentDraft(mention);
+                                commentTextareaRef.current?.focus();
+                              }}
+                              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                            >
+                              Reply
+                            </button>
                           </div>
                         </div>
                         <div className="text-sm text-slate-700 leading-6 whitespace-pre-wrap break-words">{item.body}</div>
@@ -1548,6 +1640,9 @@ export default function ListingDetailPage() {
                 </div>
 
                 <aside className="space-y-3 sm:space-y-4">
+                  {!isSeller && listing?.seller && sellerProfile ? (
+                    <SellerTrustSummary profile={sellerProfile} variant="detail" />
+                  ) : null}
                   <div className="rounded-2xl border bg-accent/25 p-3 space-y-3 sm:p-4">
                     <div>
                       <div className="market-section-title">{isJobPost ? "Applicant actions" : "Buyer actions"}</div>
@@ -1565,6 +1660,13 @@ export default function ListingDetailPage() {
                     <div className="flex flex-col gap-2 sm:flex-row">
                       <Button type="button" variant={isFavorite ? "default" : "outline"} size="lg" className="w-full sm:w-auto" disabled={isFavoriteLoading} onClick={() => void toggleFavorite()}>
                         {isFavorite ? "Saved" : "Save favorite"}
+                      </Button>
+                      <Button type="button" variant="outline" size="lg" className="w-full sm:w-auto gap-2" onClick={() => void shareAd()}>
+                        <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                          <circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" />
+                          <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" /><line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+                        </svg>
+                        {adShareCopied ? "Link copied!" : "Share ad"}
                       </Button>
                       {!auth.isAuthenticated ? (
                         <Button asChild type="button" variant="ghost" size="lg" className="w-full sm:w-auto">
@@ -1592,6 +1694,13 @@ export default function ListingDetailPage() {
                     <div className="flex flex-col gap-2 sm:flex-row">
                       <Button type="button" variant={isFavorite ? "default" : "outline"} size="lg" className="w-full sm:w-auto" disabled={isFavoriteLoading} onClick={() => void toggleFavorite()}>
                         {isFavorite ? "Saved" : "Save favorite"}
+                      </Button>
+                      <Button type="button" variant="outline" size="lg" className="w-full sm:w-auto gap-2" onClick={() => void shareAd()}>
+                        <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                          <circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" />
+                          <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" /><line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+                        </svg>
+                        {adShareCopied ? "Link copied!" : "Share ad"}
                       </Button>
                       {!auth.isAuthenticated ? (
                         <Button asChild type="button" variant="ghost" size="lg" className="w-full sm:w-auto">
@@ -1920,6 +2029,17 @@ export default function ListingDetailPage() {
                 {listing.saleType === 1 && listing.status === 1 && listing.moduleId !== ("0x" + "00".repeat(32)) ? (
                   <div className="rounded-xl border p-4 space-y-3">
                     <div className="text-sm font-medium">Place bid</div>
+                    {auctionCountdown && auctionCountdown !== "Ended" && (
+                      <div className="flex items-center gap-2 rounded-xl border border-amber-200 dark:border-amber-700/50 bg-amber-50 dark:bg-amber-900/20 px-4 py-3">
+                        <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                          <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+                        </svg>
+                        <span className="text-sm font-semibold text-amber-800 dark:text-amber-300">Ends in {auctionCountdown}</span>
+                      </div>
+                    )}
+                    {auctionCountdown === "Ended" && (
+                      <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-muted px-4 py-3 text-sm font-medium text-muted-foreground">Auction has ended</div>
+                    )}
                     <div className="grid gap-2">
                       <Label>Bid amount {native ? `(${activeChainNativeCurrencySymbol})` : "(token units)"}</Label>
                       <Input value={bidAmount} onChange={(e) => setBidAmount(e.target.value)} placeholder={native ? "0.05" : "1.0"} />

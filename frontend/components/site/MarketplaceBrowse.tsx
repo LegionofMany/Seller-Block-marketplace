@@ -70,6 +70,7 @@ export function MarketplaceBrowse() {
   const [savedSearchEmail, setSavedSearchEmail] = React.useState("");
   const [isSavingSearch, setIsSavingSearch] = React.useState(false);
   const [isDetectingLocation, setIsDetectingLocation] = React.useState(false);
+  const [showBackToTop, setShowBackToTop] = React.useState(false);
   const [viewMode, setViewMode] = React.useState<"grid" | "map">("grid");
   const [mapListings, setMapListings] = React.useState<MapListing[]>([]);
   const [userCoords, setUserCoords] = React.useState<{ lat: number; lng: number } | null>(null);
@@ -219,6 +220,14 @@ export function MarketplaceBrowse() {
       setAllAccumulated(listings);
     }
   }, [listings, isLoading]);
+
+  React.useEffect(() => {
+    function onScroll() {
+      setShowBackToTop(window.scrollY > 400);
+    }
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
 
   const [blockedSellers, setBlockedSellers] = React.useState<string[]>([]);
   React.useEffect(() => {
@@ -824,6 +833,18 @@ export function MarketplaceBrowse() {
           </Button>
           <p className="text-xs text-muted-foreground">{visibleListings.length} shown</p>
         </div>
+      )}
+      {showBackToTop && (
+        <button
+          type="button"
+          aria-label="Back to top"
+          onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+          className="fixed bottom-6 right-6 z-50 flex h-11 w-11 items-center justify-center rounded-full bg-blue-600 text-white shadow-lg hover:bg-blue-700 transition-all"
+        >
+          <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden>
+            <path d="M18 15l-6-6-6 6" />
+          </svg>
+        </button>
       )}
     </div>
   );

@@ -4,7 +4,7 @@ import * as React from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { type Address, type Hex, isAddress, parseAbiItem, zeroAddress } from "viem";
+import { type Address, type Hex, isAddress, zeroAddress } from "viem";
 import { useAccount, usePublicClient, useReadContract, useWriteContract } from "wagmi";
 import { useSignMessage } from "wagmi";
 import { toast } from "sonner";
@@ -25,7 +25,6 @@ import { fetchJson } from "@/lib/api";
 import { CATEGORY_TREE, subcategoriesFor } from "@/lib/categories";
 import { marketplaceRegistryAbi } from "@/lib/contracts/abi/MarketplaceRegistry";
 import { escrowVaultAbi } from "@/lib/contracts/abi/EscrowVault";
-import { parseListing } from "@/lib/contracts/parse";
 import { statusLabel } from "@/lib/contracts/types";
 import { shortenHex } from "@/lib/format";
 import { type PublicUserProfileResponse, type UserProfile } from "@/lib/auth";
@@ -36,16 +35,8 @@ import { getProfileLocationFilter } from "@/lib/location";
 import { buildMarketplaceHref } from "@/lib/marketplace";
 import { fetchMetadataByUri, getRenderableListingImage, LISTING_FALLBACK_IMAGE } from "@/lib/metadata";
 
-const listingCreatedEvent = parseAbiItem(
-  "event ListingCreated(bytes32 indexed id, address seller, uint8 saleType, address token, uint256 price, string metadataURI)"
-);
-
 const ADMIN_LISTINGS_PAGE_SIZE = 50;
 
-type ListingCreatedLogArgs = {
-  seller?: Address;
-  id?: Hex;
-};
 
 type EscrowReadShape = {
   buyer?: Address;
@@ -228,15 +219,6 @@ function getErrorMessage(error: unknown, fallback: string) {
   const candidate = error as { shortMessage?: unknown; message?: unknown } | null;
   const message = candidate?.shortMessage ?? candidate?.message;
   return typeof message === "string" && message.trim() ? message : fallback;
-}
-
-function getListingCreatedLogArgs(args: unknown): ListingCreatedLogArgs {
-  if (!args || typeof args !== "object") return {};
-  const candidate = args as Record<string, unknown>;
-  return {
-    seller: typeof candidate.seller === "string" && isAddress(candidate.seller) ? (candidate.seller as Address) : undefined,
-    id: typeof candidate.id === "string" ? (candidate.id as Hex) : undefined,
-  };
 }
 
 function decodeEscrowReadResult(value: unknown) {
@@ -539,11 +521,9 @@ export default function DashboardPage() {
   const envReady = Boolean(envState.env);
   const blockPagesUrl = envState.env?.blockPagesUrl ?? "https://blockpages.com";
   const defaultChainKey = envState.env?.defaultChain.key ?? "sepolia";
-  const defaultChainId = envState.env?.defaultChain.chainId;
   const defaultNativeCurrencySymbol = envState.env?.defaultChain.nativeCurrencySymbol ?? "ETH";
   const marketplaceRegistryAddress = envState.env?.marketplaceRegistryAddress ?? zeroAddress;
   const escrowVaultAddress = envState.env?.escrowVaultAddress ?? zeroAddress;
-  const fromBlock = envState.env?.fromBlock ?? 0n;
   const trustTargetAddress = isAddress(adminTrustAddress) ? adminTrustAddress : null;
   const { profile: adminTrustProfile, isLoading: isLoadingAdminTrustProfile } = useSellerProfile(trustTargetAddress);
 
@@ -2496,17 +2476,12 @@ export default function DashboardPage() {
                   ) : favoriteError ? (
                     <div className="text-sm text-muted-foreground">{favoriteError}</div>
                   ) : favoriteListings.length === 0 ? (
-                    <AccentCallout
-                      label="Curate your shortlist"
-                      tone="blue"
-                      actions={
-                        <Button asChild variant="outline" size="sm">
-                          <Link href={watchBrowseHref}>Browse listings</Link>
-                        </Button>
-                      }
-                    >
-                      Your shortlist is empty. Save any listing that deserves a second look and it will stay ready here.
-                    </AccentCallout>
+                    <div className="flex flex-col items-center gap-3 py-16 text-center">
+                      <div className="text-4xl">❤️</div>
+                      <p className="text-base font-semibold text-foreground">No saved favourites</p>
+                      <p className="text-sm text-muted-foreground">Tap &quot;Save favourite&quot; on any listing to keep track of items you love.</p>
+                      <a href="/marketplace" className="mt-2 inline-flex items-center rounded-full bg-blue-600 px-5 py-2 text-sm font-bold text-white hover:bg-blue-700 transition-colors">Find listings</a>
+                    </div>
                   ) : (
                     <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
                       {favoriteListings.map((listing) => (
@@ -2529,9 +2504,12 @@ export default function DashboardPage() {
                       Sign in to keep saved search alerts organized in one sharper watch layer.
                     </AccentCallout>
                   ) : savedSearches.length === 0 ? (
-                    <AccentCallout label="No saved searches yet" tone="amber">
-                      Your alert list is still blank. Save a refined marketplace view and it will reappear here with its filters intact.
-                    </AccentCallout>
+                    <div className="flex flex-col items-center gap-3 py-16 text-center">
+                      <div className="text-4xl">🔍</div>
+                      <p className="text-base font-semibold text-foreground">No saved searches</p>
+                      <p className="text-sm text-muted-foreground">Save a search in the marketplace and get notified when new listings match.</p>
+                      <a href="/marketplace" className="mt-2 inline-flex items-center rounded-full bg-blue-600 px-5 py-2 text-sm font-bold text-white hover:bg-blue-700 transition-colors">Browse marketplace</a>
+                    </div>
                   ) : (
                     savedSearches.map((item) => (
                       <div key={item.id} className="rounded-md border p-3 sm:p-4">
@@ -2795,9 +2773,11 @@ export default function DashboardPage() {
                       Sign in to keep saved-search alerts and marketplace updates in one refined inbox.
                     </AccentCallout>
                   ) : notifications.length === 0 ? (
-                    <AccentCallout label="Inbox is clear" tone="blue">
-                      Nothing needs attention right now. Fresh saved-search matches and marketplace updates will appear here as they land.
-                    </AccentCallout>
+                    <div className="flex flex-col items-center gap-3 py-16 text-center">
+                      <div className="text-4xl">🔔</div>
+                      <p className="text-base font-semibold text-foreground">You&apos;re all caught up</p>
+                      <p className="text-sm text-muted-foreground">New activity on your listings and saved searches will appear here.</p>
+                    </div>
                   ) : (
                     notifications.map((item) => {
                       const listingId = typeof item.payload.listingId === "string" ? item.payload.listingId : null;
@@ -2984,17 +2964,12 @@ export default function DashboardPage() {
                     <Skeleton className="h-52 w-full rounded-2xl" />
                   </div>
                 ) : myListingIds.length === 0 ? (
-                  <AccentCallout
-                    label="Start selling"
-                    tone="mint"
-                    actions={
-                      <Button asChild variant="outline" size="sm">
-                        <Link href="/create">Create your first listing</Link>
-                      </Button>
-                    }
-                  >
-                    Your seller inventory is still empty. Publish the first listing and this space becomes your live storefront.
-                  </AccentCallout>
+                  <div className="flex flex-col items-center gap-3 py-16 text-center">
+                    <div className="text-4xl">🏷️</div>
+                    <p className="text-base font-semibold text-foreground">No listings yet</p>
+                    <p className="text-sm text-muted-foreground">Post your first ad and start selling in minutes.</p>
+                    <a href="/create" className="mt-2 inline-flex items-center rounded-full bg-blue-600 px-5 py-2 text-sm font-bold text-white hover:bg-blue-700 transition-colors">Post an ad</a>
+                  </div>
                 ) : (
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     {myListingsSummaries.map((summary) => {

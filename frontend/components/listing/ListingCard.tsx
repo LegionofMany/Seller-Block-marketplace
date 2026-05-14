@@ -18,6 +18,11 @@ import {
 } from "@/lib/metadata";
 import { zeroAddress } from "viem";
 
+function isPriceFree(price: string | bigint | number | undefined): boolean {
+  if (price === undefined || price === null) return false;
+  try { return BigInt(price) === 0n; } catch { return false; }
+}
+
 /** Format a unix-seconds timestamp to a human-readable "time ago" string */
 function timeAgo(createdAt: number | undefined): string {
   if (!createdAt) return "";
@@ -111,6 +116,8 @@ export function ListingCard({ row }: { row: ListingSummary }) {
           <div className="text-xl font-bold leading-tight tracking-tight text-foreground">
             {isJobPost && !compensation ? (
               <span className="text-base text-muted-foreground">Compensation in ad</span>
+            ) : !isJobPost && isPriceFree(row.price) ? (
+              <span className="font-bold text-emerald-600">Free</span>
             ) : (
               priceLabel
             )}

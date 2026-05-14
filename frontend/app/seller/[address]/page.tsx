@@ -35,6 +35,7 @@ export default function SellerProfilePage() {
   const [isFollowing, setIsFollowing] = React.useState(false);
   const [isFollowLoading, setIsFollowLoading] = React.useState(false);
   const [followError, setFollowError] = React.useState<string | null>(null);
+  const [shareCopied, setShareCopied] = React.useState(false);
 
   const user = profile?.user;
   const displayName = user?.displayName?.trim() || user?.fullName?.trim() || shortenHex(address ?? "0x0");
@@ -83,20 +84,42 @@ export default function SellerProfilePage() {
     }
     if (!address) return;
 
+    const prev = isFollowing;
+    setIsFollowing(!prev);
+
     try {
       setIsFollowLoading(true);
       setFollowError(null);
-      if (isFollowing) {
+      if (prev) {
         await fetchJson(`/users/${address}/follow`, { method: "DELETE" });
-        setIsFollowing(false);
       } else {
         await fetchJson(`/users/${address}/follow`, { method: "POST" });
-        setIsFollowing(true);
       }
     } catch {
+      setIsFollowing(prev);
       setFollowError("Failed to update follow status");
     } finally {
       setIsFollowLoading(false);
+    }
+  }
+
+  async function shareProfile() {
+    const url = typeof window !== "undefined" ? window.location.href : `https://www.zonycs.com/seller/${address}`;
+    const shareData = {
+      title: displayName ? `${displayName} on Zonycs` : "Seller on Zonycs",
+      text: `Check out ${displayName}'s listings on Zonycs`,
+      url,
+    };
+    try {
+      if (navigator.share && navigator.canShare?.(shareData)) {
+        await navigator.share(shareData);
+      } else {
+        await navigator.clipboard.writeText(url);
+        setShareCopied(true);
+        setTimeout(() => setShareCopied(false), 2500);
+      }
+    } catch {
+      // User cancelled or clipboard failed — silently ignore
     }
   }
 
@@ -165,6 +188,19 @@ export default function SellerProfilePage() {
               </Button>
               <Button asChild variant="outline" className="rounded-full px-6">
                 <Link href={buildMarketplaceHref({ seller: address })}>View all listings</Link>
+              </Button>
+              {/* Share profile CTA */}
+              <Button
+                type="button"
+                variant="outline"
+                className="rounded-full px-6 gap-2"
+                onClick={() => void shareProfile()}
+              >
+                <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                  <circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" />
+                  <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" /><line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+                </svg>
+                {shareCopied ? "Link copied!" : "Share profile"}
               </Button>
             </div>
 

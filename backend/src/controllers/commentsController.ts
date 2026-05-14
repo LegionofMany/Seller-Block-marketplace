@@ -7,6 +7,7 @@ import { fetchListingFromChain } from "../services/blockchain";
 import { getContext } from "../services/context";
 import {
   createListingComment,
+  createNotification,
   ensureUser,
   findListing,
   listListingComments,
@@ -95,5 +96,31 @@ export async function createComment(req: Request, res: Response) {
     createdAt: now,
     updatedAt: now,
   });
+
+  // Notify the listing owner — skip if they commented on their own ad
+  const sellerAddress = listing.seller?.toLowerCase() ?? "";
+  if (sellerAddress && sellerAddress !== authorAddress.toLowerCase()) {
+    const { env } = getContext();
+    const listingHref = env.frontendAppUrl
+      ? `${env.frontendAppUrl.replace(/\/$/, "")}/listing/${listingId}?chain=${encodeURIComponent(listing.chainKey)}`
+      : null;
+
+    // Fire-and-forget: notification failure must never block the comment response
+    void createNotification(db, {
+      userAddress: listing.seller!,
+      type: "listing_comment",
+      title: "New comment on your listing",
+      body: body.length > 120 ? `${body.slice(0, 120)}…` : body,
+      dedupeKey: `listing-comment:${item.id}`,
+      payload: {
+        commentId: item.id,
+        listingId,
+        chainKey: listing.chainKey,
+        ...(listingHref ? { href: listingHref } : {}),
+      },
+      createdAt: now,
+    });
+  }
+
   return res.status(201).json({ item });
 }

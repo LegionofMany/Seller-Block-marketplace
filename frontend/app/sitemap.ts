@@ -1,77 +1,56 @@
 import type { MetadataRoute } from "next";
 
-const BASE_URL = "https://www.zonycs.com";
-
-async function fetchRecentListingIds(): Promise<
-  Array<{ id: string; chainKey: string; updatedAt?: number }>
-> {
-  try {
-    const res = await fetch(
-      `${process.env.NEXT_PUBLIC_API_BASE_URL ?? 
-        "https://seller-block-marketplace-4.onrender.com"
-      }/listings?limit=200&offset=0&sort=newest`,
-      {
-        next: { revalidate: 3600 }, // revalidate every hour
-      }
-    );
-    if (!res.ok) return [];
-    const data = await res.json() as {
-      items?: Array<{
-        id: string;
-        chainKey: string;
-        updatedAt?: number;
-        createdAt?: number;
-      }>;
-    };
-    return (data.items ?? []).map((item) => ({
-      id: item.id,
-      chainKey: item.chainKey ?? "base-sepolia",
-      updatedAt: item.updatedAt ?? item.createdAt,
-    }));
-  } catch {
-    return [];
-  }
-}
+const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL?.trim() || "https://www.zonycs.com";
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL?.trim() || "";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const staticRoutes: MetadataRoute.Sitemap = [
     {
-      url: BASE_URL,
-      lastModified: new Date(),
-      changeFrequency: "daily",
+      url: `${BASE_URL}/`,
+      changeFrequency: "weekly",
       priority: 1.0,
     },
     {
       url: `${BASE_URL}/marketplace`,
-      lastModified: new Date(),
-      changeFrequency: "hourly",
+      changeFrequency: "weekly",
       priority: 0.9,
     },
     {
       url: `${BASE_URL}/create`,
-      lastModified: new Date(),
-      changeFrequency: "monthly",
-      priority: 0.6,
+      changeFrequency: "weekly",
+      priority: 0.8,
     },
     {
       url: `${BASE_URL}/sign-in`,
-      lastModified: new Date(),
-      changeFrequency: "monthly",
-      priority: 0.3,
+      changeFrequency: "weekly",
+      priority: 0.5,
     },
   ];
 
-  // Fetch dynamic listing URLs
-  const listings = await fetchRecentListingIds();
+  let listingRoutes: MetadataRoute.Sitemap = [];
 
-  const listingRoutes: MetadataRoute.Sitemap = listings.map(
-    (listing) => ({
-      url: `${BASE_URL}/listing/${listing.id}` + `?chain=${listing.chainKey}`,
-      lastModified: listing.updatedAt ? new Date(listing.updatedAt) : new Date(),
-      changeFrequency: "daily" as const,
-      priority: 0.8,
-    })
-  );
+  try {
+    const res = await fetch(`${BACKEND_URL}/listings?limit=200&offset=0`, {
+      next: { revalidate: 3600 },
+    });
+    if (res.ok) {
+      const data = (await res.json()) as {
+        items: Array<{ id: string; chainKey: string; updatedAt?: number; createdAt?: number }>;
+      };
+      listingRoutes = data.items.map((item) => ({
+        url: `${BASE_URL}/listing/${item.id}?chain=${item.chainKey}`,
+        changeFrequency: "daily" as const,
+        priority: 0.7,
+        lastModified: item.updatedAt
+          ? new Date(item.updatedAt * 1000)
+          : item.createdAt
+          ? new Date(item.createdAt * 1000)
+          : undefined,
+      }));
+    }
+  } catch {
+    // skip listing routes if fetch fails
+  }
 
   return [...staticRoutes, ...listingRoutes];
 }

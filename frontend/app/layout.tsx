@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import Script from "next/script";
 import "./globals.css";
 import "@rainbow-me/rainbowkit/styles.css";
 
@@ -9,10 +10,8 @@ import { SiteHeader } from "@/components/site/Header";
 import { PWAInstallBanner } from "@/components/site/PWAInstallBanner";
 import { Toaster } from "sonner";
 
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim() || "http://localhost:3000";
 const githubRepoUrl = "https://github.com/LegionofMany/Seller-Block-marketplace";
 const githubWikiUrl = `${githubRepoUrl}/wiki`;
-const googleSiteVerification = process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION?.trim();
 
 export const viewport: Viewport = {
   width: "device-width",
@@ -155,6 +154,14 @@ export default function RootLayout({
             </AuthProvider>
           </Web3Providers>
         </ThemeProvider>
+        {process.env.NEXT_PUBLIC_PLAUSIBLE_DOMAIN ? (
+          <Script
+            defer
+            data-domain={process.env.NEXT_PUBLIC_PLAUSIBLE_DOMAIN}
+            src="https://plausible.io/js/script.js"
+            strategy="afterInteractive"
+          />
+        ) : null}
       </body>
     </html>
   );
